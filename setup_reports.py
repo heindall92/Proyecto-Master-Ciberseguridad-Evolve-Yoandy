@@ -3,13 +3,13 @@
 Configura definiciones de reportes SOC en Wazuh via API REST.
 Crea scheduled reports para Cowrie Honeypot, Security Events y MITRE ATT&CK.
 """
-import json, requests, urllib3, sys
+import json, requests, urllib3, sys, os
 urllib3.disable_warnings()
 
-WAZUH_API = "https://localhost:55000"
-DASHBOARD  = "https://localhost"
-API_AUTH   = ("wazuh-wui", "wazuh-wui")
-DASH_AUTH  = ("admin", "admin")
+WAZUH_API  = os.getenv("WAZUH_API_URL", "https://localhost:55000")
+DASHBOARD  = os.getenv("WAZUH_DASHBOARD_URL", "https://localhost")
+API_AUTH   = (os.getenv("WAZUH_API_USER", "wazuh-wui"), os.getenv("WAZUH_API_PASSWORD", "wazuh-wui"))
+DASH_AUTH  = (os.getenv("DASHBOARD_USERNAME", "admin"), os.getenv("DASHBOARD_PASSWORD", "admin"))
 H_API      = {"Content-Type": "application/json"}
 H_DASH     = {"Content-Type": "application/json", "osd-xsrf": "true"}
 

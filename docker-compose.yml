@@ -73,8 +73,8 @@ services:
       - "55000:55000"
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=admin
+      - INDEXER_USERNAME=${INDEXER_USERNAME:-admin}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - FILEBEAT_SSL_VERIFICATION_MODE=none
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/certs/root-ca.pem
       - SSL_CERTIFICATE=/etc/ssl/certs/wazuh.manager.pem
@@ -127,8 +127,8 @@ services:
     ports:
       - "443:443"
     environment:
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=admin
+      - INDEXER_USERNAME=${INDEXER_USERNAME:-admin}
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
       - WAZUH_API_URL=https://wazuh.manager:55000
       - SERVER_SSL_CERTIFICATE=/etc/wazuh-dashboard/certs/dashboard.pem
@@ -146,8 +146,8 @@ services:
       chmod 500 /etc/wazuh-dashboard/certs/ &&
       chmod 400 /etc/wazuh-dashboard/certs/* &&
       sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
-      sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
-      sed -i 's|#opensearch.password:|opensearch.password: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i "s|#opensearch.username:|opensearch.username: ${OPENSEARCH_DASHBOARDS_USER:-kibanaserver}|" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i "s|#opensearch.password:|opensearch.password: ${OPENSEARCH_DASHBOARDS_PASSWORD:-kibanaserver}|" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       exec /usr/sbin/chroot --userspec=1000:0 / /entrypoint.sh
       "
     volumes:

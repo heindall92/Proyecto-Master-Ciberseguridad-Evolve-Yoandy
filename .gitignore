@@ -1,3 +1,6 @@
+# Credenciales — NUNCA subir a Git
+.env
+
 # Claude Code internal files
 .claude/
 .remember/

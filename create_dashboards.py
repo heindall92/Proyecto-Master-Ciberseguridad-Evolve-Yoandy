@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Crea visualizaciones y dashboards de Cowrie en Wazuh Dashboard (OpenSearch Dashboards 2.x)."""
-import json, requests, urllib3
+import json, requests, urllib3, os
 urllib3.disable_warnings()
 
-BASE = "https://localhost"
-AUTH = ("admin", "admin")
+BASE  = os.getenv("WAZUH_DASHBOARD_URL", "https://localhost")
+_user = os.getenv("DASHBOARD_USERNAME", "admin")
+_pass = os.getenv("DASHBOARD_PASSWORD", "admin")
+AUTH  = (_user, _pass)
 H = {"Content-Type": "application/json", "osd-xsrf": "true"}
 INDEX_PATTERN_ID = "wazuh-alerts-*"
 

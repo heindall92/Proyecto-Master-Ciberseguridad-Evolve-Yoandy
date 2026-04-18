@@ -3,11 +3,11 @@
 Crea monitores y disparadores (triggers) en OpenSearch Alerting.
 Detecta condiciones críticas en tiempo real y genera notificaciones.
 """
-import json, requests, urllib3
+import json, requests, urllib3, os
 urllib3.disable_warnings()
 
-BASE  = "https://localhost:9200"
-AUTH  = ("admin", "admin")
+BASE  = os.getenv("INDEXER_URL", "https://localhost:9200")
+AUTH  = (os.getenv("INDEXER_USERNAME", "admin"), os.getenv("INDEXER_PASSWORD", "admin"))
 H     = {"Content-Type": "application/json"}
 
 def api(method, path, data=None):
