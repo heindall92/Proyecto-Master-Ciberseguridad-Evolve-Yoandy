@@ -24,9 +24,10 @@ backend/node_modules/
 frontend/.vite/
 *.node
 
-# Large binary/image files
+# Large binary/image files (root only)
 imagen.png
-*.png
+# Allow documentation screenshots
+!docs/img/*.png
 
 # Databases (runtime data)
 backend/*.db

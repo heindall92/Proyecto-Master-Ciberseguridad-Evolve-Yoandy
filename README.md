@@ -259,24 +259,52 @@ Wazuh Manager (dentro de Docker)
 
 ## 📸 Capturas de Pantalla
 
-<details>
-<summary>🖼️ Click para ver las capturas del sistema funcionando</summary>
-
 ### Dashboard principal de Wazuh
-> Resumen de agentes, alertas por severidad, módulos de seguridad (MITRE ATT&CK, compliance, FIM)
+> Resumen de agentes, alertas de las últimas 24 horas, módulos de seguridad
+
+![Dashboard principal](docs/img/01-dashboard-principal.png)
+
+---
+
+### Agente INFIERNO con MITRE ATT&CK
+> Tácticas detectadas: Evasión de Defensa, Acceso Inicial, Persistencia, Escalada de Privilegios
+
+![Agente MITRE](docs/img/02-agente-mitre.png)
+
+---
 
 ### Dashboard Cowrie Honeypot (tiempo real)
 > 12.918 alertas críticas, timeline de eventos, top IPs atacantes, comandos ejecutados
 
+![Cowrie Honeypot](docs/img/04-cowrie-honeypot.png)
+
+---
+
 ### Dashboard de Reportes de Seguridad
 > Resumen por regla, top 20 IPs atacantes, cobertura MITRE ATT&CK
 
-### 7 Monitores de alertas activos
-> Brute Force, Login Exitoso, Malware, Reverse Shell, Evasión de Defensa, Volumen Anómalo, Persistencia
+![Reportes de Seguridad](docs/img/03-reportes-seguridad.png)
 
-Las capturas se encuentran en la carpeta `Fotos de su funcionamiento en local/`
+---
 
-</details>
+### Monitores de alertas activos
+> 7 monitores habilitados: Brute Force, Login Exitoso, Malware, Reverse Shell, Evasión, Volumen Anómalo, Persistencia
+
+![Monitores](docs/img/07-monitores.png)
+
+---
+
+### Detalle de alerta activa
+> Actividad Elevada - Advertencia, severidad 3 (Medio), monitor de Volumen Anómalo
+
+![Alerta activa](docs/img/06-alerta-activa.png)
+
+---
+
+### Generación de informes PDF
+> Exportación directa desde el dashboard
+
+![Generación de informe](docs/img/09-generacion-informe.png)
 
 ---
 
