@@ -1,0 +1,203 @@
+# ═══════════════════════════════════════════════════════════
+# Valhalla SOC — Docker Compose (Official Wazuh Stack)
+#
+# Pipeline:
+#   Attacker → Cowrie Honeypot → Wazuh Manager
+#                  ↕
+#           Active Response (Ollama AI Integration)
+#                  ↓
+#           Wazuh Indexer
+#                  ↓
+#         Wazuh Dashboard (HTTPS: 443)
+# ═══════════════════════════════════════════════════════════
+
+services:
+  # ──────────────────────────────────────────────────
+  # WAZUH INDEXER (OpenSearch Database)
+  # ──────────────────────────────────────────────────
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.9.2
+    hostname: wazuh.indexer
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "node.name=wazuh.indexer"
+      - "cluster.name=wazuh-cluster"
+      - "discovery.type=single-node"
+      - "bootstrap.memory_lock=true"
+    user: "0"
+    entrypoint: >
+      bash -c "
+      mkdir -p /usr/share/wazuh-indexer/certs/ &&
+      cp -L /source_certs/root-ca.pem            /usr/share/wazuh-indexer/certs/root-ca.pem &&
+      cp -L /source_certs/wazuh.indexer.pem      /usr/share/wazuh-indexer/certs/indexer.pem &&
+      cp -L /source_certs/wazuh.indexer-key.pem  /usr/share/wazuh-indexer/certs/indexer-key.pem &&
+      cp -L /source_certs/admin.pem              /usr/share/wazuh-indexer/certs/admin.pem &&
+      cp -L /source_certs/admin-key.pem          /usr/share/wazuh-indexer/certs/admin-key.pem &&
+      chown -R 1000:1000 /usr/share/wazuh-indexer/certs/ &&
+      chmod 500 /usr/share/wazuh-indexer/certs/ &&
+      chmod 400 /usr/share/wazuh-indexer/certs/* &&
+      sed -i 's|/etc/wazuh-indexer/certs/|/usr/share/wazuh-indexer/certs/|g' /usr/share/wazuh-indexer/opensearch.yml &&
+      exec /entrypoint.sh opensearchwrapper
+      "
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./config/wazuh_indexer_ssl_certs:/source_certs:ro
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - valhalla-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ──────────────────────────────────────────────────
+  # WAZUH MANAGER (Core SIEM Engine)
+  # ──────────────────────────────────────────────────
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.9.2
+    hostname: wazuh.manager
+    restart: always
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=admin
+      - FILEBEAT_SSL_VERIFICATION_MODE=none
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/certs/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/certs/wazuh.manager.pem
+      - SSL_KEY=/etc/ssl/certs/wazuh.manager-key.pem
+      # Inyectar url de Ollama usando la red host de docker si está corriendo local
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    volumes:
+      - wazuh-manager-data:/var/ossec/data
+      - wazuh-manager-api:/var/ossec/api/configuration
+      - wazuh-manager-logs:/var/ossec/logs
+
+      # Certs específicos (bind-mount directo)
+      - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/etc/ssl/certs/root-ca.pem:ro
+      - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/certs/wazuh.manager.pem:ro
+      - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/certs/wazuh.manager-key.pem:ro
+
+      # Montajes de Cowrie & Configuracion de Integracion
+      - cowrie_logs:/var/log/cowrie:ro
+      - ./wazuh_config/ossec.conf:/var/ossec/etc/ossec.conf
+      - ./wazuh_config/rules/cowrie_rules.xml:/var/ossec/etc/rules/cowrie_rules.xml
+      - ./wazuh_config/decoders/cowrie_decoders.xml:/var/ossec/etc/decoders/cowrie_decoders.xml
+      # Montamos el script en /tmp para luego copiarlo con permisos correctos en el entrypoint
+      - ./wazuh_config/integrations/custom-ollama.py:/tmp/custom-ollama-src:ro
+    entrypoint: >
+      bash -c "
+      mkdir -p /var/ossec/integrations /var/ossec/etc/shared &&
+      touch /var/ossec/etc/shared/ar.conf &&
+      cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama &&
+      chown root:wazuh /var/ossec/integrations/custom-ollama 2>/dev/null || true &&
+      chmod 750 /var/ossec/integrations/custom-ollama &&
+      echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf &&
+      exec /init
+      "
+    networks:
+      - valhalla-net
+    depends_on:
+      - wazuh.indexer
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+
+  # ──────────────────────────────────────────────────
+  # WAZUH DASHBOARD (Official UI)
+  # ──────────────────────────────────────────────────
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.9.2
+    hostname: wazuh.dashboard
+    restart: always
+    ports:
+      - "443:443"
+    environment:
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=admin
+      - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
+      - WAZUH_API_URL=https://wazuh.manager:55000
+      - SERVER_SSL_CERTIFICATE=/etc/wazuh-dashboard/certs/dashboard.pem
+      - SERVER_SSL_KEY=/etc/wazuh-dashboard/certs/dashboard-key.pem
+      # Permite que el plugin Wazuh conecte a la API del manager sin validar su cert auto-firmado
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    user: "0"
+    entrypoint: >
+      bash -c "
+      mkdir -p /etc/wazuh-dashboard/certs/ &&
+      cp -L /source_certs/root-ca.pem               /etc/wazuh-dashboard/certs/root-ca.pem &&
+      cp -L /source_certs/wazuh.dashboard.pem       /etc/wazuh-dashboard/certs/dashboard.pem &&
+      cp -L /source_certs/wazuh.dashboard-key.pem   /etc/wazuh-dashboard/certs/dashboard-key.pem &&
+      chown -R 1000:1000 /etc/wazuh-dashboard/certs/ &&
+      chmod 500 /etc/wazuh-dashboard/certs/ &&
+      chmod 400 /etc/wazuh-dashboard/certs/* &&
+      sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i 's|#opensearch.password:|opensearch.password: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      exec /usr/sbin/chroot --userspec=1000:0 / /entrypoint.sh
+      "
+    volumes:
+      - ./config/wazuh_indexer_ssl_certs:/source_certs:ro
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    networks:
+      - valhalla-net
+    depends_on:
+      - wazuh.indexer
+      - wazuh.manager
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+
+  # ──────────────────────────────────────────────────
+  # COWRIE HONEYPOT
+  # ──────────────────────────────────────────────────
+  cowrie:
+    image: cowrie/cowrie:latest
+    container_name: valhalla-cowrie
+    restart: unless-stopped
+    ports:
+      - "2222:2222"
+      - "2223:2223"
+    volumes:
+      - cowrie_logs:/cowrie/cowrie-git/var/log/cowrie
+      - cowrie_downloads:/cowrie/cowrie-git/var/lib/cowrie/downloads
+      - ./cowrie_config/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - ./cowrie_config/userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro
+    environment:
+      - COWRIE_OUTPUT_jsonlog_enabled=true
+    networks:
+      - valhalla-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  wazuh-indexer-data:
+  wazuh-manager-data:
+  wazuh-manager-api:
+  wazuh-manager-logs:
+  wazuh-dashboard-config:
+  wazuh-dashboard-custom:
+  cowrie_logs:
+  cowrie_downloads:
+
+networks:
+  valhalla-net:
+    driver: bridge

@@ -1,0 +1,33 @@
+# ═══════════════════════════════════════════════════════════
+# Cowrie User Database — Trap Credentials
+# Format: username:x:password:uid:gid:comment
+# These are "allowed" logins — attackers who guess these
+# will get into a fake shell where we log EVERYTHING
+# ═══════════════════════════════════════════════════════════
+
+# Common usernames with weak passwords — irresistible to bots
+root:x:!root
+root:x:!admin
+root:x:!password
+root:x:!123456
+root:x:!toor
+admin:x:!admin
+admin:x:!password
+admin:x:!admin123
+user:x:!user
+user:x:!password
+test:x:!test
+test:x:!123456
+ubuntu:x:!ubuntu
+pi:x:!raspberry
+postgres:x:!postgres
+mysql:x:!mysql
+oracle:x:!oracle
+deploy:x:!deploy
+git:x:!git
+jenkins:x:!jenkins
+ftpuser:x:!ftp123
+www-data:x:!www-data
+
+# Block all other attempts (deny by default)
+*:x:*

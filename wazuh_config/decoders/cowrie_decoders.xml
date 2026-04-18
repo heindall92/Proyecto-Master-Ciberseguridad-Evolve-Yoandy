@@ -1,0 +1,21 @@
+<!--
+═══════════════════════════════════════════════════════════
+  Valhalla SOC — Wazuh Custom Decoders for Cowrie Honeypot
+  File: /var/ossec/etc/decoders/cowrie_decoders.xml
+
+  Uses Wazuh's built-in JSON_Decoder to parse Cowrie logs.
+  Fields are auto-extracted from JSON and available to rules.
+═══════════════════════════════════════════════════════════
+-->
+
+<!-- Cowrie JSON decoder — matches lines starting with {"eventid": -->
+<decoder name="cowrie">
+  <prematch>^{"eventid": "</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- Alternate field order: some Cowrie versions put timestamp first -->
+<decoder name="cowrie">
+  <prematch>^{"timestamp": "\d{4}-</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>

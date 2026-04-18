@@ -1,0 +1,36 @@
+# Claude Code internal files
+.claude/
+.remember/
+.playwright-mcp/
+
+# SSL certificates (sensitive)
+config/wazuh_indexer_ssl_certs/*.pem
+config/wazuh_indexer_ssl_certs/*.key
+
+# Docker volumes data
+wazuh-*-data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Node.js
+frontend/node_modules/
+backend/node_modules/
+frontend/.vite/
+*.node
+
+# Large binary/image files
+imagen.png
+*.png
+
+# Databases (runtime data)
+backend/*.db
+
+# Logs
+*.log
+
+# Windows temp
+Thumbs.db
+desktop.ini

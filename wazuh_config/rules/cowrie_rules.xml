@@ -1,0 +1,207 @@
+<!--
+═══════════════════════════════════════════════════════════
+  Valhalla SOC — Wazuh Custom Rules for Cowrie Honeypot
+  File: /var/ossec/etc/rules/cowrie_rules.xml
+  
+  These rules detect and classify Cowrie honeypot events
+  into security alerts with appropriate severity levels.
+═══════════════════════════════════════════════════════════
+-->
+
+<group name="cowrie,honeypot,">
+
+  <!-- ════════ BASE RULE: Cowrie JSON Log ════════ -->
+  <rule id="100100" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">^cowrie\.</field>
+    <description>Cowrie honeypot event.</description>
+  </rule>
+
+  <!-- ════════ SSH CONNECTION ════════ -->
+  <rule id="100101" level="3">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.session.connect</field>
+    <description>Cowrie: New SSH connection from $(src_ip)</description>
+    <group>connection_attempt,</group>
+  </rule>
+
+  <rule id="100102" level="3">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.client.version</field>
+    <description>Cowrie: SSH client version identified — $(message)</description>
+    <group>recon,</group>
+  </rule>
+
+  <!-- ════════ AUTHENTICATION ════════ -->
+  <rule id="100110" level="5">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.login.failed</field>
+    <description>Cowrie: Failed SSH login attempt — user: $(username) from $(src_ip)</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- Brute force: 5+ failed logins from same IP in 120 seconds -->
+  <rule id="100111" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100110</if_matched_sid>
+    <same_source_ip />
+    <description>Cowrie: SSH brute force attack detected from $(src_ip) — multiple failed logins</description>
+    <group>authentication_failures,brute_force,</group>
+    <mitre>
+      <id>T1110</id>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Successful login (highly suspicious on a honeypot) -->
+  <rule id="100112" level="9">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.login.success</field>
+    <description>Cowrie: Successful SSH login — user: $(username) from $(src_ip) — HONEYPOT COMPROMISED</description>
+    <group>authentication_success,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Successful login after brute force (critical) -->
+  <rule id="100113" level="12">
+    <if_sid>100112</if_sid>
+    <if_matched_sid>100110</if_matched_sid>
+    <same_source_ip />
+    <description>Cowrie: Successful login AFTER brute force from $(src_ip) — Active intrusion!</description>
+    <group>authentication_success,brute_force,</group>
+    <mitre>
+      <id>T1078</id>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- ════════ COMMAND EXECUTION ════════ -->
+  <rule id="100120" level="8">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.command.input</field>
+    <description>Cowrie: Command executed in honeypot — CMD: $(input)</description>
+    <group>command_execution,</group>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+  </rule>
+
+  <!-- Reconnaissance commands -->
+  <rule id="100121" level="9">
+    <if_sid>100120</if_sid>
+    <match>uname|whoami|id |cat /etc/passwd|cat /etc/shadow|ifconfig|ip addr|netstat|ps aux</match>
+    <description>Cowrie: Reconnaissance commands detected — $(input)</description>
+    <group>command_execution,recon,</group>
+    <mitre>
+      <id>T1059.004</id>
+      <id>T1082</id>
+    </mitre>
+  </rule>
+
+  <!-- Malware download (wget/curl) -->
+  <rule id="100130" level="13">
+    <if_sid>100120</if_sid>
+    <match>wget |curl |tftp |scp |fetch </match>
+    <description>Cowrie: Malware download attempt — $(input)</description>
+    <group>malware,file_transfer,</group>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- File download event from Cowrie -->
+  <rule id="100131" level="13">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.session.file_download</field>
+    <description>Cowrie: File downloaded by attacker from $(url)</description>
+    <group>malware,file_transfer,</group>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- Reverse shell attempts -->
+  <rule id="100140" level="15">
+    <if_sid>100120</if_sid>
+    <match>/dev/tcp|bash -i|nc -e|ncat|reverse_tcp|meterpreter</match>
+    <description>Cowrie: REVERSE SHELL attempt detected — $(input)</description>
+    <group>c2,reverse_shell,</group>
+    <mitre>
+      <id>T1059.004</id>
+      <id>T1071</id>
+    </mitre>
+  </rule>
+
+  <!-- Firewall/security tool tampering -->
+  <rule id="100150" level="14">
+    <if_sid>100120</if_sid>
+    <match>iptables -F|iptables -X|ufw disable|service firewalld stop|setenforce 0|systemctl stop</match>
+    <description>Cowrie: Attempt to disable firewall/security — $(input)</description>
+    <group>defense_evasion,</group>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Persistence via cron -->
+  <rule id="100160" level="11">
+    <if_sid>100120</if_sid>
+    <match>crontab|/etc/cron|at |systemctl enable</match>
+    <description>Cowrie: Persistence mechanism detected — $(input)</description>
+    <group>persistence,</group>
+    <mitre>
+      <id>T1053</id>
+    </mitre>
+  </rule>
+
+  <!-- Log tampering / anti-forensics -->
+  <rule id="100170" level="12">
+    <if_sid>100120</if_sid>
+    <match>history -c|unset HISTFILE|rm -rf /var/log|shred |> /var/log</match>
+    <description>Cowrie: Anti-forensics / log tampering detected — $(input)</description>
+    <group>defense_evasion,anti_forensics,</group>
+    <mitre>
+      <id>T1070</id>
+    </mitre>
+  </rule>
+
+  <!-- Privilege escalation attempts -->
+  <rule id="100180" level="12">
+    <if_sid>100120</if_sid>
+    <match>sudo |su -|chmod u+s|chown root|SUID</match>
+    <description>Cowrie: Privilege escalation attempt — $(input)</description>
+    <group>privilege_escalation,</group>
+    <mitre>
+      <id>T1548</id>
+    </mitre>
+  </rule>
+
+  <!-- TCP Tunnel / Port forwarding -->
+  <rule id="100190" level="13">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.direct-tcpip.request</field>
+    <description>Cowrie: TCP tunnel/port forwarding request from $(src_ip)</description>
+    <group>c2,tunnel,</group>
+    <mitre>
+      <id>T1572</id>
+    </mitre>
+  </rule>
+
+  <!-- Session closed -->
+  <rule id="100199" level="3">
+    <if_sid>100100</if_sid>
+    <field name="eventid">cowrie.session.closed</field>
+    <description>Cowrie: Session closed — duration: $(duration)s</description>
+    <group>session,</group>
+  </rule>
+
+  <!-- ════════ OLLAMA AI INTEGRATION RULES ════════ -->
+  <rule id="100200" level="10">
+    <decoded_as>json</decoded_as>
+    <field name="integration">ollama_ai</field>
+    <description>Ollama AI Insight para Alerta $(original_rule_id): $(ai_verdict)</description>
+    <group>ai_analysis,ollama,</group>
+  </rule>
+
+</group>
