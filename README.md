@@ -1,4 +1,4 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=200&section=header&text=⚔️%20VALHALLA%20SOC&fontSize=60&fontColor=fff&animation=twinkling&fontAlignY=35&desc=Centro%20de%20Operaciones%20de%20Seguridad%20con%20IA&descSize=18&descAlignY=55&descAlign=50" width="100%"/>
+![header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=200&section=header&text=VALHALLA%20SOC&fontSize=60&fontColor=fff&animation=twinkling&fontAlignY=35&desc=Centro%20de%20Operaciones%20de%20Seguridad%20con%20IA&descSize=18&descAlignY=55&descAlign=50)
 
 <div align="center">
 
@@ -490,7 +490,7 @@ Valhalla-SOC/
 
 ---
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=120&section=footer&animation=twinkling" width="100%"/>
+![footer](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=120&section=footer&animation=twinkling)
 
 <div align="center">
 
