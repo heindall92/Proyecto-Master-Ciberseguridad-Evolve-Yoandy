@@ -1,0 +1,79 @@
+# ═══════════════════════════════════════════════════════════
+# Cowrie — Base de datos de usuarios (userdb)
+#
+# Formato:
+#   usuario:x:contraseña
+#
+# Convenciones:
+#   *           -> cualquier contraseña (wildcard)
+#   !pass       -> DENEGAR si coincide con 'pass'
+#   pass        -> PERMITIR si coincide
+#
+# Estrategia: dejamos pasar a los bots con credenciales
+# débiles típicas (root/123456, admin/admin, etc.) para
+# que caigan en la shell falsa y podamos grabar TODO lo
+# que intentan hacer.
+# ═══════════════════════════════════════════════════════════
+
+# --- root con passwords típicos de diccionario ---
+root:x:root
+root:x:admin
+root:x:password
+root:x:123456
+root:x:123456789
+root:x:12345
+root:x:1234
+root:x:toor
+root:x:qwerty
+root:x:letmein
+root:x:changeme
+
+# --- admin ---
+admin:x:admin
+admin:x:admin123
+admin:x:password
+admin:x:123456
+admin:x:admin1234
+
+# --- usuarios genéricos ---
+user:x:user
+user:x:password
+user:x:123456
+test:x:test
+test:x:123456
+test:x:test123
+guest:x:guest
+guest:x:123456
+
+# --- sistemas típicos Linux / cloud ---
+ubuntu:x:ubuntu
+ubuntu:x:123456
+debian:x:debian
+centos:x:centos
+pi:x:raspberry
+postgres:x:postgres
+mysql:x:mysql
+oracle:x:oracle
+oracle:x:oracle123
+
+# --- cuentas de servicio (target común en CI/CD) ---
+deploy:x:deploy
+git:x:git
+jenkins:x:jenkins
+ftpuser:x:ftp123
+www-data:x:www-data
+nginx:x:nginx
+apache:x:apache
+
+# --- IoT / routers / cámaras (Mirai-style) ---
+support:x:support
+service:x:service
+tech:x:tech
+installer:x:installer
+
+# Denegar explícitamente passwords obviamente seguras
+*:x:!$(openssl*
+*:x:!pbkdf2*
+
+# Reglas por defecto: bloquear todo lo demás
+*:x:*

@@ -1,0 +1,100 @@
+# ═══════════════════════════════════════════════════════════
+# Valhalla SOC — Honeypot (Cowrie) — Standalone stack
+#
+# Este compose es totalmente INDEPENDIENTE del resto del SOC.
+# Se puede arrancar por separado y el backend (FastAPI) consume
+# los logs JSON del volumen compartido `cowrie_logs`.
+#
+# Puertos expuestos al host:
+#   - 2222/tcp  -> SSH (se hace pasar por OpenSSH)
+#   - 2223/tcp  -> Telnet
+#
+# Red externa compartida:
+#   - valhalla-net  (la crea este compose si no existe)
+#
+# Logs JSON:
+#   - Volumen nombrado `cowrie_logs` montado en
+#     /cowrie/cowrie-git/var/log/cowrie dentro del contenedor.
+#   - También se hace bind-mount a ./logs para inspección local.
+# ═══════════════════════════════════════════════════════════
+
+services:
+  cowrie:
+    image: cowrie/cowrie:latest
+    container_name: valhalla-cowrie
+    hostname: production-server
+    restart: unless-stopped
+
+    # ──────────────────────────────────────────────────
+    # Puertos (host:container)
+    # ──────────────────────────────────────────────────
+    ports:
+      - "${COWRIE_SSH_PORT:-2222}:2222"
+      - "${COWRIE_TELNET_PORT:-2223}:2223"
+
+    # ──────────────────────────────────────────────────
+    # Configuración + logs persistentes
+    # ──────────────────────────────────────────────────
+    volumes:
+      # Config bind-mount (solo lectura)
+      - ./cowrie/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - ./cowrie/userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro
+
+      # Logs JSON — volumen nombrado + bind-mount local para depuración
+      - cowrie_logs:/cowrie/cowrie-git/var/log/cowrie
+      - ./logs:/cowrie/cowrie-git/var/log/cowrie-local
+
+      # Archivos capturados a los atacantes (malware, scripts, etc.)
+      - cowrie_downloads:/cowrie/cowrie-git/var/lib/cowrie/downloads
+      - ./downloads:/cowrie/cowrie-git/var/lib/cowrie/downloads-local
+
+      # TTY logs (sesiones grabadas)
+      - cowrie_tty:/cowrie/cowrie-git/var/lib/cowrie/tty
+      - ./tty:/cowrie/cowrie-git/var/lib/cowrie/tty-local
+
+    environment:
+      # Fuerza la salida JSON aunque el .cfg cambie
+      - COWRIE_OUTPUT_jsonlog_enabled=true
+      - COWRIE_OUTPUT_jsonlog_logfile=var/log/cowrie/cowrie.json
+
+    networks:
+      - valhalla-net
+
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2222 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ──────────────────────────────────────────────────
+# Volúmenes nombrados — persistentes entre reinicios
+# ──────────────────────────────────────────────────
+volumes:
+  cowrie_logs:
+    name: valhalla_cowrie_logs
+  cowrie_downloads:
+    name: valhalla_cowrie_downloads
+  cowrie_tty:
+    name: valhalla_cowrie_tty
+
+# ──────────────────────────────────────────────────
+# Red compartida — el backend FastAPI se une a esta
+# misma red (external: true en su propio compose).
+# ──────────────────────────────────────────────────
+networks:
+  valhalla-net:
+    name: valhalla-net
+    driver: bridge

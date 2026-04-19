@@ -1,0 +1,24 @@
+# ═══════════════════════════════════════════════════════════
+# Honeypot — Git ignore
+# ═══════════════════════════════════════════════════════════
+
+# Variables de entorno locales
+.env
+
+# Logs y artefactos capturados (pueden contener malware real)
+logs/*
+!logs/.gitkeep
+
+downloads/*
+!downloads/.gitkeep
+
+tty/*
+!tty/.gitkeep
+
+# Ficheros temporales
+*.pid
+*.lock
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
