@@ -76,6 +76,33 @@ Log "Iniciando verificacion automatica..."
 Log ("Informe -> " + $EvidenceFile)
 Log ""
 
+# ----- Preflight: Docker daemon ----------------------------
+Log "Comprobando que Docker Desktop esta corriendo..."
+$daemon = Run-Cmd 'docker info --format "{{.ServerVersion}}"'
+if ($daemon.out -notmatch "^[0-9]+\.[0-9]+") {
+    Write-Host ""
+    Write-Host "  ERROR: Docker Desktop no esta corriendo (daemon no responde)." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Que hacer:" -ForegroundColor Yellow
+    Write-Host "    1) Abre Docker Desktop (menu Inicio -> Docker Desktop)." -ForegroundColor Yellow
+    Write-Host "    2) Espera a que el icono diga 'Engine running' (~30-60s)." -ForegroundColor Yellow
+    Write-Host "    3) Vuelve a ejecutar este script." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Detalle tecnico del error:" -ForegroundColor DarkGray
+    Write-Host ("    " + $daemon.out) -ForegroundColor DarkGray
+    Write-Host ""
+    W ""
+    W "## ABORTADO - Docker daemon no responde"
+    W ""
+    W "El script se ha detenido antes de ejecutar los tests porque Docker Desktop no esta corriendo."
+    W ""
+    W '```'
+    W $daemon.out
+    W '```'
+    exit 1
+}
+Log ("  OK - Docker daemon corriendo (ServerVersion " + $daemon.out + ")")
+
 # ----- TC-00 Entorno ---------------------------------------
 W ""
 W "## TC-00 - Entorno"
@@ -89,7 +116,7 @@ W ""
 W "docker compose version"
 W $composeV.out
 W '```'
-if ($dockerV.out -match "Docker version") { Mark-OK "TC-00" } else { Mark-KO "TC-00" "docker no disponible"; Write-Host "Abre Docker Desktop y reintenta." -ForegroundColor Red; exit 1 }
+if ($dockerV.out -match "Docker version") { Mark-OK "TC-00" } else { Mark-KO "TC-00" "docker no disponible"; exit 1 }
 
 # ----- TC-01 Imagen ---------------------------------------
 W ""
