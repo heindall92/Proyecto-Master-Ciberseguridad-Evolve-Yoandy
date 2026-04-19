@@ -4,12 +4,37 @@ Honeypot **SSH/Telnet** independiente basado en [Cowrie](https://github.com/cowr
 
 Este subproyecto es **totalmente autocontenido**: tiene su propio `docker-compose.yml`, su propia configuración y sus propios scripts. Puedes arrancarlo sin levantar el resto del SOC.
 
+## 🎯 ¿Solo quieres comprobar que funciona?
+
+**Un solo comando** en PowerShell (Windows):
+
+```powershell
+cd honeypot
+.\verificar.bat
+```
+
+o sin doble-click:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
+```
+
+En Linux / macOS / WSL:
+
+```bash
+cd honeypot
+bash scripts/verify.sh
+```
+
+Arranca el honeypot, hace 15 tests, lanza ataques simulados, captura los eventos JSON reales y **genera un informe en `docs/EVIDENCIA-<fecha>.md`** con toda la evidencia. Aspecto esperado: [docs/EVIDENCIA-ejemplo.md](docs/EVIDENCIA-ejemplo.md).
+
 ## 📚 Documentación
 
 | Documento | Qué contiene |
 |---|---|
 | [**docs/MANUAL.md**](docs/MANUAL.md) | Manual completo de operación (requisitos, instalación, configuración, operación diaria, troubleshooting, integración con backend). |
 | [**docs/VERIFICACION.md**](docs/VERIFICACION.md) | Procedimiento formal de verificación con 15 tests. Rellenable como entregable. |
+| [**docs/EVIDENCIA-ejemplo.md**](docs/EVIDENCIA-ejemplo.md) | Ejemplo del informe que genera `scripts/verify.ps1` / `verify.sh`. |
 | [**docs/CHANGELOG.md**](docs/CHANGELOG.md) | Qué cambios se han hecho en el repo, por qué, y qué no se ha tocado. |
 
 ---
