@@ -118,18 +118,22 @@ W $composeV.out
 W '```'
 if ($dockerV.out -match "Docker version") { Mark-OK "TC-00" } else { Mark-KO "TC-00" "docker no disponible"; exit 1 }
 
-# ----- TC-01 Imagen (build) -------------------------------
+# ----- TC-01 Imagen ---------------------------------------
 W ""
-W "## TC-01 - Imagen Docker (build local con perms corregidos)"
+W "## TC-01 - Imagen Docker disponible"
 W ""
-Log "Construyendo imagen valhalla-cowrie (primera vez ~2-3 min, luego instantaneo)..."
-$build = Run-Cmd 'docker compose build 2>&1'
+Log "docker pull cowrie/cowrie:latest (puede tardar 1-2 min la primera vez)..."
+$pull = Run-Cmd 'docker pull cowrie/cowrie:latest'
 W '```'
-W "docker compose build"
-W $build.out
+W "docker pull cowrie/cowrie:latest"
+W $pull.out
 W '```'
-$imgCheck = Run-Cmd 'docker images valhalla-cowrie:latest --format "{{.Repository}}"'
-if ($imgCheck.out -match "valhalla-cowrie") { Mark-OK "TC-01" } else { Mark-KO "TC-01" "build fallo" }
+if ($pull.out -match "(Downloaded|up to date|Pull complete|Status: Image)") { Mark-OK "TC-01" } else { Mark-KO "TC-01" "pull fallo" }
+
+# Pre-crear dirs host para el bind-mount
+foreach ($d in @("logs","downloads","tty")) {
+    New-Item -Force -ItemType Directory -Path (Join-Path $HoneypotDir $d) | Out-Null
+}
 
 # ----- TC-02 Arranque -------------------------------------
 W ""
@@ -294,14 +298,12 @@ print("TOTAL_OK={}".format(ok_count))
     Mark-KO "TC-09" "sin python no se ejecutan comandos en la shell falsa"
 }
 
-# ----- Helper: contar eventos en el contenedor (por path) -
+# ----- Helper: contar eventos via bind-mount --------------
+$Script:LogFile = Join-Path $HoneypotDir "logs\cowrie.json"
+
 function Count-Events {
-    param([string]$Path)
-    if (-not $Path) { return 0 }
-    $r = Run-Cmd ('docker exec valhalla-cowrie sh -c "wc -l < ' + $Path + ' 2>/dev/null || echo 0"')
-    $n = 0
-    [int]::TryParse($r.out.Trim(), [ref]$n) | Out-Null
-    return $n
+    if (-not (Test-Path $Script:LogFile)) { return 0 }
+    return (Get-Content $Script:LogFile -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
 }
 
 # ----- TC-10 + TC-11 Eventos JSON ------------------------
@@ -310,23 +312,17 @@ W "## TC-10 + TC-11 - Eventos en cowrie.json"
 W ""
 Start-Sleep -Seconds 3
 
-# Probe agresivo: buscar cowrie.json en todo el contenedor
-$probe = Run-Cmd 'docker exec valhalla-cowrie sh -c "find / -name cowrie.json -type f 2>/dev/null | head -1"'
-$Script:LogPath = $probe.out.Trim()
-if (-not $Script:LogPath) {
-    # Si aun no existe, usamos la ruta esperada (puede aparecer tras eventos)
-    $Script:LogPath = "/cowrie/cowrie-git/var/log/cowrie/cowrie.json"
-}
-
-# Diagnostico: logs del contenedor y listado del dir de logs
+# Diagnostico si fallan: docker logs + ls del dir
 $diagLogs = Run-Cmd 'docker logs --tail 30 valhalla-cowrie 2>&1'
 $diagDir  = Run-Cmd 'docker exec valhalla-cowrie sh -c "ls -la /cowrie/cowrie-git/var/log/cowrie/ 2>&1"'
 
-$count = Count-Events -Path $Script:LogPath
-$tailCmd = 'docker exec valhalla-cowrie sh -c "tail -n 20 ' + $Script:LogPath + ' 2>/dev/null || true"'
-$tailOut = Run-Cmd $tailCmd
+$count = Count-Events
+$tailOut = ""
+if (Test-Path $Script:LogFile) {
+    $tailOut = (Get-Content $Script:LogFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+}
 
-W ("Ruta del log dentro del contenedor: ``" + $Script:LogPath + "``")
+W ("Ruta del log (bind-mount host): ``" + $Script:LogFile + "``")
 W ""
 W ("Total de eventos registrados: **" + $count + "**")
 W ""
@@ -342,7 +338,7 @@ W '```'
 W ""
 W "Ultimas lineas del JSON (max 20):"
 W '```json'
-W $tailOut.out
+W $tailOut
 W '```'
 if ($count -gt 0) { Mark-OK "TC-10" } else { Mark-KO "TC-10" "JSON vacio" }
 if ($count -gt 5) { Mark-OK "TC-11" } else { Mark-KO "TC-11" ("solo " + $count + " eventos") }
@@ -351,36 +347,38 @@ if ($count -gt 5) { Mark-OK "TC-11" } else { Mark-KO "TC-11" ("solo " + $count +
 W ""
 W "## TC-13 - Persistencia tras restart"
 W ""
-$n1 = Count-Events -Path $Script:LogPath
+$n1 = Count-Events
 Log "Reiniciando contenedor..."
 Run-Cmd 'docker compose restart' | Out-Null
 Start-Sleep -Seconds 15
-$n2 = Count-Events -Path $Script:LogPath
+$n2 = Count-Events
 W '```'
 W ("Eventos antes del restart: " + $n1)
 W ("Eventos despues:           " + $n2)
 W '```'
 if ($n2 -ge $n1 -and $n1 -gt 0) { Mark-OK "TC-13" } elseif ($n1 -eq 0) { Mark-KO "TC-13" "no habia eventos antes del restart" } else { Mark-KO "TC-13" "logs perdidos" }
 
-# ----- TC-14 Volumenes -----------------------------------
+# ----- TC-14 Bind-mounts visibles ------------------------
 W ""
-W "## TC-14 - Volumenes nombrados"
+W "## TC-14 - Bind-mounts (logs/downloads/tty) presentes"
 W ""
-$vols = Run-Cmd 'docker volume ls --format "{{.Name}}"'
+$mountInfo = Run-Cmd 'docker inspect -f "{{range .Mounts}}{{.Source}} -> {{.Destination}}`n{{end}}" valhalla-cowrie'
 W '```'
-W $vols.out
+W $mountInfo.out
 W '```'
-if ($vols.out -match "valhalla_cowrie_logs") { Mark-OK "TC-14" } else { Mark-KO "TC-14" "volumen ausente" }
+if ($mountInfo.out -match "logs") { Mark-OK "TC-14" } else { Mark-KO "TC-14" "bind-mount logs ausente" }
 
-# ----- TC-15 cowrie.json accesible ------------------------
+# ----- TC-15 cowrie.json accesible en host ---------------
 W ""
-W "## TC-15 - cowrie.json existe y es accesible"
+W "## TC-15 - cowrie.json existe en ./logs (host)"
 W ""
-$lsLog = Run-Cmd ('docker exec valhalla-cowrie ls -la ' + $Script:LogPath)
+$dir = Get-ChildItem -Path (Join-Path $HoneypotDir "logs") -Force -ErrorAction SilentlyContinue
 W '```'
-W $lsLog.out
+W "Contenido de logs/ en host:"
+foreach ($f in $dir) { W ("  " + $f.Name + "  (" + $f.Length + " bytes)") }
 W '```'
-if ($count -gt 0) { Mark-OK "TC-15" } else { Mark-KO "TC-15" "cowrie.json vacio o ausente" }
+$hasJson = $dir | Where-Object { $_.Name -eq "cowrie.json" -and $_.Length -gt 0 }
+if ($hasJson) { Mark-OK "TC-15" } else { Mark-KO "TC-15" "cowrie.json vacio o ausente" }
 
 # ----- Resumen -------------------------------------------
 W ""
