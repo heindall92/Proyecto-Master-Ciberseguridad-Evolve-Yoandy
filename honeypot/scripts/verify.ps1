@@ -118,17 +118,18 @@ W $composeV.out
 W '```'
 if ($dockerV.out -match "Docker version") { Mark-OK "TC-00" } else { Mark-KO "TC-00" "docker no disponible"; exit 1 }
 
-# ----- TC-01 Imagen ---------------------------------------
+# ----- TC-01 Imagen (build) -------------------------------
 W ""
-W "## TC-01 - Imagen Docker disponible"
+W "## TC-01 - Imagen Docker (build local con perms corregidos)"
 W ""
-Log "docker pull cowrie/cowrie:latest (puede tardar 1-2 min la primera vez)..."
-$pull = Run-Cmd 'docker pull cowrie/cowrie:latest'
+Log "Construyendo imagen valhalla-cowrie (primera vez ~2-3 min, luego instantaneo)..."
+$build = Run-Cmd 'docker compose build 2>&1'
 W '```'
-W "docker pull cowrie/cowrie:latest"
-W $pull.out
+W "docker compose build"
+W $build.out
 W '```'
-if ($pull.out -match "(Downloaded|up to date|Pull complete|Status: Image)") { Mark-OK "TC-01" } else { Mark-KO "TC-01" "pull fallo" }
+$imgCheck = Run-Cmd 'docker images valhalla-cowrie:latest --format "{{.Repository}}"'
+if ($imgCheck.out -match "valhalla-cowrie") { Mark-OK "TC-01" } else { Mark-KO "TC-01" "build fallo" }
 
 # ----- TC-02 Arranque -------------------------------------
 W ""
@@ -142,8 +143,8 @@ W "docker compose up -d"
 W $upResult.out
 W '```'
 
-Log "Esperando 30s a que Cowrie inicialice..."
-Start-Sleep -Seconds 30
+Log "Esperando 40s a que Cowrie inicialice..."
+Start-Sleep -Seconds 40
 
 # TC-02 se comprueba via `docker ps` (no parseando texto de compose,
 # porque el formato de salida cambia entre versiones 2.x/3.x/Desktop).

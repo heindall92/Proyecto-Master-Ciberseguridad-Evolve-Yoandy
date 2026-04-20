@@ -20,7 +20,10 @@
 
 services:
   cowrie:
-    image: cowrie/cowrie:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: valhalla-cowrie:latest
     container_name: valhalla-cowrie
     hostname: production-server
     restart: unless-stopped
