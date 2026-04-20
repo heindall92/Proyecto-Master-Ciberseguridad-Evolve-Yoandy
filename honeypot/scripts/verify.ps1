@@ -221,32 +221,37 @@ foreach ($c in @("python","python3","py")) {
     if (Get-Command $c -ErrorAction SilentlyContinue) { $pyok = $true; $pyCmd = $c; break }
 }
 
-# Primero: aperturas TCP - fuerzan que Cowrie emita `session.connect`
-# aunque paramiko falle. Esto garantiza que haya eventos en el JSON.
+# Primero: mini-handshake SSH (enviar banner) - fuerza a Cowrie
+# a emitir session.connect + client.version aunque paramiko falle.
 for ($i=0; $i -lt 5; $i++) {
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient("localhost", 2222)
+        $s = $tcp.GetStream()
+        $s.ReadTimeout = 3000
+        $buf = New-Object byte[] 256
+        $s.Read($buf, 0, 256) | Out-Null
+        $ours = [System.Text.Encoding]::ASCII.GetBytes("SSH-2.0-verify-test`r`n")
+        $s.Write($ours, 0, $ours.Length)
         Start-Sleep -Milliseconds 500
         $tcp.Close()
     } catch {}
 }
 
 if ($pyok) {
-    # Instalar paramiko con feedback visible (no silencioso)
     Log "Instalando paramiko (si hace falta)..."
-    $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check paramiko')
-    $checkParamiko = Run-Cmd ($pyCmd + ' -c "import paramiko; print(paramiko.__version__)"')
-    if ($checkParamiko.out -notmatch "^\d") {
-        W "_(paramiko no se pudo instalar/importar)_"
+    $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check paramiko 2>&1')
+    # Redirigir stderr a null en el import-check (python 3.6 emite warning)
+    $checkRaw = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>NUL')
+    $pver = ($checkRaw.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1).Trim()
+    if (-not $pver) {
+        W "_(paramiko no disponible - solo handshake SSH minimo sin auth)_"
         W '```'
-        W ("pip output: " + $pipOut.out)
-        W ("import test: " + $checkParamiko.out)
+        W ("import test: " + $checkRaw.out)
         W '```'
-        W "Se generaron 5 conexiones TCP contra localhost:2222 (sin auth, sin comandos)."
         Mark-OK "TC-07"
-        Mark-KO "TC-09" ("paramiko ausente: " + $checkParamiko.out)
+        Mark-KO "TC-09" "paramiko ausente, sin comandos"
     } else {
-        Log ("paramiko " + $checkParamiko.out.Trim() + " listo, lanzando ataques...")
+        Log ("paramiko " + $pver + " listo, lanzando ataques...")
         $pyScript = @'
 import sys, time
 import paramiko
