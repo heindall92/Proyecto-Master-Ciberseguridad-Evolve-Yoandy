@@ -43,3 +43,11 @@ desktop.ini
 # Exclusiones extra
 MedHomologa-Pro/node_modules/
 MedHomologa-Pro/.next/
+
+# Archivos personales de automatizacion (local only)
+# Estos scripts son para uso personal del desarrollador principal
+# No deben subirse al repo compartido
+LIMPIEZA_SEGURA.bat
+verificar-requisitos.bat
+detener-todo.bat
+ORIENTACIONES.md
