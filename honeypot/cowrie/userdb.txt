@@ -1,21 +1,11 @@
-# ═══════════════════════════════════════════════════════════
-# Cowrie — Base de datos de usuarios (userdb)
+# Cowrie userdb - credenciales senuelo
 #
 # Formato:
-#   usuario:x:contraseña
-#
-# Convenciones:
-#   *           -> cualquier contraseña (wildcard)
-#   !pass       -> DENEGAR si coincide con 'pass'
-#   pass        -> PERMITIR si coincide
-#
-# Estrategia: dejamos pasar a los bots con credenciales
-# débiles típicas (root/123456, admin/admin, etc.) para
-# que caigan en la shell falsa y podamos grabar TODO lo
-# que intentan hacer.
-# ═══════════════════════════════════════════════════════════
+#   usuario:x:contrasena      (PERMITIR si coincide)
+#   usuario:x:!contrasena     (DENEGAR si coincide)
+#   *:x:*                     (wildcard, al final)
 
-# --- root con passwords típicos de diccionario ---
+# root - passwords de diccionario clasicos
 root:x:root
 root:x:admin
 root:x:password
@@ -28,14 +18,14 @@ root:x:qwerty
 root:x:letmein
 root:x:changeme
 
-# --- admin ---
+# admin
 admin:x:admin
 admin:x:admin123
 admin:x:password
 admin:x:123456
 admin:x:admin1234
 
-# --- usuarios genéricos ---
+# usuarios genericos
 user:x:user
 user:x:password
 user:x:123456
@@ -45,7 +35,7 @@ test:x:test123
 guest:x:guest
 guest:x:123456
 
-# --- sistemas típicos Linux / cloud ---
+# sistemas Linux / cloud
 ubuntu:x:ubuntu
 ubuntu:x:123456
 debian:x:debian
@@ -56,7 +46,7 @@ mysql:x:mysql
 oracle:x:oracle
 oracle:x:oracle123
 
-# --- cuentas de servicio (target común en CI/CD) ---
+# cuentas de servicio (CI/CD)
 deploy:x:deploy
 git:x:git
 jenkins:x:jenkins
@@ -65,15 +55,12 @@ www-data:x:www-data
 nginx:x:nginx
 apache:x:apache
 
-# --- IoT / routers / cámaras (Mirai-style) ---
+# IoT / routers / camaras (estilo Mirai)
 support:x:support
 service:x:service
 tech:x:tech
 installer:x:installer
 
-# Denegar explícitamente passwords obviamente seguras
-*:x:!$(openssl*
-*:x:!pbkdf2*
-
-# Reglas por defecto: bloquear todo lo demás
+# wildcard final - cualquier user/pass no listado arriba
+# se acepta tambien (maximo atractivo para bots)
 *:x:*

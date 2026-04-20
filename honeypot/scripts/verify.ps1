@@ -220,10 +220,36 @@ W "## TC-07 + TC-09 - Login aceptado + comandos en shell falsa"
 W ""
 Log "Lanzando ataques simulados..."
 
+# Buscar un Python >= 3.8 (paramiko moderno lo necesita)
 $pyok = $false
 $pyCmd = $null
-foreach ($c in @("python","python3","py")) {
-    if (Get-Command $c -ErrorAction SilentlyContinue) { $pyok = $true; $pyCmd = $c; break }
+$pyCandidates = @()
+if (Get-Command py -ErrorAction SilentlyContinue) { $pyCandidates += "py -3.12","py -3.11","py -3.10","py -3.9","py -3.8","py -3" }
+$pyCandidates += "python","python3"
+
+function Test-PyVersion {
+    param([string]$Cmd)
+    try {
+        $cmdline = $Cmd + ' -c "import sys; print(sys.version_info.major*100+sys.version_info.minor)" 2>$null'
+        $v = Invoke-Expression $cmdline
+        if ($v -and [int]$v -ge 308) { return $true }
+    } catch {}
+    return $false
+}
+
+foreach ($c in $pyCandidates) {
+    if (Test-PyVersion $c) { $pyok = $true; $pyCmd = $c; break }
+}
+
+# Si no hay Python >= 3.8, intentar instalar Python 3.12 via winget
+if (-not $pyok -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Log "No hay Python >= 3.8. Instalando Python 3.12 via winget (tardara ~1-2 min)..."
+    $null = winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements --silent 2>&1
+    # refrescar PATH en la sesion actual
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    foreach ($c in @("py -3.12","py -3","python")) {
+        if (Test-PyVersion $c) { $pyok = $true; $pyCmd = $c; break }
+    }
 }
 
 # Primero: mini-handshake SSH (enviar banner) - fuerza a Cowrie
