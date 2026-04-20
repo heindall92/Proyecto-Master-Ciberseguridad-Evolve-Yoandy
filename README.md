@@ -308,6 +308,13 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
+### Dashboard de Presentación del SOC
+> Vista principal del sistema Valhalla SOC con métricas en tiempo real
+
+![Dashboard Presentación](docs/img/10-dashboard-presentacion.png)
+
+---
+
 ## 💻 Requisitos Previos
 
 ### Hardware Mínimo
