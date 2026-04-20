@@ -293,9 +293,11 @@ print("TOTAL_OK={}".format(ok_count))
     Mark-KO "TC-09" "sin python no se ejecutan comandos en la shell falsa"
 }
 
-# ----- Helper: contar eventos en el contenedor -----------
+# ----- Helper: contar eventos en el contenedor (por path) -
 function Count-Events {
-    $r = Run-Cmd 'docker exec valhalla-cowrie sh -c "wc -l < /cowrie/cowrie-git/var/log/cowrie/cowrie.json 2>/dev/null || echo 0"'
+    param([string]$Path)
+    if (-not $Path) { return 0 }
+    $r = Run-Cmd ('docker exec valhalla-cowrie sh -c "wc -l < ' + $Path + ' 2>/dev/null || echo 0"')
     $n = 0
     [int]::TryParse($r.out.Trim(), [ref]$n) | Out-Null
     return $n
@@ -307,20 +309,37 @@ W "## TC-10 + TC-11 - Eventos en cowrie.json"
 W ""
 Start-Sleep -Seconds 3
 
-# Probe path inside container (por si cowrie usa otra ubicacion)
-$probe = Run-Cmd 'docker exec valhalla-cowrie sh -c "find /cowrie -name cowrie.json -type f 2>/dev/null | head -1"'
-$logPath = $probe.out.Trim()
-if ($logPath -eq "" -or $logPath -match "error") { $logPath = "/cowrie/cowrie-git/var/log/cowrie/cowrie.json" }
+# Probe agresivo: buscar cowrie.json en todo el contenedor
+$probe = Run-Cmd 'docker exec valhalla-cowrie sh -c "find / -name cowrie.json -type f 2>/dev/null | head -1"'
+$Script:LogPath = $probe.out.Trim()
+if (-not $Script:LogPath) {
+    # Si aun no existe, usamos la ruta esperada (puede aparecer tras eventos)
+    $Script:LogPath = "/cowrie/cowrie-git/var/log/cowrie/cowrie.json"
+}
 
-$count = Count-Events
-$tailCmd = 'docker exec valhalla-cowrie sh -c "tail -n 20 ' + $logPath + ' 2>/dev/null || true"'
+# Diagnostico: logs del contenedor y listado del dir de logs
+$diagLogs = Run-Cmd 'docker logs --tail 30 valhalla-cowrie 2>&1'
+$diagDir  = Run-Cmd 'docker exec valhalla-cowrie sh -c "ls -la /cowrie/cowrie-git/var/log/cowrie/ 2>&1"'
+
+$count = Count-Events -Path $Script:LogPath
+$tailCmd = 'docker exec valhalla-cowrie sh -c "tail -n 20 ' + $Script:LogPath + ' 2>/dev/null || true"'
 $tailOut = Run-Cmd $tailCmd
 
-W ("Ruta del log dentro del contenedor: ``" + $logPath + "``")
+W ("Ruta del log dentro del contenedor: ``" + $Script:LogPath + "``")
 W ""
 W ("Total de eventos registrados: **" + $count + "**")
 W ""
-W "Ultimas lineas (max 20):"
+W "Listado del directorio de logs dentro del contenedor:"
+W '```'
+W $diagDir.out
+W '```'
+W ""
+W "Ultimas 30 lineas de stdout del contenedor (diagnostico):"
+W '```'
+W $diagLogs.out
+W '```'
+W ""
+W "Ultimas lineas del JSON (max 20):"
 W '```json'
 W $tailOut.out
 W '```'
@@ -331,11 +350,11 @@ if ($count -gt 5) { Mark-OK "TC-11" } else { Mark-KO "TC-11" ("solo " + $count +
 W ""
 W "## TC-13 - Persistencia tras restart"
 W ""
-$n1 = Count-Events
+$n1 = Count-Events -Path $Script:LogPath
 Log "Reiniciando contenedor..."
 Run-Cmd 'docker compose restart' | Out-Null
 Start-Sleep -Seconds 15
-$n2 = Count-Events
+$n2 = Count-Events -Path $Script:LogPath
 W '```'
 W ("Eventos antes del restart: " + $n1)
 W ("Eventos despues:           " + $n2)
@@ -356,7 +375,7 @@ if ($vols.out -match "valhalla_cowrie_logs") { Mark-OK "TC-14" } else { Mark-KO 
 W ""
 W "## TC-15 - cowrie.json existe y es accesible"
 W ""
-$lsLog = Run-Cmd ('docker exec valhalla-cowrie ls -la ' + $logPath)
+$lsLog = Run-Cmd ('docker exec valhalla-cowrie ls -la ' + $Script:LogPath)
 W '```'
 W $lsLog.out
 W '```'

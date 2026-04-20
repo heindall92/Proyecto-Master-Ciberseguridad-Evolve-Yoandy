@@ -53,9 +53,12 @@ services:
       - cowrie_tty:/cowrie/cowrie-git/var/lib/cowrie/tty
 
     environment:
-      # Fuerza la salida JSON aunque el .cfg cambie
+      # Fuerza la salida JSON con ruta ABSOLUTA (relativa fallaba segun
+      # el working directory con que arranque cowrie dentro del contenedor)
       - COWRIE_OUTPUT_jsonlog_enabled=true
-      - COWRIE_OUTPUT_jsonlog_logfile=var/log/cowrie/cowrie.json
+      - COWRIE_OUTPUT_jsonlog_logfile=/cowrie/cowrie-git/var/log/cowrie/cowrie.json
+      - COWRIE_OUTPUT_textlog_enabled=true
+      - COWRIE_OUTPUT_textlog_logfile=/cowrie/cowrie-git/var/log/cowrie/cowrie.log
 
     networks:
       - valhalla-net
