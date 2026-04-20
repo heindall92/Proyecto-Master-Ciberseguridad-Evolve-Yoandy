@@ -242,7 +242,8 @@ if ($pyok) {
     $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check paramiko 2>&1')
     # Redirigir stderr a null en el import-check (python 3.6 emite warning)
     $checkRaw = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>NUL')
-    $pver = ($checkRaw.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1).Trim()
+    $pmatch = $checkRaw.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
+    $pver = if ($pmatch) { $pmatch.Trim() } else { "" }
     if (-not $pver) {
         W "_(paramiko no disponible - solo handshake SSH minimo sin auth)_"
         W '```'
