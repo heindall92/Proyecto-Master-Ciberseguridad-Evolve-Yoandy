@@ -337,6 +337,38 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
+## 🖥️ Dashboard Valhalla SOC (Frontend)
+
+Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propio** desarrollado con HTML/CSS/JS que se ejecuta en `http://localhost:3000`.
+
+### Características:
+- 🎨 **Interfaz moderna** con visualización de amenazas en tiempo real
+- 🔐 **Sistema de autenticación** con JWT
+- 📊 **Dashboard interactivo** con métricas del honeypot
+- 🎫 **Gestión de tickets** SOC
+- 📈 **Exportación de reportes** en múltiples formatos
+
+### Componentes:
+| Componente | Puerto | Descripción |
+|---|---|---|
+| **Frontend** | `3000` | Interfaz web del usuario |
+| **Backend** | `3001` | API REST con autenticación JWT |
+
+### Iniciar el Dashboard:
+```bash
+# Backend (API)
+cd backend
+npm install
+npm start
+
+# Frontend (UI) - En otra terminal
+cd frontend
+npm install
+npm start
+```
+
+---
+
 ## 🚀 Guía de Puesta en Marcha
 
 > 📖 **Manual completo** disponible en [`MANUAL.md`](MANUAL.md)
@@ -362,13 +394,21 @@ pip install requests
 python create_dashboards.py
 python setup_monitors.py
 python setup_reports.py
+
+# 6. Iniciar el Frontend y Backend de Valhalla SOC (en terminales separados)
+# Terminal 1 - Backend:
+cd backend && npm install && npm start
+
+# Terminal 2 - Frontend:
+cd frontend && npm install && npm start
 ```
 
 ### Acceder al Dashboard
 
 | Servicio | URL | Credenciales |
 |---|---|---|
-| 📊 Dashboard Wazuh | `https://localhost` | admin / admin |
+| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | Ver `backend/.env.example` |
+| 📊 Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
 | 🔌 Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
 | 🗄️ OpenSearch | `https://localhost:9200` | admin / admin |
 | 🪤 Honeypot SSH | `ssh localhost -p 2222` | ¡Es la trampa! 🪤 |
