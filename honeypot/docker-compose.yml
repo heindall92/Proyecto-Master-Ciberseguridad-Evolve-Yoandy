@@ -40,17 +40,17 @@ services:
       - ./cowrie/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
       - ./cowrie/userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro
 
-      # Logs JSON — volumen nombrado + bind-mount local para depuración
+      # Logs JSON — volumen nombrado (Cowrie corre como UID 999,
+      # los bind-mounts en Windows/WSL2 tienen problemas de permisos,
+      # por eso usamos solo volumen nombrado y los scripts extraen
+      # los logs via `docker exec` o `docker cp`).
       - cowrie_logs:/cowrie/cowrie-git/var/log/cowrie
-      - ./logs:/cowrie/cowrie-git/var/log/cowrie-local
 
       # Archivos capturados a los atacantes (malware, scripts, etc.)
       - cowrie_downloads:/cowrie/cowrie-git/var/lib/cowrie/downloads
-      - ./downloads:/cowrie/cowrie-git/var/lib/cowrie/downloads-local
 
       # TTY logs (sesiones grabadas)
       - cowrie_tty:/cowrie/cowrie-git/var/lib/cowrie/tty
-      - ./tty:/cowrie/cowrie-git/var/lib/cowrie/tty-local
 
     environment:
       # Fuerza la salida JSON aunque el .cfg cambie
