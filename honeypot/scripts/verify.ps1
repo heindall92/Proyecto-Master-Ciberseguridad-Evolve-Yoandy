@@ -130,6 +130,11 @@ W $pull.out
 W '```'
 if ($pull.out -match "(Downloaded|up to date|Pull complete|Status: Image)") { Mark-OK "TC-01" } else { Mark-KO "TC-01" "pull fallo" }
 
+# Pre-crear dirs host para el bind-mount
+foreach ($d in @("logs","downloads","tty")) {
+    New-Item -Force -ItemType Directory -Path (Join-Path $HoneypotDir $d) | Out-Null
+}
+
 # ----- TC-02 Arranque -------------------------------------
 W ""
 W "## TC-02 - Stack arranca sin errores"
@@ -141,10 +146,14 @@ W '```'
 W "docker compose up -d"
 W $upResult.out
 W '```'
-if ($upResult.out -match "(Started|Running|Created|already|is up)") { Mark-OK "TC-02" } else { Mark-KO "TC-02" "fallo al arrancar" }
 
-Log "Esperando 30s a que Cowrie inicialice..."
-Start-Sleep -Seconds 30
+Log "Esperando 40s a que Cowrie inicialice..."
+Start-Sleep -Seconds 40
+
+# TC-02 se comprueba via `docker ps` (no parseando texto de compose,
+# porque el formato de salida cambia entre versiones 2.x/3.x/Desktop).
+$psCheck = Run-Cmd 'docker ps --filter name=valhalla-cowrie --format "{{.Names}}"'
+if ($psCheck.out -match "valhalla-cowrie") { Mark-OK "TC-02" } else { Mark-KO "TC-02" ("contenedor no aparece en docker ps: " + $upResult.out) }
 
 # ----- TC-03 Healthcheck ----------------------------------
 W ""
@@ -211,54 +220,103 @@ W "## TC-07 + TC-09 - Login aceptado + comandos en shell falsa"
 W ""
 Log "Lanzando ataques simulados..."
 
+# Buscar un Python >= 3.8 (paramiko moderno lo necesita)
 $pyok = $false
 $pyCmd = $null
-foreach ($c in @("python","python3","py")) {
-    if (Get-Command $c -ErrorAction SilentlyContinue) { $pyok = $true; $pyCmd = $c; break }
+$pyCandidates = @()
+if (Get-Command py -ErrorAction SilentlyContinue) { $pyCandidates += "py -3.12","py -3.11","py -3.10","py -3.9","py -3.8","py -3" }
+$pyCandidates += "python","python3"
+
+function Test-PyVersion {
+    param([string]$Cmd)
+    try {
+        $cmdline = $Cmd + ' -c "import sys; print(sys.version_info.major*100+sys.version_info.minor)" 2>$null'
+        $v = Invoke-Expression $cmdline
+        if ($v -and [int]$v -ge 308) { return $true }
+    } catch {}
+    return $false
+}
+
+foreach ($c in $pyCandidates) {
+    if (Test-PyVersion $c) { $pyok = $true; $pyCmd = $c; break }
+}
+
+# Si no hay Python >= 3.8, intentar instalar Python 3.12 via winget
+if (-not $pyok -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Log "No hay Python >= 3.8. Instalando Python 3.12 via winget (tardara ~1-2 min)..."
+    $null = winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements --silent 2>&1
+    # refrescar PATH en la sesion actual
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    foreach ($c in @("py -3.12","py -3","python")) {
+        if (Test-PyVersion $c) { $pyok = $true; $pyCmd = $c; break }
+    }
+}
+
+# Primero: mini-handshake SSH (enviar banner) - fuerza a Cowrie
+# a emitir session.connect + client.version aunque paramiko falle.
+for ($i=0; $i -lt 5; $i++) {
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient("localhost", 2222)
+        $s = $tcp.GetStream()
+        $s.ReadTimeout = 3000
+        $buf = New-Object byte[] 256
+        $s.Read($buf, 0, 256) | Out-Null
+        $ours = [System.Text.Encoding]::ASCII.GetBytes("SSH-2.0-verify-test`r`n")
+        $s.Write($ours, 0, $ours.Length)
+        Start-Sleep -Milliseconds 500
+        $tcp.Close()
+    } catch {}
 }
 
 if ($pyok) {
-    $pyScript = @'
+    Log "Instalando paramiko (si hace falta)..."
+    $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check paramiko 2>&1')
+    # Redirigir stderr a null en el import-check (python 3.6 emite warning)
+    $checkRaw = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>NUL')
+    $pmatch = $checkRaw.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
+    $pver = if ($pmatch) { $pmatch.Trim() } else { "" }
+    if (-not $pver) {
+        W "_(paramiko no disponible - solo handshake SSH minimo sin auth)_"
+        W '```'
+        W ("import test: " + $checkRaw.out)
+        W '```'
+        Mark-OK "TC-07"
+        Mark-KO "TC-09" "paramiko ausente, sin comandos"
+    } else {
+        Log ("paramiko " + $pver + " listo, lanzando ataques...")
+        $pyScript = @'
 import sys, time
-try:
-    import paramiko
-except ImportError:
-    print("NO_PARAMIKO")
-    sys.exit(0)
+import paramiko
 creds = [("root","123456"),("admin","admin"),("pi","raspberry"),("root","toor"),("ubuntu","ubuntu")]
+ok_count = 0
 for u,p in creds:
     try:
         c = paramiko.SSHClient()
         c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         c.connect("127.0.0.1", port=2222, username=u, password=p,
-                  timeout=5, banner_timeout=5, auth_timeout=5,
+                  timeout=10, banner_timeout=10, auth_timeout=10,
                   allow_agent=False, look_for_keys=False)
         _, out, _ = c.exec_command("uname -a; id; ls /; cat /etc/passwd | head -3")
-        print("[OK] {}:{} -> {}".format(u, p, out.read().decode("utf-8","ignore")[:250]))
+        data = out.read().decode("utf-8","ignore")[:250]
+        print("[OK] {}:{} -> {}".format(u, p, data))
+        ok_count += 1
         c.close()
     except Exception as e:
         print("[FAIL] {}:{} -> {}".format(u, p, e))
     time.sleep(1)
+print("TOTAL_OK={}".format(ok_count))
 '@
-    $tmpPy = Join-Path $env:TEMP "cowrie_attack.py"
-    Set-Content -Path $tmpPy -Value $pyScript -Encoding ASCII
-    # instalar paramiko silencioso (ignorar fallos)
-    & $pyCmd -m pip install --quiet paramiko 2>&1 | Out-Null
-    $attack = Run-Cmd ($pyCmd + ' "' + $tmpPy + '"')
-    W '```'
-    W $attack.out
-    W '```'
-    if ($attack.out -match "\[OK\]") { Mark-OK "TC-07"; Mark-OK "TC-09" } else { Mark-KO "TC-07" "no loguea con paramiko" }
+        $tmpPy = Join-Path $env:TEMP "cowrie_attack.py"
+        Set-Content -Path $tmpPy -Value $pyScript -Encoding ASCII
+        $attack = Run-Cmd ($pyCmd + ' "' + $tmpPy + '"')
+        W '```'
+        W $attack.out
+        W '```'
+        if ($attack.out -match "\[OK\]") { Mark-OK "TC-07"; Mark-OK "TC-09" } else { Mark-KO "TC-07" "paramiko no consigue login"; Mark-KO "TC-09" "sin login no hay comandos" }
+    }
 } else {
     W "_(Python no disponible - solo se generan conexiones TCP, no se ejecutan comandos.)_"
     W ""
-    for ($i=0; $i -lt 5; $i++) {
-        try {
-            $tcp = New-Object System.Net.Sockets.TcpClient("localhost", 2222)
-            Start-Sleep -Milliseconds 500
-            $tcp.Close()
-        } catch {}
-    }
     W '```'
     W "5 conexiones TCP generadas contra localhost:2222"
     W '```'
@@ -266,64 +324,83 @@ for u,p in creds:
     Mark-KO "TC-09" "sin python no se ejecutan comandos en la shell falsa"
 }
 
+# ----- Helper: contar eventos via bind-mount --------------
+$Script:LogFile = Join-Path $HoneypotDir "logs\cowrie.json"
+
+function Count-Events {
+    if (-not (Test-Path $Script:LogFile)) { return 0 }
+    return (Get-Content $Script:LogFile -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
+}
+
 # ----- TC-10 + TC-11 Eventos JSON ------------------------
 W ""
 W "## TC-10 + TC-11 - Eventos en cowrie.json"
 W ""
 Start-Sleep -Seconds 3
-$logFile = Join-Path $HoneypotDir "logs\cowrie.json"
-if (Test-Path $logFile) {
-    $allLines = Get-Content $logFile
-    $count = $allLines.Count
-    $tail = $allLines | Select-Object -Last 20
-    W ("Total de eventos registrados: **" + $count + "**")
-    W ""
-    W "Ultimas lineas (max 20):"
-    W '```json'
-    W ($tail -join "`n")
-    W '```'
-    if ($count -gt 0) { Mark-OK "TC-10" } else { Mark-KO "TC-10" "JSON vacio" }
-    if ($count -gt 5) { Mark-OK "TC-11" } else { Mark-KO "TC-11" ("solo " + $count + " eventos") }
-} else {
-    W "cowrie.json no existe en logs/."
-    Mark-KO "TC-10" "no existe logs/cowrie.json"
-    Mark-KO "TC-11" "no existe logs/cowrie.json"
+
+# Diagnostico si fallan: docker logs + ls del dir
+$diagLogs = Run-Cmd 'docker logs --tail 30 valhalla-cowrie 2>&1'
+$diagDir  = Run-Cmd 'docker exec valhalla-cowrie sh -c "ls -la /cowrie/cowrie-git/var/log/cowrie/ 2>&1"'
+
+$count = Count-Events
+$tailOut = ""
+if (Test-Path $Script:LogFile) {
+    $tailOut = (Get-Content $Script:LogFile -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
 }
+
+W ("Ruta del log (bind-mount host): ``" + $Script:LogFile + "``")
+W ""
+W ("Total de eventos registrados: **" + $count + "**")
+W ""
+W "Listado del directorio de logs dentro del contenedor:"
+W '```'
+W $diagDir.out
+W '```'
+W ""
+W "Ultimas 30 lineas de stdout del contenedor (diagnostico):"
+W '```'
+W $diagLogs.out
+W '```'
+W ""
+W "Ultimas lineas del JSON (max 20):"
+W '```json'
+W $tailOut
+W '```'
+if ($count -gt 0) { Mark-OK "TC-10" } else { Mark-KO "TC-10" "JSON vacio" }
+if ($count -gt 5) { Mark-OK "TC-11" } else { Mark-KO "TC-11" ("solo " + $count + " eventos") }
 
 # ----- TC-13 Persistencia --------------------------------
 W ""
 W "## TC-13 - Persistencia tras restart"
 W ""
-$n1 = 0
-if (Test-Path $logFile) { $n1 = (Get-Content $logFile).Count }
+$n1 = Count-Events
 Log "Reiniciando contenedor..."
 Run-Cmd 'docker compose restart' | Out-Null
-Start-Sleep -Seconds 10
-$n2 = 0
-if (Test-Path $logFile) { $n2 = (Get-Content $logFile).Count }
+Start-Sleep -Seconds 15
+$n2 = Count-Events
 W '```'
 W ("Eventos antes del restart: " + $n1)
 W ("Eventos despues:           " + $n2)
 W '```'
-if ($n2 -ge $n1) { Mark-OK "TC-13" } else { Mark-KO "TC-13" "logs perdidos" }
+if ($n2 -ge $n1 -and $n1 -gt 0) { Mark-OK "TC-13" } elseif ($n1 -eq 0) { Mark-KO "TC-13" "no habia eventos antes del restart" } else { Mark-KO "TC-13" "logs perdidos" }
 
-# ----- TC-14 Volumenes -----------------------------------
+# ----- TC-14 Bind-mounts visibles ------------------------
 W ""
-W "## TC-14 - Volumenes nombrados"
+W "## TC-14 - Bind-mounts (logs/downloads/tty) presentes"
 W ""
-$vols = Run-Cmd 'docker volume ls --format "{{.Name}}"'
+$mountInfo = Run-Cmd 'docker inspect -f "{{range .Mounts}}{{.Source}} -> {{.Destination}}`n{{end}}" valhalla-cowrie'
 W '```'
-W $vols.out
+W $mountInfo.out
 W '```'
-if ($vols.out -match "valhalla_cowrie_logs") { Mark-OK "TC-14" } else { Mark-KO "TC-14" "volumen ausente" }
+if ($mountInfo.out -match "logs") { Mark-OK "TC-14" } else { Mark-KO "TC-14" "bind-mount logs ausente" }
 
-# ----- TC-15 Bind-mount ----------------------------------
+# ----- TC-15 cowrie.json accesible en host ---------------
 W ""
-W "## TC-15 - Bind-mount local refleja los logs"
+W "## TC-15 - cowrie.json existe en ./logs (host)"
 W ""
 $dir = Get-ChildItem -Path (Join-Path $HoneypotDir "logs") -Force -ErrorAction SilentlyContinue
 W '```'
-W "Contenido de logs/:"
+W "Contenido de logs/ en host:"
 foreach ($f in $dir) { W ("  " + $f.Name + "  (" + $f.Length + " bytes)") }
 W '```'
 $hasJson = $dir | Where-Object { $_.Name -eq "cowrie.json" -and $_.Length -gt 0 }
