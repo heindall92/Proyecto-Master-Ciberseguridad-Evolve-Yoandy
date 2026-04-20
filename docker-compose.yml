@@ -108,6 +108,8 @@ services:
       echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf &&
       exec /init
       "
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - valhalla-net
     depends_on:
@@ -146,8 +148,8 @@ services:
       chmod 500 /etc/wazuh-dashboard/certs/ &&
       chmod 400 /etc/wazuh-dashboard/certs/* &&
       sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
-      sed -i "s|#opensearch.username:|opensearch.username: ${OPENSEARCH_DASHBOARDS_USER:-kibanaserver}|" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
-      sed -i "s|#opensearch.password:|opensearch.password: ${OPENSEARCH_DASHBOARDS_PASSWORD:-kibanaserver}|" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i 's|#opensearch.password:|opensearch.password: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       exec /usr/sbin/chroot --userspec=1000:0 / /entrypoint.sh
       "
     volumes:

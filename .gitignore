@@ -21,6 +21,7 @@ __pycache__/
 # Node.js
 frontend/node_modules/
 backend/node_modules/
+backend/package-lock.json
 frontend/.vite/
 *.node
 
@@ -38,3 +39,7 @@ backend/*.db
 # Windows temp
 Thumbs.db
 desktop.ini
+
+# Exclusiones extra
+MedHomologa-Pro/node_modules/
+MedHomologa-Pro/.next/

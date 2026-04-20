@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VALHALLA SOC — Acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #080e0a;
+    --bg2:     #0d1610;
+    --line:    rgba(0,200,80,.12);
+    --signal:  #00c850;
+    --danger:  #ff3a3a;
+    --amber:   #ffb000;
+    --text:    #d4f0dc;
+    --text-dim:#7ab890;
+    --text-faint:#3d6b4d;
+    --ff-mono: 'JetBrains Mono', monospace;
+    --ff-head: 'Rajdhani', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ff-mono);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* CRT scanlines */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Background grid */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .login-wrap {
+    position: relative;
+    z-index: 10;
+    width: 420px;
+  }
+
+  /* Corner decorations */
+  .corner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-color: var(--signal);
+    border-style: solid;
+    opacity: .6;
+  }
+  .corner--tl { top: -4px; left: -4px;  border-width: 2px 0 0 2px; }
+  .corner--tr { top: -4px; right: -4px; border-width: 2px 2px 0 0; }
+  .corner--bl { bottom: -4px; left: -4px;  border-width: 0 0 2px 2px; }
+  .corner--br { bottom: -4px; right: -4px; border-width: 0 2px 2px 0; }
+
+  .login-box {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    padding: 40px 36px 36px;
+    position: relative;
+  }
+
+  /* Top brand */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .brand__logo {
+    width: 46px; height: 46px;
+    border: 1px solid var(--signal);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--ff-head);
+    font-size: 22px; font-weight: 700;
+    color: var(--signal);
+    box-shadow: 0 0 16px rgba(0,200,80,.2);
+  }
+  .brand__title {
+    font-family: var(--ff-head);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 3px;
+  }
+  .brand__sub {
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 2.5px;
+    margin-top: 2px;
+  }
+
+  .login-box h2 {
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: var(--ff-mono);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .field input:focus {
+    border-color: var(--signal);
+    box-shadow: 0 0 8px rgba(0,200,80,.15);
+  }
+  .field input::placeholder { color: var(--text-faint); }
+
+  .btn-login {
+    width: 100%;
+    padding: 11px;
+    background: transparent;
+    border: 1px solid var(--signal);
+    color: var(--signal);
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background .15s, box-shadow .15s;
+    text-transform: uppercase;
+  }
+  .btn-login:hover {
+    background: rgba(0,200,80,.08);
+    box-shadow: 0 0 16px rgba(0,200,80,.2);
+  }
+  .btn-login:active { opacity: .8; }
+  .btn-login:disabled { opacity: .4; cursor: not-allowed; }
+
+  .error-msg {
+    background: rgba(255,58,58,.08);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    padding: 8px 12px;
+    margin-top: 14px;
+    display: none;
+  }
+  .error-msg.show { display: block; }
+
+  .footer-note {
+    text-align: center;
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 2px;
+    margin-top: 24px;
+    text-transform: uppercase;
+  }
+
+  /* Blinking cursor */
+  .cursor::after {
+    content: '█';
+    animation: blink 1s step-end infinite;
+    color: var(--signal);
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="corner corner--tl"></div>
+  <div class="corner corner--tr"></div>
+  <div class="corner corner--bl"></div>
+  <div class="corner corner--br"></div>
+
+  <div class="login-box">
+    <div class="brand">
+      <div class="brand__logo">V</div>
+      <div>
+        <div class="brand__title">SOC <em>VALHALLA</em></div>
+        <div class="brand__sub">BLUE TEAM · OPERATIONS CENTER</div>
+      </div>
+    </div>
+
+    <h2>// Autenticación requerida</h2>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="field">
+        <label>Identificador</label>
+        <input type="text" id="username" placeholder="usuario" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label>Clave de acceso</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn-login" id="btnLogin">[ ACCEDER ]</button>
+    </form>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="footer-note">
+      CLASIFICADO // EYES ONLY &nbsp;·&nbsp; <span class="cursor"></span>
+    </div>
+  </div>
+</div>
+
+<script src="login.js"></script>
+</body>
+</html>

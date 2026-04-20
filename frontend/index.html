@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>VALHALLA — SOC Blue Team Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Reusable SVG defs -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--signal)" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="var(--signal)" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sparkGradDanger" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--danger)" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="var(--danger)" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Nav icons -->
+    <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></symbol>
+    <symbol id="i-siem" viewBox="0 0 24 24"><path d="M12 2 L3 7 L12 12 L21 7 Z"/><path d="M3 12 L12 17 L21 12"/><path d="M3 17 L12 22 L21 17"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12 H21 M12 3 A15 15 0 0 1 12 21 M12 3 A15 15 0 0 0 12 21"/></symbol>
+    <symbol id="i-incident" viewBox="0 0 24 24"><path d="M12 2 L22 20 H2 Z"/><path d="M12 9 V14 M12 17 V17.5"/></symbol>
+    <symbol id="i-assets" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20 H16 M12 16 V20"/></symbol>
+    <symbol id="i-vuln" viewBox="0 0 24 24"><path d="M12 3 L21 8 V16 L12 21 L3 16 V8 Z"/><path d="M12 8 V13 M12 15.5 V16"/></symbol>
+    <symbol id="i-threat" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/><path d="M12 3 V6 M12 18 V21 M3 12 H6 M18 12 H21"/></symbol>
+    <symbol id="i-playbook" viewBox="0 0 24 24"><path d="M4 4 H20 V20 H4 Z"/><path d="M8 9 H16 M8 13 H16 M8 17 H12"/></symbol>
+    <symbol id="i-net" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 6 H17 M6 8 L11 16 M18 8 L13 16"/></symbol>
+    <symbol id="i-metrics" viewBox="0 0 24 24"><path d="M3 20 L3 4 M3 20 L21 20"/><rect x="6" y="12" width="3" height="6"/><rect x="11" y="8" width="3" height="10"/><rect x="16" y="5" width="3" height="13"/></symbol>
+    <symbol id="i-logs" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M6 9 H10 M6 12 H14 M6 15 H12"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <div class="topbar__logo"><span>V</span></div>
+      <div>
+        <div class="topbar__title">SOC <em>VALHALLA</em></div>
+        <div class="topbar__sub">BLUE TEAM · WAZUH 4.8.1 · CLASSIFIED // EYES ONLY</div>
+      </div>
+    </div>
+
+    <div class="topbar__stats">
+      <div class="chip"><span class="dot"></span><span>ESTADO</span><b>OPERATIVO</b></div>
+      <div class="chip danger"><span class="dot"></span><span>INCIDENTES ACTIVOS</span><b id="kpi-active">07</b></div>
+      <div class="chip amber"><span class="dot"></span><span>ALERTAS 24H</span><b id="kpi-alerts">2,481</b></div>
+      <div class="chip cyan"><span class="dot"></span><span>AGENTES ONLINE</span><b>342 / 348</b></div>
+      <div class="chip"><span>UPTIME</span><b id="kpi-uptime">99.982%</b></div>
+      <div class="chip"><span>ANALISTA</span><b id="kpi-analyst">—</b></div>
+      <button id="btnTheme" data-action="__toggleTweaks" style="display:flex;align-items:center;gap:6px;background:none;border:1px solid rgba(60,255,158,.3);color:var(--signal);font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;padding:4px 10px;cursor:pointer">⚙ TEMA</button>
+      <button id="btnLogout" data-action="__logout" style="display:none;align-items:center;gap:6px;background:none;border:1px solid rgba(255,58,58,.4);color:var(--danger);font-family:var(--ff-mono);font-size:9px;letter-spacing:2px;padding:4px 10px;cursor:pointer">SALIR</button>
+    </div>
+  </header>
+
+  <!-- ============ SIDE NAV ============ -->
+  <aside class="sidenav">
+    <div class="sidenav__label">// módulos</div>
+
+    <button class="navbtn active" data-view="overview">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-overview"/></svg></span>
+      <span class="navbtn__label">Overview</span>
+      <span class="navbtn__sub">panorama general</span>
+      <span class="navbtn__badge">00</span>
+    </button>
+
+    <button class="navbtn" data-view="siem">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-siem"/></svg></span>
+      <span class="navbtn__label">SIEM</span>
+      <span class="navbtn__sub">alertas wazuh</span>
+      <span class="navbtn__badge danger">2,481</span>
+    </button>
+
+    <button class="navbtn" data-view="map">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-map"/></svg></span>
+      <span class="navbtn__label">Threat Map</span>
+      <span class="navbtn__sub">ataques geoloc.</span>
+      <span class="navbtn__badge amber">LIVE</span>
+    </button>
+
+    <button class="navbtn" data-view="incidents">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-incident"/></svg></span>
+      <span class="navbtn__label">Incidentes</span>
+      <span class="navbtn__sub">tickets abiertos</span>
+      <span class="navbtn__badge danger">07</span>
+    </button>
+
+    <button class="navbtn" data-view="assets">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-assets"/></svg></span>
+      <span class="navbtn__label">Activos</span>
+      <span class="navbtn__sub">endpoints · srv</span>
+      <span class="navbtn__badge">348</span>
+    </button>
+
+    <button class="navbtn" data-view="vulns">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-vuln"/></svg></span>
+      <span class="navbtn__label">Vulns</span>
+      <span class="navbtn__sub">cve · parches</span>
+      <span class="navbtn__badge amber">41</span>
+    </button>
+
+    <button class="navbtn" data-view="cowrie">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-incident"/></svg></span>
+      <span class="navbtn__label">Cowrie</span>
+      <span class="navbtn__sub">honeypot ssh</span>
+      <span class="navbtn__badge danger">LIVE</span>
+    </button>
+
+    <button class="navbtn" data-view="threat">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-threat"/></svg></span>
+      <span class="navbtn__label">Threat Intel</span>
+      <span class="navbtn__sub">misp · otx feed</span>
+      <span class="navbtn__badge">IOCs</span>
+    </button>
+
+    <button class="navbtn" data-view="network">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-net"/></svg></span>
+      <span class="navbtn__label">Network</span>
+      <span class="navbtn__sub">tráfico · flujos</span>
+      <span class="navbtn__badge">847mb/s</span>
+    </button>
+
+    <button class="navbtn" data-view="tickets">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-playbook"/></svg></span>
+      <span class="navbtn__label">Tickets</span>
+      <span class="navbtn__sub">parches · tareas</span>
+      <span class="navbtn__badge" id="ticketsBadge">0</span>
+    </button>
+
+    <button class="navbtn" data-view="rules">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-playbook"/></svg></span>
+      <span class="navbtn__label">Normas</span>
+      <span class="navbtn__sub">reglas wazuh</span>
+      <span class="navbtn__badge amber">14</span>
+    </button>
+
+    <button class="navbtn" data-view="playbooks">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-playbook"/></svg></span>
+      <span class="navbtn__label">Playbooks</span>
+      <span class="navbtn__sub">runbooks · SOAR</span>
+      <span class="navbtn__badge">12</span>
+    </button>
+
+    <button class="navbtn" data-view="metrics">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-metrics"/></svg></span>
+      <span class="navbtn__label">Métricas</span>
+      <span class="navbtn__sub">kpis equipo</span>
+      <span class="navbtn__badge">MTTR</span>
+    </button>
+
+    <button class="navbtn" data-view="reports">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-logs"/></svg></span>
+      <span class="navbtn__label">Informes</span>
+      <span class="navbtn__sub">exportar · pdf · docx</span>
+      <span class="navbtn__badge">PDF</span>
+    </button>
+
+    <button class="navbtn" data-view="ollama">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-threat"/></svg></span>
+      <span class="navbtn__label">Ollama AI</span>
+      <span class="navbtn__sub">análisis · ia · soc</span>
+      <span class="navbtn__badge cyan">AI</span>
+    </button>
+
+    <button class="navbtn" data-view="users" id="navUsers" style="display:none">
+      <span class="navbtn__icon-wrap"><svg class="navbtn__icon"><use href="#i-logs"/></svg></span>
+      <span class="navbtn__label">Usuarios</span>
+      <span class="navbtn__sub">roles · accesos</span>
+      <span class="navbtn__badge">ADMIN</span>
+    </button>
+
+    <div class="sidenav__label" style="margin-top:auto">// session</div>
+    <div style="padding: 8px 14px; font-size: 10px; color: var(--text-faint); letter-spacing: 1.2px; line-height: 1.6">
+      ROOT@VALHALLA:~#<br>
+      SID: 0x7A4F · L3<br>
+      TTY: pts/0 · 22:47:03
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main" id="main">
+    <!-- views injected by JS -->
+  </main>
+
+  <!-- ============ RIGHT RAIL ============ -->
+  <aside class="rail" id="rail">
+    <!-- rail content injected per view -->
+  </aside>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <span>VALHALLA.SOC // v3.41.2 // <em>BUILD 20260418</em></span>
+    <span id="clock">22:47:03 UTC+02</span>
+    <span>MITRE ATT&CK v15 · CERT-ES · ISO 27035</span>
+  </footer>
+
+</div>
+
+<!-- Tweaks panel -->
+<div class="tweaks" id="tweaks">
+  <h4>// Ajustes</h4>
+
+  <label>Esquema de color</label>
+  <div class="chips" data-group="scheme">
+    <button data-val="green" class="on">Green</button>
+    <button data-val="cyan">Cyan</button>
+    <button data-val="amber">Amber</button>
+    <button data-val="purple">Purple</button>
+    <button data-val="light">Light</button>
+  </div>
+
+  <label>Scanlines CRT</label>
+  <div class="chips" data-group="scan">
+    <button data-val="on" class="on">On</button>
+    <button data-val="off">Off</button>
+  </div>
+
+  <label>Densidad</label>
+  <div class="chips" data-group="density">
+    <button data-val="normal" class="on">Normal</button>
+    <button data-val="compact">Compacta</button>
+  </div>
+
+  <label>Flujo de logs</label>
+  <div class="chips" data-group="logs">
+    <button data-val="on" class="on">Activo</button>
+    <button data-val="off">Pausa</button>
+  </div>
+</div>
+
+<!-- Component scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="data.js"></script>
+<script src="components.js"></script>
+<script src="modals.js"></script>
+<script src="app.js"></script>
+<script src="events.js"></script>
+</body>
+</html>
