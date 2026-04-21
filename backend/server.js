@@ -279,7 +279,12 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     const attRes = await osQuery('wazuh-alerts-*', {
       size: 0,
-      query: { term: { 'rule.groups': 'cowrie' } },
+      query: {
+        bool: {
+          must:    [{ term: { 'rule.groups': 'cowrie' } }],
+          must_not:[{ term: { 'rule.id': '100200' } }]
+        }
+      },
       aggs: {
         by_ip: {
           terms: { field: 'data.src_ip', size: 20 },
@@ -606,7 +611,14 @@ app.post('/api/virustotal/check', async (req, res) => {
 // ── Cowrie honeypot data ──────────────────────────────────────────────────────
 app.get('/api/cowrie', async (req, res) => {
   try {
-    const base = { query: { term: { 'rule.groups': 'cowrie' } } };
+    const base = {
+      query: {
+        bool: {
+          must:    [{ term: { 'rule.groups': 'cowrie' } }],
+          must_not:[{ term: { 'rule.id': '100200' } }]
+        }
+      }
+    };
 
     const [sessRes, pwRes, cmdRes, srcRes] = await Promise.allSettled([
       // Session count

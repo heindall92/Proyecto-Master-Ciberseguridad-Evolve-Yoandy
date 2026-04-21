@@ -289,12 +289,6 @@ window.__loadOverviewData = async function() {
 
     // MITRE y Top atacantes eliminados del Overview (ahora solo en rail)
 
-            <span class="atklog__type">${esc(a.type)}</span>
-            <span class="atklog__count">${esc(String(a.count))}</span>
-          </div>`).join('');
-      }
-    }
-
     // Actualizar rail: agentes + severidad
     const railAgentCount = document.getElementById('railAgentCount');
     const railAgentList  = document.getElementById('railAgentList');
