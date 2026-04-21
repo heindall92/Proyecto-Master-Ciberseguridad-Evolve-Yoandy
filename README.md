@@ -351,7 +351,7 @@ Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propi
 ### Componentes:
 | Componente | Puerto | Descripción |
 |---|---|---|
-| **Sitema Valhalla** | `3000` | Frontend (HUD) + Backend (API) unificados |
+| **Sistema Valhalla** | `3000` | Frontend (HUD) + Backend (API) unificados |
 
 ### Iniciar el Dashboard:
 ```bash
