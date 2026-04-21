@@ -228,7 +228,7 @@ window.__showCreateUser = function() {
   if (!username) return;
   const password = prompt('Contraseña (mínimo 8 caracteres):');
   if (!password) return;
-  const role = prompt('Rol (admin / analyst / reporter / viewer):', 'analyst');
+  const role = (prompt('Rol (admin / analyst / reporter / viewer):', 'analyst') || '').toLowerCase().trim();
   if (!role) return;
   const email = prompt('Email (opcional):') || '';
 
@@ -243,7 +243,7 @@ window.__showCreateUser = function() {
 };
 
 window.__editUserRole = function(id, username, currentRole) {
-  const role = prompt(`Nuevo rol para ${username} (admin/analyst/reporter/viewer):`, currentRole);
+  const role = (prompt(`Nuevo rol para ${username} (admin/analyst/reporter/viewer):`, currentRole) || '').toLowerCase().trim();
   if (!role) return;
   fetch(`/api/users/${id}/role`, {
     method: 'PUT',
@@ -264,6 +264,28 @@ window.__toggleUser = function(id, active) {
     if (d.ok) window.__loadUsersIfNeeded();
     else alert('Error: ' + d.error);
   });
+};
+
+window.__resetUserPassword = function(id, username) {
+  const password = prompt(`Nueva contraseña para ${username} (mínimo 8 caracteres):`);
+  if (!password) return;
+  fetch(`/api/users/${id}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) alert('Contraseña actualizada con éxito');
+    else alert('Error: ' + d.error);
+  });
+};
+
+window.__deleteUser = function(id, username) {
+  if (!confirm(`¿Estás seguro de eliminar PERMANENTEMENTE al usuario "${username}"?\nEsta acción no se puede deshacer.`)) return;
+  fetch(`/api/users/${id}`, { method: 'DELETE' })
+    .then(r => r.json()).then(d => {
+      if (d.ok) window.__loadUsersIfNeeded();
+      else alert('Error: ' + d.error);
+    });
 };
 
 // Agent enrollment modal
@@ -303,6 +325,46 @@ window.__showEnrollAgent = function() {
     </div>`;
   document.body.appendChild(modal);
 };
+
+window.__closeEnrollModal = function() {
+  const modal = document.getElementById('enrollModal');
+  if (modal) modal.remove();
+};
+
+window.__syncAgents = async function(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⏱ SINCRONIZANDO…'; }
+  try {
+    const res = await fetch('/api/dashboard');
+    const data = await res.json();
+    if (data.agents) {
+      window.DATA.assets = data.agents;
+      setView('assets');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '✓ SINCRONIZADO'; setTimeout(() => { btn.textContent = '↻ SINCRONIZAR'; }, 2000); }
+  } catch (e) {
+    alert('Error al sincronizar agentes: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '↻ SINCRONIZAR'; }
+  }
+};
+
+window.__editAgent = function(id, name, currentGroup) {
+  const newGroup = prompt(`Cambiar grupo para agente "${name}" (ID: ${id}):`, currentGroup || 'default');
+  if (!newGroup || newGroup === currentGroup) return;
+
+  fetch(`/api/agents/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group: newGroup }),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      alert(d.message);
+      window.__syncAgents();
+    } else {
+      alert('Error: ' + d.error);
+    }
+  });
+};
+
 
 window.__doEnrollAgent = async function() {
   const name  = document.getElementById('enrollName')?.value?.trim();

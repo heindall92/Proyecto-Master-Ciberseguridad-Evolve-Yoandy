@@ -750,6 +750,31 @@ app.delete('/api/agents/:id', async (req, res) => {
   }
 });
 
+// PUT /api/agents/:id — update agent group
+app.put('/api/agents/:id', async (req, res) => {
+  const id = String(req.params.id).replace(/[^0-9]/g, '');
+  const { group } = req.body || {};
+  if (!id || !group) return res.status(400).json({ ok: false, error: 'ID y Grupo requeridos' });
+
+  try {
+    const token = await getWazuhToken();
+    // Wazuh API: PUT /agents/{agent_id}/group/{group_id}
+    // Note: We move the agent to the specified group (replaces all currently assigned groups)
+    const r = await httpsRequest(`${WAZUH_API}/agents/${id}/group/${group}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (r.status === 200) {
+      res.json({ ok: true, message: `Agente ${id} movido al grupo "${group}"` });
+    } else {
+      res.json({ ok: false, error: `Wazuh: ${r.status} ${JSON.stringify(r.body)}` });
+    }
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── Tickets ───────────────────────────────────────────────────────────────────
 app.use('/api/tickets', ticketsRoutes);
 

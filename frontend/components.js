@@ -547,25 +547,34 @@ function renderAssets() {
     <div class="panel__head">
       <div class="panel__title">Inventario · agentes Wazuh desplegados</div>
       <div class="panel__meta">12 / 348 visibles · filtrar por tipo</div>
-      <button data-action="__showEnrollAgent" style="background:rgba(60,255,158,0.1);border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:9px;letter-spacing:2px;padding:4px 14px;cursor:pointer">+ ENROLAR AGENTE</button>
+      <div style="display:flex;gap:8px">
+        <button ${actEl('__syncAgents')} style="background:rgba(74,227,255,0.08);border:1px solid var(--cyan);color:var(--cyan);font-family:var(--mono);font-size:9px;letter-spacing:2px;padding:4px 14px;cursor:pointer">↻ SINCRONIZAR</button>
+        <button data-action="__showEnrollAgent" style="background:rgba(60,255,158,0.1);border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:9px;letter-spacing:2px;padding:4px 14px;cursor:pointer">+ ENROLAR AGENTE</button>
+      </div>
     </div>
     <div class="panel__body">
       <div class="grid grid--4">
-        ${D.assets.map(a => `
+        ${D.assets.map(a => {
+          const group = a.group || 'default';
+          return `
           <div class="asset" style="position:relative">
             <div style="cursor:pointer" ${act('openAgent', String(a.id || a.name), a.name)}>
-              <div class="asset__name">${a.name}</div>
-              <div class="asset__ip">${a.ip} · ${a.os}</div>
-              <div style="font-size:10px; color:var(--text-faint); letter-spacing:1px; margin-top:4px; text-transform:uppercase">${a.type} · ${a.agent}</div>
+              <div class="asset__name">${esc(a.name)}</div>
+              <div class="asset__ip">${esc(a.ip)} · ${esc(a.os)}</div>
+              <div style="font-size:10px; color:var(--text-faint); letter-spacing:1px; margin-top:4px; text-transform:uppercase">${esc(a.type)} · ${esc(a.agent)}</div>
+              <div style="font-size:9px; color:var(--text-dim); margin-top:2px; opacity:0.8; letter-spacing:0.5px">GRUPO: ${esc(Array.isArray(group) ? group.join(', ') : group)}</div>
               <div class="asset__status ${a.status}">
                 <span class="dot" style="background:currentColor; box-shadow:0 0 6px currentColor"></span>
                 ${a.status === 'up' ? 'ONLINE' : a.status === 'warn' ? 'ALERTA' : 'OFFLINE · AISLADO'}
               </div>
-              <div style="font-size:9px;color:var(--signal);letter-spacing:1.5px;margin-top:6px">▶ VER DETALLE</div>
+              <div style="font-size:8.5px;color:var(--signal);letter-spacing:1.5px;margin-top:6px;opacity:0.8">▶ DETALLES TÉCNICOS</div>
             </div>
-            <button ${actEl('__removeAgent', String(a.id || a.name), a.name)} title="Eliminar agente" class="btn-remove-agent" style="position:absolute;top:6px;right:6px;background:none;border:1px solid rgba(255,58,58,.35);color:var(--danger);font-family:var(--mono);font-size:9px;padding:2px 7px;cursor:pointer;letter-spacing:1px">✕</button>
-          </div>
-        `).join('')}
+            <div style="position:absolute;top:6px;right:6px;display:flex;gap:4px">
+              <button ${act('__editAgent', a.id, a.name, Array.isArray(group) ? group[0] : group)} title="Editar agente" style="background:none;border:1px solid rgba(74,227,255,.35);color:var(--cyan);font-family:var(--mono);font-size:9px;padding:2px 7px;cursor:pointer;letter-spacing:1px">E</button>
+              <button ${actEl('__removeAgent', String(a.id || a.name), a.name)} title="Eliminar agente" class="btn-remove-agent" style="background:none;border:1px solid rgba(255,58,58,.35);color:var(--danger);font-family:var(--mono);font-size:9px;padding:2px 7px;cursor:pointer;letter-spacing:1px">✕</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>
   </section>
@@ -1289,7 +1298,9 @@ function renderUsers() {
             <td style="padding:10px 16px">
               <div style="display:flex;gap:6px">
                 <button ${act('__editUserRole', u.id, u.username, u.role)} style="background:none;border:1px solid var(--line);color:var(--text-dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:1px;white-space:nowrap">ROL</button>
+                <button ${act('__resetUserPassword', u.id, u.username)} style="background:none;border:1px solid rgba(74,227,255,0.4);color:var(--cyan);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:1px;white-space:nowrap">PASS</button>
                 <button ${act('__toggleUser', u.id, u.active?0:1)} style="background:none;border:1px solid var(--line);color:${u.active?'var(--danger)':'var(--signal)'};font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:1px;white-space:nowrap">${u.active?'DESACTIVAR':'ACTIVAR'}</button>
+                <button ${act('__deleteUser', u.id, u.username)} style="background:none;border:1px solid rgba(255,58,58,0.4);color:var(--danger);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:1px;white-space:nowrap">BORRAR</button>
               </div>
             </td>
           </tr>`).join('') : `<tr><td colspan="6" style="padding:24px;color:var(--text-faint);text-align:center">Cargando usuarios…</td></tr>`}

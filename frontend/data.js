@@ -1,86 +1,21 @@
 /* ======================================================
    VALHALLA SOC — data layer
-   Mock data is shown instantly; real Wazuh data loads
-   in the background and triggers a view refresh.
+   Datos reales desde Wazuh API / OpenSearch
    ====================================================== */
 
 window.DATA = {
 
   alerts: [],
 
-  incidents: [
-    {
-      id: 'VLH-2401', sev: 'CRIT', title: '[SIMULADO] Ransomware — wks-fin-07', assignee: 'T.STARK', status: 'open', age: '02:14', mitre: 'T1486',
-      tactic: 'Impact', affected: ['wks-fin-07','srv-nas-01'], ioc: 'hash: a1b2…f7c9',
-      description: 'Ransomware LockBit 3.0 detectado en la estación de trabajo wks-fin-07 del departamento de finanzas. Se han cifrado 847 archivos. El malware intenta propagarse por SMB a los recursos compartidos de red.',
-      timeline: ['06:14 — Wazuh detecta escritura masiva de archivos .locked', '06:18 — Regla 87702 activa: ransomware pattern match', '06:22 — Alerta enviada al analista on-call', '06:31 — Agente aislado de la red vía política Wazuh'],
-      mitigations: ['1. AISLAR inmediatamente wks-fin-07 de la red (cortar switch port)', '2. Preservar imagen forense antes de cualquier acción', '3. Verificar backup más reciente en srv-nas-01 (comprobar integridad)', '4. Analizar hash del binario en VirusTotal y MalwareBazaar', '5. Buscar IOCs en todos los endpoints: hash a1b2…f7c9', '6. Revisar cuentas con acceso a SMB activo en las últimas 4h', '7. Activar playbook Ransomware Response paso 1'],
-      playbook: 'Ransomware Response',
-    },
-    {
-      id: 'VLH-2400', sev: 'CRIT', title: '[SIMULADO] Credenciales comprometidas · RRHH', assignee: 'N.ROMANOV', status: 'progress', age: '04:22', mitre: 'T1078',
-      tactic: 'Initial Access', affected: ['wks-rrhh-04','srv-ad-01'], ioc: 'user: maria.garcia',
-      description: 'Cuenta de dominio maria.garcia comprometida — acceso desde IP externa 95.142.78.104 (RU, IOC activo APT29) fuera del horario laboral. Se detectaron 3 intentos de movimiento lateral hacia srv-ad-01.',
-      timeline: ['02:07 — Login correcto desde 95.142.78.104 (horario inusual)', '02:09 — Acceso a carpeta RRHH/confidencial (183 archivos leídos)', '02:14 — Intento de conexión RDP a srv-ad-01 desde wks-rrhh-04', '02:22 — Alerta SIEM: credencial usada desde 2 IPs simultáneas'],
-      mitigations: ['1. DESHABILITAR cuenta maria.garcia inmediatamente en AD', '2. Forzar reset de contraseña + revisar grupos de AD', '3. Bloquear IP 95.142.78.104 en firewall perimetral', '4. Auditar todos los accesos desde esa IP en las últimas 72h', '5. Revisar archivos accedidos: posible exfiltración de datos RRHH', '6. Activar MFA obligatorio para accesos desde IPs externas', '7. Notificar al DPO — posible brecha RGPD'],
-      playbook: 'Credential Theft',
-    },
-    {
-      id: 'VLH-2399', sev: 'HIGH', title: '[SIMULADO] C2 beacon — 185.220.101.47', assignee: 'B.BANNER', status: 'progress', age: '05:08', mitre: 'T1071.001',
-      tactic: 'Command & Control', affected: ['wks-dev-22'], ioc: 'ip: 185.220.101.47',
-      description: 'Comunicación periódica cada 120s (beacon) detectada desde wks-dev-22 hacia 185.220.101.47 (Tor exit node, Cobalt Strike C2 conocido). Patrón consistente con implante post-compromiso.',
-      timeline: ['01:00 — Primer beacon detectado por Suricata', '03:08 — Frecuencia regular confirmada (×12 en 24min)', '05:08 — Correlación con IOC VirusTotal score 98/100', '05:15 — Regla Wazuh 100200 (Ollama) clasifica: C2 activo'],
-      mitigations: ['1. Bloquear 185.220.101.47 en firewall + DNS sinkhole', '2. Aislar wks-dev-22 de la red preservando memoria RAM', '3. Ejecutar análisis forense de procesos activos (volatility3)', '4. Buscar persistencia: scheduled tasks, registry run keys, crontab', '5. Revisar credenciales del usuario en wks-dev-22', '6. Comprobar si hay otros beacons similares en la red', '7. Activar playbook C2 Beacon Contain'],
-      playbook: 'C2 Beacon Contain',
-    },
-    {
-      id: 'VLH-2398', sev: 'HIGH', title: '[SIMULADO] Escalada de privilegios en srv-ad-02', assignee: 'S.ROGERS', status: 'progress', age: '07:51', mitre: 'T1068',
-      tactic: 'Privilege Escalation', affected: ['srv-ad-02'], ioc: 'CVE-2021-34527 (PrintNightmare)',
-      description: 'Explotación de PrintNightmare (CVE-2021-34527) en srv-ad-02 — un proceso no privilegiado ejecutó código arbitrario como SYSTEM. Se detectó la creación de un usuario local admin oculto.',
-      timeline: ['00:00 — Proceso spoolsv.exe ejecuta DLL desde ruta no estándar', '00:03 — Creación de usuario "svc_backup_" con privilegios de admin local', '00:07 — Modificación de grupo Administradores de dominio', '07:51 — Wazuh regla 60128 activa: privilege escalation via print spooler'],
-      mitigations: ['1. PARCHEAR inmediatamente CVE-2021-34527 en srv-ad-02', '2. Deshabilitar Print Spooler en todos los Domain Controllers: Stop-Service Spooler', '3. Eliminar usuario "svc_backup_" y revisar todos los admins locales', '4. Auditar cambios en grupos privilegiados AD en las últimas 8h', '5. Revisar qué sistemas se conectaron a srv-ad-02 recientemente', '6. Buscar evidencias de Golden Ticket / Pass-the-Hash', '7. Activar playbook Privilege Escalation'],
-      playbook: 'Privilege Escalation',
-    },
-    {
-      id: 'VLH-2397', sev: 'MED', title: '[SIMULADO] Phishing dirigido — dpto. finanzas', assignee: 'C.BARTON', status: 'open', age: '11:02', mitre: 'T1566.001',
-      tactic: 'Initial Access', affected: ['wks-fin-02','wks-fin-05'], ioc: 'domain: secure-login-msft.co',
-      description: 'Campaña de spear phishing detectada dirigida al departamento de finanzas. Emails suplantando a Microsoft con adjunto .docx macro-enabled. 2 usuarios han abierto el archivo.',
-      timeline: ['11:00 — Email recibido por 6 usuarios de finanzas', '11:02 — Wazuh detecta macro execution en wks-fin-02 y wks-fin-05', '11:05 — Conexión saliente a secure-login-msft.co (IOC score 95)'],
-      mitigations: ['1. Bloquear dominio secure-login-msft.co en proxy y DNS', '2. Cuarentena inmediata de wks-fin-02 y wks-fin-05', '3. Escanear adjunto .docx con VirusTotal y sandbox', '4. Identificar todos los destinatarios del email', '5. Reportar email a Microsoft MSRC y PhishTank', '6. Activar playbook Phishing Triage'],
-      playbook: 'Phishing Triage',
-    },
-    {
-      id: 'VLH-2396', sev: 'MED', title: '[SIMULADO] Exfiltración DNS sospechosa', assignee: 'T.STARK', status: 'progress', age: '18:47', mitre: 'T1048.003',
-      tactic: 'Exfiltration', affected: ['wks-dev-08'], ioc: 'domain: cdn-update.cloud',
-      description: 'Patrón de exfiltración vía DNS tunneling detectado en wks-dev-08. Volumen inusual de peticiones TXT a cdn-update.cloud con subdominios de longitud > 60 caracteres (datos codificados en base64).',
-      timeline: ['18:47 — Zeek detecta 847 peticiones DNS en 10 minutos', '18:50 — Longitud media de subdominios: 68 chars (anómalo)', '18:52 — Correlación con IOC cdn-update.cloud (Spamhaus score 82)'],
-      mitigations: ['1. Bloquear cdn-update.cloud en DNS resolver y firewall', '2. Capturar tráfico DNS de wks-dev-08 para análisis forense', '3. Analizar qué datos se han exfiltrado (entropía en subdominios)', '4. Revisar todos los procesos con acceso DNS en el host', '5. Activar playbook Data Exfiltration'],
-      playbook: 'Data Exfiltration',
-    },
-    {
-      id: 'VLH-2395', sev: 'LOW', title: '[SIMULADO] Shadow IT — Dropbox sin autorizar', assignee: 'W.MAXIMOFF', status: 'open', age: '1d 04h', mitre: 'T1567',
-      tactic: 'Exfiltration', affected: ['wks-mktg-11'], ioc: 'app: Dropbox Desktop Client',
-      description: 'Instalación y uso de Dropbox Desktop no autorizado en wks-mktg-11. Se han subido 2.3 GB de archivos corporativos a un almacenamiento cloud personal fuera del perímetro de seguridad.',
-      timeline: ['1d 04h — Instalación de Dropbox detectada por FIM', '1d 02h — Primera sincronización: 847 archivos subidos', '12h — Sincronización continua activa'],
-      mitigations: ['1. Bloquear Dropbox en proxy y mediante AppLocker/GPO', '2. Identificar qué archivos han sido sincronizados', '3. Evaluar si los datos contienen información sensible (RGPD)', '4. Convocar reunión de awareness con el usuario', '5. Reforzar política de uso aceptable (AUP)'],
-      playbook: 'Data Exfiltration',
-    },
-  ],
+  // Incidents se cargan desde /api/tickets (tickets reales de la BD)
+  incidents: [],
 
   vulns: [],  // populated by /api/vulns from Wazuh Vulnerability Detection
 
   assets: [],
 
-  iocs: [
-    { type: 'IP',     val: '185.220.101.47',       score: 98, source: 'AlienVault OTX',  tags: 'C2 · Cobalt Strike' },
-    { type: 'IP',     val: '95.142.78.104',        score: 92, source: 'MISP',            tags: 'APT29 · VPN abuse'  },
-    { type: 'DOMAIN', val: 'secure-login-msft.co', score: 95, source: 'PhishTank',       tags: 'phishing · O365'    },
-    { type: 'HASH',   val: 'a1b2…f7c9 · SHA256',   score: 99, source: 'VirusTotal',      tags: 'LockBit 3.0'        },
-    { type: 'URL',    val: 'hxxp://cdn-upd8.ru/x.bin', score: 88, source: 'MISP',        tags: 'dropper · loader'   },
-    { type: 'HASH',   val: '5f3a…91c2 · MD5',      score: 87, source: 'AbuseCH',         tags: 'Emotet'             },
-    { type: 'DOMAIN', val: 'cdn-update.cloud',     score: 82, source: 'Spamhaus',        tags: 'C2 · malvertising'  },
-    { type: 'IP',     val: '109.248.6.143',        score: 76, source: 'AlienVault OTX',  tags: 'scanner · ToR'      },
-  ],
+  // IOCs se cargan desde /api/iocs/feed (AlienVault OTX real si está configurado)
+  iocs: [],
 
   playbooks: [
     {
@@ -202,16 +137,8 @@ window.DATA = {
     },
   ],
 
-  attacks: [
-    { city: 'Moscow',    cc: 'RU', lat: 55.75,  lng:  37.62, ip: '95.142.78.104',  count: 847, type: 'brute-force' },
-    { city: 'Beijing',   cc: 'CN', lat: 39.90,  lng: 116.40, ip: '114.114.114.42', count: 621, type: 'scan'        },
-    { city: 'Tehran',    cc: 'IR', lat: 35.69,  lng:  51.39, ip: '5.63.15.92',     count: 412, type: 'phishing'    },
-    { city: 'Kyiv',      cc: 'UA', lat: 50.45,  lng:  30.52, ip: '185.220.101.47', count: 389, type: 'C2'          },
-    { city: 'São Paulo', cc: 'BR', lat:-23.55,  lng: -46.63, ip: '200.17.4.211',   count: 201, type: 'ddos'        },
-    { city: 'Lagos',     cc: 'NG', lat:  6.52,  lng:   3.38, ip: '41.58.12.8',     count: 178, type: 'phishing'    },
-    { city: 'Seoul',     cc: 'KR', lat: 37.57,  lng: 126.98, ip: '121.174.5.44',   count:  92, type: 'scan'        },
-    { city: 'Mumbai',    cc: 'IN', lat: 19.08,  lng:  72.88, ip: '103.57.82.9',    count:  67, type: 'brute-force' },
-  ],
+  // Attacks se cargan desde /api/dashboard (datos reales de Cowrie + GeoIP)
+  attacks: [],
   hq: { lat: 40.42, lng: -3.70, city: 'Madrid' },
 
   metrics: {

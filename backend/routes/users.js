@@ -95,4 +95,19 @@ router.put('/:id/password', (req, res) => {
   res.json({ ok: true });
 });
 
+// DELETE /api/users/:id — delete user (admin)
+router.delete('/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (id === req.user.id) {
+    return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+  }
+  try {
+    queries.delete.run(id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al eliminar usuario' });
+  }
+});
+
 module.exports = router;

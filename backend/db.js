@@ -73,6 +73,7 @@ const queries = {
   updateRole:      db.prepare('UPDATE users SET role = ? WHERE id = ?'),
   updateActive:    db.prepare('UPDATE users SET active = ? WHERE id = ?'),
   updatePassword:  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
+  delete:          db.prepare('DELETE FROM users WHERE id = ?'),
   updateLastLogin: db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?"),
 };
 
