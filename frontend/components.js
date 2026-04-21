@@ -162,40 +162,45 @@ function renderOverview() {
     </div>
   </div>
 
-  <div class="grid grid--3">
-    ${MiniPanel('Top atacantes', `
-      <div id="attackersList">
-        ${D.attacks.slice(0,5).map(a => `
+  <div class="grid grid--2" id="overviewBottom">
+    <!-- Top atacantes: solo datos reales de Cowrie/OpenSearch -->
+    ${MiniPanel('Top atacantes · Cowrie', (() => {
+      const atks = D.attacks || [];
+      if (!atks.length) return `
+        <div style="padding:20px;text-align:center;color:var(--text-faint);font-size:10px;letter-spacing:1.5px">
+          Esperando eventos Cowrie en OpenSearch…<br>
+          <span style="font-size:9px;color:var(--text-faint);margin-top:4px;display:block">Los IPs atacantes aparecer\xE1n cuando Cowrie genere alertas.</span>
+        </div>`;
+      return `<div id="attackersList">` + atks.slice(0,8).map(a => `
         <div class="atklog">
           <span class="atklog__flag">${esc(a.cc)}</span>
           <span class="atklog__ip">${esc(a.ip)}</span>
           <span class="atklog__type">${esc(a.type)}</span>
           <span class="atklog__count">${esc(String(a.count))}</span>
-        </div>`).join('')}
-      </div>
-    `)}
-    ${MiniPanel('MITRE ATT&CK · Top técnicas (30d)', (() => {
-      const realTechs = window.DATA?.mitre?.techniques;
-      const items = realTechs?.length
-        ? realTechs.slice(0, 5).map(t => [t.id, t.desc || t.id, t.count, t.count > 50 ? 'danger' : 'amber'])
-        : [
-            ['T1110', 'Brute Force · SSH',              0, 'danger'],
-            ['T1021', 'Remote Services',                0, 'amber'],
-            ['T1059', 'Command Interpreter',            0, ''],
-            ['T1078', 'Valid Accounts',                 0, 'amber'],
-            ['T1071', 'Application Layer Protocol',     0, ''],
-          ];
-      const maxVal = Math.max(...items.map(i => i[2]), 1);
-      return `<div id="mitreOverviewItems">` + items.map(([id, name, v, cls]) => `
-        <div style="padding: 8px 14px; border-bottom: 1px dashed var(--line-faint); font-size: 11px">
-          <div style="display:flex; justify-content:space-between; margin-bottom: 4px">
-            <span style="color: var(--cyan); letter-spacing: 1px; font-weight: 500">${esc(String(id))} · ${esc(String(name).slice(0,35))}</span>
-            <span style="color: var(--text-dim); font-variant-numeric: tabular-nums">${v || '—'}</span>
-          </div>
-          <div class="bar"><div class="bar__fill ${cls}" style="width:${maxVal > 1 ? Math.round(v/maxVal*100) : 5}%"></div></div>
         </div>`).join('') + `</div>`;
     })())}
-    ${MiniPanel('Consola · live', `<div class="term" id="termFeed"></div>`)}
+
+    <!-- MITRE ATT&CK: solo datos reales de Wazuh (rule.mitre.id en OpenSearch) -->
+    ${MiniPanel('MITRE ATT&CK · Wazuh (30d)', (() => {
+      const techs = window.DATA?.mitre?.techniques;
+      if (!techs?.length) return `
+        <div style="padding:20px;text-align:center;color:var(--text-faint);font-size:10px;letter-spacing:1.5px" id="mitreOverviewItems">
+          Sin datos MITRE a\xFAn.<br>
+          <span style="font-size:9px;color:var(--text-faint);margin-top:4px;display:block">Se poblar\xE1 cuando Wazuh genere alertas con field <code style="color:var(--cyan)">rule.mitre.id</code>.</span>
+        </div>`;
+      const maxVal = Math.max(...techs.map(t => t.count), 1);
+      return `<div id="mitreOverviewItems">` + techs.slice(0,6).map(t => {
+        const cls = t.count > 50 ? 'danger' : t.count > 20 ? 'amber' : '';
+        return `
+        <div style="padding: 8px 14px; border-bottom: 1px dashed var(--line-faint); font-size: 11px">
+          <div style="display:flex; justify-content:space-between; margin-bottom: 4px">
+            <span style="color: var(--cyan); letter-spacing: 1px; font-weight: 500">${esc(String(t.id))} \xB7 ${esc(String(t.desc||t.id).slice(0,38))}</span>
+            <span style="color: var(--text-dim); font-variant-numeric: tabular-nums">${t.count}</span>
+          </div>
+          <div class="bar"><div class="bar__fill ${cls}" style="width:${Math.round(t.count/maxVal*100)}%"></div></div>
+        </div>`;
+      }).join('') + `</div>`;
+    })())}
   </div>
   `;
 }
@@ -331,20 +336,66 @@ window.__loadOverviewData = async function() {
     if (window.DATA.mitre?.techniques?.length) {
       const mitreEl = document.getElementById('mitreOverviewItems');
       if (mitreEl) {
-        const items   = window.DATA.mitre.techniques.slice(0,5);
+        const items   = window.DATA.mitre.techniques.slice(0,6);
         const maxVal  = Math.max(...items.map(t => t.count), 1);
         mitreEl.innerHTML = items.map(t => {
           const cls = t.count > 50 ? 'danger' : t.count > 20 ? 'amber' : '';
           return `
           <div style="padding: 8px 14px; border-bottom: 1px dashed var(--line-faint); font-size: 11px">
             <div style="display:flex; justify-content:space-between; margin-bottom: 4px">
-              <span style="color: var(--cyan); letter-spacing: 1px; font-weight: 500">${esc(String(t.id))} \xB7 ${esc(String(t.desc||t.id).slice(0,35))}</span>
+              <span style="color: var(--cyan); letter-spacing: 1px; font-weight: 500">${esc(String(t.id))} \xB7 ${esc(String(t.desc||t.id).slice(0,38))}</span>
               <span style="color: var(--text-dim); font-variant-numeric: tabular-nums">${t.count}</span>
             </div>
             <div class="bar"><div class="bar__fill ${cls}" style="width:${Math.round(t.count/maxVal*100)}%"></div></div>
           </div>`;
         }).join('');
       }
+    }
+
+    // Actualizar Top atacantes si hay datos reales
+    if (window.DATA.attacks?.length) {
+      const atkEl = document.getElementById('attackersList');
+      if (atkEl) {
+        atkEl.innerHTML = window.DATA.attacks.slice(0,8).map(a => `
+          <div class="atklog">
+            <span class="atklog__flag">${esc(a.cc)}</span>
+            <span class="atklog__ip">${esc(a.ip)}</span>
+            <span class="atklog__type">${esc(a.type)}</span>
+            <span class="atklog__count">${esc(String(a.count))}</span>
+          </div>`).join('');
+      }
+    }
+
+    // Actualizar rail: agentes + severidad
+    const railAgentCount = document.getElementById('railAgentCount');
+    const railAgentList  = document.getElementById('railAgentList');
+    if (railAgentList && window.DATA.assets?.length) {
+      const ag = window.DATA.assets;
+      if (railAgentCount) railAgentCount.textContent = `${ag.filter(a=>a.status==='up').length} / ${ag.length} online`;
+      railAgentList.innerHTML = ag.slice(0,8).map(a => `
+        <div style="display:grid;grid-template-columns:8px 1fr auto;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line-faint);align-items:center">
+          <span style="width:6px;height:6px;border-radius:50%;background:${a.status==='up'?'var(--signal)':a.status==='warn'?'var(--amber)':'var(--danger)'};box-shadow:0 0 4px currentColor"></span>
+          <div>
+            <div style="font-size:11px;color:var(--text-bright);letter-spacing:0.5px">${esc(a.name)}</div>
+            <div style="font-size:9px;color:var(--text-faint);margin-top:1px">${esc(a.ip)} \xB7 ${esc(a.os||'')}</div>
+          </div>
+          <span style="font-size:8.5px;letter-spacing:1px;color:${a.status==='up'?'var(--signal)':a.status==='warn'?'var(--amber)':'var(--danger)'};text-transform:uppercase">${a.status==='up'?'OK':a.status==='warn'?'WARN':'OFF'}</span>
+        </div>`).join('');
+    }
+
+    // Actualizar rail: barras de severidad reales
+    if (data.severityBreak?.length) {
+      const sevMap = {};
+      data.severityBreak.forEach(b => { sevMap[b.sev] = b.count; });
+      const total = Object.values(sevMap).reduce((s,v)=>s+v,0);
+      ['CRIT','HIGH','MED','LOW'].forEach(s => {
+        const n   = sevMap[s] || 0;
+        const pct = total ? Math.round(n/total*100) : 0;
+        const elN = document.getElementById(`railSev-${s}`);
+        const elB = document.getElementById(`railSevBar-${s}`);
+        if (elN) elN.textContent = n.toLocaleString('es');
+        if (elB) elB.style.width = `${Math.max(pct, 2)}%`;
+      });
     }
   } catch (e) {
     console.warn('[Overview] Error cargando datos reales:', e.message);
@@ -1150,85 +1201,52 @@ function renderMetrics() {
 // RIGHT RAIL content (varies by view)
 // =========================================================
 function renderRail(view) {
-  const aiPanel = `
-    <section class="rail__panel">
-      <div class="panel__body" style="padding: 0">
-        <div class="ai-panel">
-          <div class="ai-panel__head">
-            <div class="ai-panel__dot"></div>
-            <div class="ai-panel__title">Ollama AI · Análisis</div>
-          </div>
-          <div class="ai-panel__body" id="aiAnalysis">
-            <strong>Correlación activa:</strong> Se detecta actividad coordinada desde <strong>RU (APT29)</strong> — brute-force SSH + C2 beacon en segmentos separados sugiere movimiento lateral post-compromiso.<br><br>
-            <strong>Recomendación:</strong> Aislar wks-fin-07 y wks-rrhh-04. Ejecutar playbook <strong>C2 Beacon Contain</strong> + <strong>Credential Theft</strong> en paralelo. Prioridad: contener antes de pivoting a srv-ad-02.<br><br>
-            <span style="color:var(--text-faint); font-size:9.5px; letter-spacing:1px">MODELO: llama3.1:70b · LATENCIA: 420ms · CONFIANZA: 94.2%</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
-
-  const terminalPanel = `
+  // ── Panel real: estado de agentes Wazuh ────────────────────────────────────
+  const agents = window.DATA.assets || [];
+  const agentPanel = `
     <section class="rail__panel">
       <div class="panel__head">
-        <div class="panel__title">// Consola raw</div>
-        <div class="panel__meta" style="color:var(--signal)">LIVE</div>
+        <div class="panel__title">// Agentes Wazuh</div>
+        <div class="panel__meta" id="railAgentCount" style="color:var(--signal)">cargando…</div>
       </div>
-      <div class="term" id="railTerm" style="max-height: 220px"></div>
-    </section>
-  `;
-
-  const onCallPanel = `
-    <section class="rail__panel">
-      <div class="panel__head">
-        <div class="panel__title">// Guardia activa</div>
-      </div>
-      <div class="panel__body" style="padding: 0">
-        ${[
-          ['T.STARK', 'L3 · NOCHE', 'activo'],
-          ['N.ROMANOV', 'L3 · BACKUP', 'activo'],
-          ['B.BANNER', 'L2 · FORENSIC', 'activo'],
-          ['CSO M.HILL', 'ESCALADO', 'standby'],
-        ].map(([n, r, s]) => `
-          <div style="display:grid; grid-template-columns:auto 1fr auto; gap:8px; padding:9px 14px; border-bottom:1px solid var(--line-faint); align-items:center">
-            <span class="dot" style="width:6px;height:6px;background:${s === 'activo' ? 'var(--signal)' : 'var(--text-faint)'}; box-shadow:0 0 5px ${s === 'activo' ? 'var(--signal)' : 'transparent'}"></span>
+      <div class="panel__body" style="padding:0" id="railAgentList">
+        ${agents.length === 0
+          ? `<div style="padding:14px;font-size:10px;color:var(--text-faint);letter-spacing:1px">Conectando con Wazuh…</div>`
+          : agents.slice(0, 8).map(a => `
+          <div style="display:grid;grid-template-columns:8px 1fr auto;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line-faint);align-items:center">
+            <span style="width:6px;height:6px;border-radius:50%;background:${a.status==='up'?'var(--signal)':a.status==='warn'?'var(--amber)':'var(--danger)'};box-shadow:0 0 5px currentColor"></span>
             <div>
-              <div style="font-family:var(--sans); font-weight:600; letter-spacing:1.5px; color:var(--text-bright); font-size:11.5px">${n}</div>
-              <div style="font-size:9.5px; color:var(--text-faint); letter-spacing:1px; margin-top:1px">${r}</div>
+              <div style="font-size:11px;color:var(--text-bright);letter-spacing:0.5px">${esc(a.name)}</div>
+              <div style="font-size:9px;color:var(--text-faint);margin-top:1px">${esc(a.ip)} · ${esc(a.os||'')}</div>
             </div>
-            <div style="font-size:8.5px; letter-spacing:1.5px; color:${s === 'activo' ? 'var(--signal)' : 'var(--text-dim)'}; text-transform:uppercase">${s}</div>
-          </div>
-        `).join('')}
+            <span style="font-size:8.5px;letter-spacing:1px;color:${a.status==='up'?'var(--signal)':a.status==='warn'?'var(--amber)':'var(--danger)'}">${a.status==='up'?'OK':a.status==='warn'?'WARN':'OFF'}</span>
+          </div>`).join('')
+        }
       </div>
     </section>
   `;
 
-  const healthPanel = `
+  // ── Panel real: resumen de severidad de alertas 24h ──────────────────────
+  const sevPanel = `
     <section class="rail__panel">
-      <div class="panel__head"><div class="panel__title">// Salud del stack</div></div>
-      <div class="panel__body" style="padding:10px 14px">
-        ${[
-          ['Wazuh Manager', 98, ''],
-          ['Elasticsearch', 87, ''],
-          ['Kibana', 99, ''],
-          ['Suricata IDS', 94, ''],
-          ['Zeek sensor', 76, 'amber'],
-          ['MISP instance', 91, ''],
-          ['Ollama AI', 100, ''],
-        ].map(([n, v, cls]) => `
-          <div style="margin-bottom: 8px">
-            <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom: 3px; letter-spacing:0.5px">
-              <span>${n}</span>
-              <span style="color:var(--text-dim); font-variant-numeric:tabular-nums">${v}%</span>
-            </div>
-            <div class="bar"><div class="bar__fill ${cls}" style="width:${v}%"></div></div>
+      <div class="panel__head">
+        <div class="panel__title">// Severidad · 24h</div>
+        <div class="panel__meta" id="railSevMeta" style="color:var(--text-faint)">Wazuh SIEM</div>
+      </div>
+      <div class="panel__body" style="padding:10px 14px" id="railSevBars">
+        ${[['CRIT','danger'],['HIGH','amber'],['MED',''],['LOW','']].map(([s,cls]) => `
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+            <span style="color:${cls==='danger'?'var(--danger)':cls==='amber'?'var(--amber)':'var(--text-faint)'}">${s}</span>
+            <span id="railSev-${s}" style="color:var(--text-dim);font-variant-numeric:tabular-nums">…</span>
           </div>
-        `).join('')}
+          <div class="bar"><div id="railSevBar-${s}" class="bar__fill ${cls}" style="width:5%"></div></div>
+        </div>`).join('')}
       </div>
     </section>
   `;
 
-  return aiPanel + healthPanel + onCallPanel + terminalPanel;
+  return agentPanel + sevPanel;
 }
 
 // =========================================================
