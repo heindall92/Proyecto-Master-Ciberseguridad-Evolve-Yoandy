@@ -46,6 +46,31 @@
 - [[arquitectura]]
 - [[Executive Report Generator]]
 
+## 2026-04-21 (README de módulo)
+
+### Cambio
+- Se crea `docs-julieta/README.md` con documentación completa del módulo [[Executive Report Generator]] en formato Markdown para GitHub.
+
+### Contenido agregado
+- Título oficial del módulo.
+- Badge de estado (`funcionando`).
+- Descripción ejecutiva en español.
+- Referencia a dos capturas:
+  - `images/screenshot-1.png`
+  - `images/screenshot-2.png`
+- Secciones:
+  - Características
+  - Stack técnico
+  - Endpoints que consume
+  - Cómo ejecutar en local
+  - Fallback sin Docker
+  - Autora (Julieta - Análisis)
+
+### Documentos relacionados
+- [[README]]
+- [[componentes]]
+- [[cambios]]
+
 ## 2026-04-21 (implementación Executive Report)
 
 ### Cambio
