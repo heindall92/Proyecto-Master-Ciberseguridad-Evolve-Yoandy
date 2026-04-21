@@ -1190,9 +1190,9 @@ function renderRail(view) {
           <span id="hist-t0">—</span><span>Ahora</span>
         </div>
         <div style="display:flex;justify-content:center;gap:1px;margin-top:6px">
-          <button data-hf="6"  onclick="window.__filterHist(6)"  class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">6H</button>
-          <button data-hf="12" onclick="window.__filterHist(12)" class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">12H</button>
-          <button data-hf="24" onclick="window.__filterHist(24)" class="histbtn histbtn--active" style="background:none;border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">24H</button>
+          <button data-hf="6"  onclick="window.__filterHist(6)"  class="histbtn" title="Ver últimas 6 horas" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">6H</button>
+          <button data-hf="12" onclick="window.__filterHist(12)" class="histbtn" title="Ver últimas 12 horas" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">12H</button>
+          <button data-hf="24" onclick="window.__filterHist(24)" class="histbtn histbtn--active" title="Ver últimas 24 horas" style="background:none;border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">24H</button>
         </div>
       </div>
     </section>
