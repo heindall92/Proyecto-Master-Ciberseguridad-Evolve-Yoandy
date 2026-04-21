@@ -67,6 +67,10 @@ function setView(v) {
   // view-specific mounts
   if (v === 'overview') {
     window.mountAlerts(10);
+    // Load real data from /api/overview (KPIs, histogram, Cowrie, critical alerts)
+    if (typeof window.__loadOverviewData === 'function') {
+      window.__loadOverviewData();
+    }
   }
   if (v === 'map') {
     // Destroy old map instance if exists
@@ -93,36 +97,12 @@ function setView(v) {
   startTerminal();
 }
 
-// Live terminal
+// Live terminal removed — panels termFeed and railTerm were fake (randomWalk).
+// startTerminal kept as no-op to avoid errors from lingering calls.
 let termTimer = null;
 function startTerminal() {
   clearInterval(termTimer);
-  const feed = document.getElementById('termFeed') || document.getElementById('railTerm');
-  if (!feed) return;
-  feed.innerHTML = '<span class="cursor">boot // valhalla soc v3.41.2 · session opened</span>';
-
-  const pushLine = () => {
-    if (!state.logsOn) return;
-    const tpl = window.DATA.logTemplates[Math.floor(Math.random() * window.DATA.logTemplates.length)];
-    const ip = `${Math.floor(Math.random()*223)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
-    const agent = ['srv-db-03', 'wks-fin-07', 'srv-ad-01', 'wks-dev-22', 'fw-perim-01'][Math.floor(Math.random()*5)];
-    const hash = Math.random().toString(16).slice(2, 10) + '...' + Math.random().toString(16).slice(2, 6);
-    const ts = new Date().toTimeString().slice(0,8);
-    const msg = tpl.m
-      .replace('{ip}', ip)
-      .replace('{agent}', agent)
-      .replace('{hash}', hash)
-      .replace('{port}', Math.floor(Math.random()*60000))
-      .replace('{n}', Math.floor(Math.random()*50+10));
-
-    const line = document.createElement('div');
-    line.innerHTML = `<span class="t-dim">${ts}</span> <span class="t-${tpl.t}">${msg}</span>`;
-    feed.insertBefore(line, feed.firstChild);
-    while (feed.children.length > 14) feed.lastChild.remove();
-  };
-
-  for (let i = 0; i < 6; i++) pushLine();
-  termTimer = setInterval(pushLine, 1400);
+  // No terminal panels in the current UI — all data is real Wazuh data
 }
 
 // Clock
@@ -134,15 +114,8 @@ function tickClock() {
   el.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} UTC+02`;
 }
 
-// KPI simulation (ticker)
-function tickKPIs() {
-  const alertsEl = document.getElementById('kpi-alerts');
-  if (alertsEl) {
-    const cur = parseInt(alertsEl.textContent.replace(/,/g, ''));
-    const next = cur + Math.floor(Math.random() * 4);
-    alertsEl.textContent = next.toLocaleString();
-  }
-}
+// KPI counter — driven by real /api/overview data (30s interval in app bootstrap)
+// tickKPIs removed: values are now real Wazuh data, not random simulation
 
 // Edit mode / tweaks wiring
 (function setupEditMode() {
@@ -194,7 +167,14 @@ document.querySelectorAll('.navbtn').forEach(b => {
 applyTweaks();
 setView(state.view);
 setInterval(tickClock, 1000);
-setInterval(tickKPIs, 2500);
+
+// Auto-refresh Overview data every 30s (solo cuando la vista overview está activa)
+setInterval(() => {
+  if (state.view === 'overview' && typeof window.__loadOverviewData === 'function') {
+    window.__loadOverviewData();
+  }
+}, 30000);
+
 
 // Exposed so data.js can trigger a view re-render after loading real data
 // Skip refresh if Ollama is currently processing (would wipe the result box)

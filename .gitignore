@@ -32,6 +32,8 @@ imagen.png
 
 # Databases (runtime data)
 backend/*.db
+backend/*.db-shm
+backend/*.db-wal
 
 # Logs
 *.log
