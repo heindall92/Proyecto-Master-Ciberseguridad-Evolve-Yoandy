@@ -115,169 +115,16 @@ function renderOverview() {
     <div id="critFeedItems" style="display:flex;flex-direction:column;gap:4px"></div>
   </div>
 
-  <!-- Grid compacto de 3 columnas: SIEM (2fr) | Severidad+Volumen+Cowrie (1fr) | Atacantes+MITRE (1fr) -->
-  <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px">
-
-    <!-- Columna izquierda: Flujo SIEM -->
-    <section class="panel" style="display:flex;flex-direction:column">
-      <div class="panel__head">
-        <div class="panel__title">Flujo SIEM · Wazuh</div>
-        <div class="panel__meta" id="siemCount">Conectando con OpenSearch…</div>
-      </div>
-      <div class="panel__body" style="padding:0;flex:1">
-        <div id="alertList"></div>
-      </div>
-    </section>
-
-    <!-- Columna centro: Severidad + Volumen eventos + Cowrie -->
-    <div style="display:flex;flex-direction:column;gap:8px">
-
-      <!-- Severidad: distribución visual -->
-      <section class="panel">
-        <div class="panel__head">
-          <div class="panel__title">Distribución Severidad · 24h</div>
-        </div>
-        <div class="panel__body" style="padding:10px 12px">
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:9px;color:var(--danger);width:32px;font-weight:600">CRIT</span>
-              <div class="bar" style="flex:1;height:6px;background:rgba(255,58,58,0.15);border-radius:3px;overflow:hidden">
-                <div id="sevBarCrit" style="width:0%;height:100%;background:var(--danger);transition:width .3s"></div>
-              </div>
-              <span id="sevCountCrit" style="font-size:10px;color:var(--text-faint);width:36px;text-align:right;font-family:var(--mono)">—</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:9px;color:var(--amber);width:32px;font-weight:600">HIGH</span>
-              <div class="bar" style="flex:1;height:6px;background:rgba(255,193,7,0.15);border-radius:3px;overflow:hidden">
-                <div id="sevBarHigh" style="width:0%;height:100%;background:var(--amber);transition:width .3s"></div>
-              </div>
-              <span id="sevCountHigh" style="font-size:10px;color:var(--text-faint);width:36px;text-align:right;font-family:var(--mono)">—</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:9px;color:var(--signal);width:32px;font-weight:600">MED</span>
-              <div class="bar" style="flex:1;height:6px;background:rgba(0,255,170,0.15);border-radius:3px;overflow:hidden">
-                <div id="sevBarMed" style="width:0%;height:100%;background:var(--signal);transition:width .3s"></div>
-              </div>
-              <span id="sevCountMed" style="font-size:10px;color:var(--text-faint);width:36px;text-align:right;font-family:var(--mono)">—</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:9px;color:var(--text-faint);width:32px;font-weight:600">LOW</span>
-              <div class="bar" style="flex:1;height:6px;background:rgba(177,186,211,0.15);border-radius:3px;overflow:hidden">
-                <div id="sevBarLow" style="width:0%;height:100%;background:var(--text-faint);transition:width .3s"></div>
-              </div>
-              <span id="sevCountLow" style="font-size:10px;color:var(--text-faint);width:36px;text-align:right;font-family:var(--mono)">—</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Volumen eventos compacto -->
-      <section class="panel" style="flex:0 0 auto">
-        <div class="panel__head" style="padding:8px 12px">
-          <div class="panel__title" style="font-size:10px">Volumen eventos · 24h</div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <div class="panel__meta" id="histMeta" style="color:var(--signal);font-size:9px">cargando…</div>
-            <div style="display:flex;gap:2px">
-              <button data-hf="6"  onclick="window.__filterHist(6)"  class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:7px;padding:1px 4px;cursor:pointer;letter-spacing:1px">6H</button>
-              <button data-hf="12" onclick="window.__filterHist(12)" class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:7px;padding:1px 4px;cursor:pointer;letter-spacing:1px">12H</button>
-              <button data-hf="24" onclick="window.__filterHist(24)" class="histbtn histbtn--active" style="background:none;border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:7px;padding:1px 4px;cursor:pointer;letter-spacing:1px">24H</button>
-            </div>
-          </div>
-        </div>
-        <div class="panel__body" style="padding:8px 12px">
-          <div id="histSparkWrap" style="height:40px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px">Cargando…</div>
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-faint);margin-top:2px;letter-spacing:1px">
-            <span id="hist-t0">—</span><span>-12h</span><span>-6h</span><span>-3h</span><span>Ahora</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Cowrie compacto -->
-      <section class="panel" style="flex:0 0 auto">
-        <div class="panel__head" style="padding:8px 12px">
-          <div class="panel__title" style="font-size:10px">Cowrie Honeypot · 24h</div>
-          <div class="panel__meta" style="color:var(--danger);font-size:9px">● :2222</div>
-        </div>
-        <div class="panel__body" style="padding:8px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div>
-            <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Sesiones</div>
-            <div style="font-size:16px;font-weight:700;color:var(--danger);font-family:var(--mono)" id="cow-sessions">…</div>
-          </div>
-          <div>
-            <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">IPs</div>
-            <div style="font-size:16px;font-weight:700;color:var(--amber);font-family:var(--mono)" id="cow-ips">…</div>
-          </div>
-          <div>
-            <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Logins</div>
-            <div style="font-size:16px;font-weight:700;color:var(--text);font-family:var(--mono)" id="cow-logins">…</div>
-          </div>
-          <div>
-            <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Malware</div>
-            <div style="font-size:16px;font-weight:700;color:var(--cyan);font-family:var(--mono)" id="cow-malware">…</div>
-          </div>
-        </div>
-      </section>
-
+  <!-- Overview simplificado: Solo Flujo SIEM (el rail muestra Agentes+Severidad+Volumen+Cowrie) -->
+  <section class="panel" style="display:flex;flex-direction:column;height:calc(100vh - 220px)">
+    <div class="panel__head">
+      <div class="panel__title">Flujo SIEM · Wazuh</div>
+      <div class="panel__meta" id="siemCount">Conectando con OpenSearch…</div>
     </div>
-
-    <!-- Columna derecha: Top atacantes + MITRE -->
-    <div style="display:flex;flex-direction:column;gap:8px">
-
-      <!-- Top atacantes -->
-      <section class="panel" style="flex:1">
-        <div class="panel__head" style="padding:8px 12px">
-          <div class="panel__title" style="font-size:10px">Top atacantes · Cowrie</div>
-        </div>
-        <div class="panel__body" style="padding:0;max-height:200px;overflow:auto">
-          ${(() => {
-            const atks = D.attacks || [];
-            if (!atks.length) return `
-              <div style="padding:16px;text-align:center;color:var(--text-faint);font-size:9px;letter-spacing:1px">
-                Esperando eventos Cowrie…
-              </div>`;
-            return `<div id="attackersList">` + atks.slice(0,8).map(a => `
-              <div class="atklog" style="padding:6px 10px;font-size:10px">
-                <span class="atklog__flag" style="font-size:9px">${esc(a.cc)}</span>
-                <span class="atklog__ip" style="font-size:9px">${esc(a.ip)}</span>
-                <span class="atklog__type" style="font-size:8px">${esc(a.type)}</span>
-                <span class="atklog__count" style="font-size:9px">${esc(String(a.count))}</span>
-              </div>`).join('') + `</div>`;
-          })()}
-        </div>
-      </section>
-
-      <!-- MITRE ATT&CK -->
-      <section class="panel" style="flex:1">
-        <div class="panel__head" style="padding:8px 12px">
-          <div class="panel__title" style="font-size:10px">MITRE ATT&CK · 30d</div>
-        </div>
-        <div class="panel__body" style="padding:0;max-height:200px;overflow:auto">
-          ${(() => {
-            const techs = window.DATA?.mitre?.techniques;
-            if (!techs?.length) return `
-              <div style="padding:16px;text-align:center;color:var(--text-faint);font-size:9px;letter-spacing:1px" id="mitreOverviewItems">
-                Sin datos MITRE aún.
-              </div>`;
-            const maxVal = Math.max(...techs.map(t => t.count), 1);
-            return `<div id="mitreOverviewItems">` + techs.slice(0,6).map(t => {
-              const cls = t.count > 50 ? 'danger' : t.count > 20 ? 'amber' : '';
-              return `
-              <div style="padding:6px 10px; border-bottom:1px dashed var(--line-faint); font-size:10px">
-                <div style="display:flex; justify-content:space-between; margin-bottom:2px">
-                  <span style="color:var(--cyan); letter-spacing:0.5px; font-size:9px">${esc(String(t.id))}</span>
-                  <span style="color:var(--text-dim); font-size:9px">${t.count}</span>
-                </div>
-                <div class="bar" style="height:4px;background:rgba(177,186,211,0.1);border-radius:2px;overflow:hidden">
-                  <div class="bar__fill ${cls}" style="width:${Math.round(t.count/maxVal*100)}%;height:100%"></div>
-                </div>
-              </div>`;
-            }).join('') + `</div>`;
-          })()}
-        </div>
-      </section>
-
+    <div class="panel__body" style="padding:0;flex:1;overflow:auto">
+      <div id="alertList"></div>
     </div>
-  </div>
+  </section>
   `;
 }
 
@@ -391,7 +238,7 @@ window.__loadOverviewData = async function() {
     if (data.kpis?.agentsOnline  != null) setEl('kpi-ov-online',  `${data.kpis.agentsOnline} / ${data.kpis.agentsTotal}`);
     if (data.kpis?.agentsOffline != null) setEl('kpi-ov-offline', String(data.kpis.agentsOffline));
 
-    // 2b. Barras de severidad (nuevo panel visual)
+    // 2b. Barras de severidad (rail)
     const sevTotal = crit + high + med + low;
     const setSevBar = (idBar, idCount, val) => {
       const bar = document.getElementById(idBar);
@@ -399,10 +246,11 @@ window.__loadOverviewData = async function() {
       if (bar) bar.style.width = sevTotal ? `${Math.max((val/sevTotal)*100, 2)}%` : '0%';
       if (cnt) cnt.textContent = val.toLocaleString('es');
     };
-    setSevBar('sevBarCrit', 'sevCountCrit', crit);
-    setSevBar('sevBarHigh', 'sevCountHigh', high);
-    setSevBar('sevBarMed',  'sevCountMed',  med);
-    setSevBar('sevBarLow',  'sevCountLow',  low);
+    // Actualizar rail ( IDs: railSev-CRIT, railSevBar-CRIT, etc. )
+    setSevBar('railSevBar-CRIT', 'railSev-CRIT', crit);
+    setSevBar('railSevBar-HIGH', 'railSev-HIGH', high);
+    setSevBar('railSevBar-MED',  'railSev-MED',  med);
+    setSevBar('railSevBar-LOW',  'railSev-LOW',  low);
 
     // 3. Histogram interactivo
     if (data.histogram?.length) {
@@ -439,34 +287,8 @@ window.__loadOverviewData = async function() {
       `).join('');
     }
 
-    // Actualizar MITRE si hay datos reales
-    if (window.DATA.mitre?.techniques?.length) {
-      const mitreEl = document.getElementById('mitreOverviewItems');
-      if (mitreEl) {
-        const items   = window.DATA.mitre.techniques.slice(0,6);
-        const maxVal  = Math.max(...items.map(t => t.count), 1);
-        mitreEl.innerHTML = items.map(t => {
-          const cls = t.count > 50 ? 'danger' : t.count > 20 ? 'amber' : '';
-          return `
-          <div style="padding: 8px 14px; border-bottom: 1px dashed var(--line-faint); font-size: 11px">
-            <div style="display:flex; justify-content:space-between; margin-bottom: 4px">
-              <span style="color: var(--cyan); letter-spacing: 1px; font-weight: 500">${esc(String(t.id))} \xB7 ${esc(String(t.desc||t.id).slice(0,38))}</span>
-              <span style="color: var(--text-dim); font-variant-numeric: tabular-nums">${t.count}</span>
-            </div>
-            <div class="bar"><div class="bar__fill ${cls}" style="width:${Math.round(t.count/maxVal*100)}%"></div></div>
-          </div>`;
-        }).join('');
-      }
-    }
+    // MITRE y Top atacantes eliminados del Overview (ahora solo en rail)
 
-    // Actualizar Top atacantes si hay datos reales
-    if (window.DATA.attacks?.length) {
-      const atkEl = document.getElementById('attackersList');
-      if (atkEl) {
-        atkEl.innerHTML = window.DATA.attacks.slice(0,8).map(a => `
-          <div class="atklog">
-            <span class="atklog__flag">${esc(a.cc)}</span>
-            <span class="atklog__ip">${esc(a.ip)}</span>
             <span class="atklog__type">${esc(a.type)}</span>
             <span class="atklog__count">${esc(String(a.count))}</span>
           </div>`).join('');
@@ -1353,7 +1175,58 @@ function renderRail(view) {
     </section>
   `;
 
-  return agentPanel + sevPanel;
+  // ── Panel: Volumen de eventos con histograma ────────────────────────────
+  const volumePanel = `
+    <section class="rail__panel">
+      <div class="panel__head" style="padding:8px 10px">
+        <div class="panel__title" style="font-size:10px">Volumen · 24h</div>
+        <div style="display:flex;align-items:center;gap:3px">
+          <div class="panel__meta" id="histMeta" style="color:var(--signal);font-size:8px">cargando…</div>
+        </div>
+      </div>
+      <div class="panel__body" style="padding:6px 10px">
+        <div id="histSparkWrap" style="height:35px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:9px">Cargando…</div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--text-faint);margin-top:2px;letter-spacing:0.5px">
+          <span id="hist-t0">—</span><span>Ahora</span>
+        </div>
+        <div style="display:flex;justify-content:center;gap:1px;margin-top:6px">
+          <button data-hf="6"  onclick="window.__filterHist(6)"  class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">6H</button>
+          <button data-hf="12" onclick="window.__filterHist(12)" class="histbtn" style="background:none;border:1px solid var(--line);color:var(--text-faint);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">12H</button>
+          <button data-hf="24" onclick="window.__filterHist(24)" class="histbtn histbtn--active" style="background:none;border:1px solid var(--signal);color:var(--signal);font-family:var(--mono);font-size:6px;padding:1px 3px;cursor:pointer;letter-spacing:0.5px">24H</button>
+        </div>
+      </div>
+    </section>
+  `;
+
+  // ── Panel: Cowrie Honeypot stats ──────────────────────────────────────────
+  const cowriePanel = `
+    <section class="rail__panel">
+      <div class="panel__head" style="padding:8px 10px">
+        <div class="panel__title" style="font-size:10px">Cowrie · 24h</div>
+        <div class="panel__meta" style="color:var(--danger);font-size:8px">● :2222</div>
+      </div>
+      <div class="panel__body" style="padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div>
+          <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Sesiones</div>
+          <div style="font-size:16px;font-weight:700;color:var(--danger);font-family:var(--mono)" id="cow-sessions">…</div>
+        </div>
+        <div>
+          <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">IPs</div>
+          <div style="font-size:16px;font-weight:700;color:var(--amber);font-family:var(--mono)" id="cow-ips">…</div>
+        </div>
+        <div>
+          <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Logins</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text);font-family:var(--mono)" id="cow-logins">…</div>
+        </div>
+        <div>
+          <div style="font-size:8px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Malware</div>
+          <div style="font-size:16px;font-weight:700;color:var(--cyan);font-family:var(--mono)" id="cow-malware">…</div>
+        </div>
+      </div>
+    </section>
+  `;
+
+  return agentPanel + sevPanel + volumePanel + cowriePanel;
 }
 
 // =========================================================
