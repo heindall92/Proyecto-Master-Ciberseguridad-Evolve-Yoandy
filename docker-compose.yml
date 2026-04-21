@@ -13,6 +13,21 @@
 
 services:
   # ──────────────────────────────────────────────────
+  # ATTACKER (opcional para simulaciones)
+  # ──────────────────────────────────────────────────
+  attacker:
+    image: kalilinux/kali-rolling
+    container_name: valhalla-attacker
+    hostname: attacker
+    tty: true
+    stdin_open: true
+    command: /bin/bash
+    restart: unless-stopped
+    profiles: ["labs"]
+    networks:
+      - valhalla-net
+
+  # ──────────────────────────────────────────────────
   # WAZUH INDEXER (OpenSearch Database)
   # ──────────────────────────────────────────────────
   wazuh.indexer:
@@ -76,20 +91,18 @@ services:
       - INDEXER_USERNAME=${INDEXER_USERNAME:-admin}
       - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - FILEBEAT_SSL_VERIFICATION_MODE=none
-      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/certs/root-ca.pem
-      - SSL_CERTIFICATE=/etc/ssl/certs/wazuh.manager.pem
-      - SSL_KEY=/etc/ssl/certs/wazuh.manager-key.pem
-      # Inyectar url de Ollama usando la red host de docker si está corriendo local
-      - OLLAMA_HOST=http://host.docker.internal:11434
+      - SSL_CERTIFICATE_AUTHORITIES=/source_certs/root-ca.pem
+      - SSL_CERTIFICATE=/source_certs/wazuh.manager.pem
+      - SSL_KEY=/source_certs/wazuh.manager-key.pem
+      # url de ollama configurable para integracion local
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
     volumes:
       - wazuh-manager-data:/var/ossec/data
       - wazuh-manager-api:/var/ossec/api/configuration
       - wazuh-manager-logs:/var/ossec/logs
 
-      # Certs específicos (bind-mount directo)
-      - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/etc/ssl/certs/root-ca.pem:ro
-      - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/certs/wazuh.manager.pem:ro
-      - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/certs/wazuh.manager-key.pem:ro
+      # Certs para conexion TLS con indexer
+      - ./config/wazuh_indexer_ssl_certs:/source_certs:ro
 
       # Montajes de Cowrie & Configuracion de Integracion
       - cowrie_logs:/var/log/cowrie:ro
@@ -190,6 +203,87 @@ services:
         limits:
           memory: 512M
 
+  # ──────────────────────────────────────────────────
+  # POSTGRES (persistencia backend fastapi)
+  # ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-valhalla}
+      POSTGRES_USER: ${POSTGRES_USER:-valhalla}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-valhalla}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-valhalla} -d ${POSTGRES_DB:-valhalla}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - valhalla-net
+
+  # ──────────────────────────────────────────────────
+  # OLLAMA (analisis ia local para backend y wazuh)
+  # ──────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - valhalla-net
+
+  # ──────────────────────────────────────────────────
+  # BACKEND FASTAPI
+  # ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://valhalla:valhalla@postgres:5432/valhalla}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://192.168.46.1:3000,http://192.168.1.17:3000}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
+      OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-45}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - valhalla-net
+
+  # ──────────────────────────────────────────────────
+  # FRONTEND DASHBOARD REACT + TS
+  # ──────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - valhalla-net
+
 volumes:
   wazuh-indexer-data:
   wazuh-manager-data:
@@ -199,6 +293,8 @@ volumes:
   wazuh-dashboard-custom:
   cowrie_logs:
   cowrie_downloads:
+  pgdata:
+  ollama:
 
 networks:
   valhalla-net:
