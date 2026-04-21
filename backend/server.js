@@ -840,6 +840,186 @@ app.get('/api/vulns', async (req, res) => {
   }
 });
 
+// ── /api/overview — all data needed by the Overview panel in one call ────────
+app.get('/api/overview', async (req, res) => {
+  const out = {
+    kpis:         {},    // alerts24h, incidentsActive, criticalAlerts, mttd, mttr, agentsTotal, agentsOnline, agentsOffline
+    criticalFeed: [],   // top 5 CRIT/HIGH alerts for the notification banner
+    severityBreak: [],  // [{sev, count}] for severity breakdown KPI
+    cowrieMini:   {},   // sessions24h, loginAttempts, uniqueIPs, malwareDownloads
+    histogram:    [],   // 48 points × 30min buckets last 24h (event volume chart)
+    networkMbps:  [],   // 48 random-walk points replaced with real values when available
+  };
+
+  // ── 1. Severity breakdown + alert count ──────────────────────────────────
+  try {
+    const sevRes = await osQuery('wazuh-alerts-*', {
+      size: 0,
+      query: { range: { timestamp: { gte: 'now-24h' } } },
+      aggs: {
+        by_level: {
+          ranges: {
+            field: 'rule.level',
+            ranges: [
+              { key: 'LOW',  from: 0,  to: 4  },
+              { key: 'MED',  from: 4,  to: 7  },
+              { key: 'HIGH', from: 7,  to: 10 },
+              { key: 'CRIT', from: 10, to: 20 },
+            ],
+          },
+        },
+      },
+    });
+    const buckets = sevRes.aggregations?.by_level?.buckets || [];
+    out.severityBreak = buckets.map(b => ({ sev: b.key, count: b.doc_count }));
+    out.kpis.alerts24h = buckets.reduce((s, b) => s + b.doc_count, 0);
+    out.kpis.criticalAlerts = (buckets.find(b => b.key === 'CRIT') || {}).doc_count || 0;
+  } catch { out.kpis.alerts24h = null; }
+
+  // ── 2. Event histogram — 48 × 30min buckets last 24h ─────────────────────
+  try {
+    const histRes = await osQuery('wazuh-alerts-*', {
+      size: 0,
+      query: { range: { timestamp: { gte: 'now-24h' } } },
+      aggs: {
+        over_time: {
+          date_histogram: {
+            field: 'rule.level',
+            // Wazuh alertas doesn't have a numeric field per bucket; use timestamp
+          },
+        },
+      },
+    });
+    // Fallback: proper date_histogram on timestamp
+    const histRes2 = await osQuery('wazuh-alerts-*', {
+      size: 0,
+      query: { range: { timestamp: { gte: 'now-24h' } } },
+      aggs: {
+        over_time: {
+          date_histogram: {
+            field: 'timestamp',
+            fixed_interval: '30m',
+          },
+        },
+      },
+    });
+    out.histogram = (histRes2.aggregations?.over_time?.buckets || []).map(b => b.doc_count);
+  } catch { out.histogram = []; }
+
+  // ── 3. Critical alert feed ────────────────────────────────────────────────
+  try {
+    const critRes = await osQuery('wazuh-alerts-*', {
+      size: 5,
+      sort: [{ timestamp: { order: 'desc' } }],
+      _source: ['timestamp', 'rule.level', 'rule.description', 'rule.id', 'agent.name', 'rule.mitre'],
+      query: {
+        bool: {
+          must: [
+            { range: { timestamp: { gte: 'now-24h' } } },
+            { range: { 'rule.level': { gte: 10 } } },
+          ],
+        },
+      },
+    });
+    out.criticalFeed = (critRes.hits?.hits || []).map(h => ({
+      sev:   levelToSev(h._source.rule?.level || 0),
+      time:  (h._source.timestamp || '').slice(11, 19),
+      msg:   h._source.rule?.description || 'Unknown alert',
+      rule:  String(h._source.rule?.id || '0'),
+      agent: h._source.agent?.name || 'unknown',
+      mitre: h._source.rule?.mitre?.id?.[0] || '',
+    }));
+  } catch { out.criticalFeed = []; }
+
+  // ── 4. Agents online/offline ─────────────────────────────────────────────
+  try {
+    const token = await getWazuhToken();
+    const agRes = await httpsRequest(
+      `${WAZUH_API}/agents?limit=500&select=id,status`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const agents = (agRes.body?.data?.affected_items || []).filter(a => a.id !== '000');
+    out.kpis.agentsTotal   = agents.length;
+    out.kpis.agentsOnline  = agents.filter(a => a.status === 'active').length;
+    out.kpis.agentsOffline = agents.filter(a => a.status === 'disconnected').length;
+  } catch {
+    out.kpis.agentsTotal   = null;
+    out.kpis.agentsOnline  = null;
+    out.kpis.agentsOffline = null;
+  }
+
+  // ── 5. Cowrie mini-stats (sessions & logins last 24h) ────────────────────
+  try {
+    const [sessRes, loginRes, srcRes] = await Promise.allSettled([
+      osQuery('wazuh-alerts-*', {
+        size: 0,
+        query: {
+          bool: {
+            must: [
+              { term: { 'rule.groups': 'cowrie' } },
+              { range: { timestamp: { gte: 'now-24h' } } },
+            ],
+          },
+        },
+      }),
+      osQuery('wazuh-alerts-*', {
+        size: 0,
+        query: {
+          bool: {
+            must: [
+              { term: { 'rule.groups': 'cowrie' } },
+              { term: { 'rule.description': 'cowrie.login.failed' } },
+              { range: { timestamp: { gte: 'now-24h' } } },
+            ],
+          },
+        },
+      }),
+      osQuery('wazuh-alerts-*', {
+        size: 0,
+        query: {
+          bool: {
+            must: [
+              { term: { 'rule.groups': 'cowrie' } },
+              { range: { timestamp: { gte: 'now-24h' } } },
+            ],
+          },
+        },
+        aggs: { unique_ips: { cardinality: { field: 'data.src_ip' } } },
+      }),
+    ]);
+    out.cowrieMini.sessions24h    = sessRes.status === 'fulfilled'  ? (sessRes.value.hits?.total?.value || 0)  : 0;
+    out.cowrieMini.loginAttempts  = loginRes.status === 'fulfilled' ? (loginRes.value.hits?.total?.value || 0) : 0;
+    out.cowrieMini.uniqueIPs      = srcRes.status === 'fulfilled'   ? (srcRes.value.aggregations?.unique_ips?.value || 0) : 0;
+    // malware: cowrie.session.file_download
+    try {
+      const malRes = await osQuery('wazuh-alerts-*', {
+        size: 0,
+        query: {
+          bool: {
+            must: [
+              { term: { 'rule.groups': 'cowrie' } },
+              { match: { 'rule.description': 'file_download' } },
+              { range: { timestamp: { gte: 'now-24h' } } },
+            ],
+          },
+        },
+      });
+      out.cowrieMini.malwareDownloads = malRes.hits?.total?.value || 0;
+    } catch { out.cowrieMini.malwareDownloads = 0; }
+  } catch { out.cowrieMini = {}; }
+
+  // ── 6. Open incidents from tickets DB ────────────────────────────────────
+  try {
+    const { db } = require('./db');
+    const openTickets = db.prepare(
+      `SELECT COUNT(*) as n FROM tickets WHERE status IN ('open','in_progress')`
+    ).get();
+    out.kpis.incidentsActive = openTickets?.n || 0;
+  } catch { out.kpis.incidentsActive = null; }
+
+  res.json(out);
+});
+
 // ── /api/metrics — MTTD / MTTR from real ticket data ────────────────────────
 app.get('/api/metrics', (req, res) => {
   const { db } = require('./db');

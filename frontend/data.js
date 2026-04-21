@@ -338,9 +338,14 @@ window.DATA = {
       if (md.ok) {
         window.DATA.mitre = { tactics: md.tactics, techniques: md.techniques };
         if (typeof window.__refreshView === 'function') window.__refreshView();
+        // Also update overview MITRE widget without full re-render
+        if (typeof window.__loadOverviewData === 'function' && window.state?.view === 'overview') {
+          window.__loadOverviewData();
+        }
       }
     }
   } catch (_) {}
+
 })();
 
 // Refresh real data every 30 seconds

@@ -67,6 +67,10 @@ function setView(v) {
   // view-specific mounts
   if (v === 'overview') {
     window.mountAlerts(10);
+    // Load real data from /api/overview (KPIs, histogram, Cowrie, critical alerts)
+    if (typeof window.__loadOverviewData === 'function') {
+      window.__loadOverviewData();
+    }
   }
   if (v === 'map') {
     // Destroy old map instance if exists
@@ -195,6 +199,14 @@ applyTweaks();
 setView(state.view);
 setInterval(tickClock, 1000);
 setInterval(tickKPIs, 2500);
+
+// Auto-refresh Overview data every 30s (solo cuando la vista overview está activa)
+setInterval(() => {
+  if (state.view === 'overview' && typeof window.__loadOverviewData === 'function') {
+    window.__loadOverviewData();
+  }
+}, 30000);
+
 
 // Exposed so data.js can trigger a view re-render after loading real data
 // Skip refresh if Ollama is currently processing (would wipe the result box)
