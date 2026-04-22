@@ -315,6 +315,13 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
+### Interfaz de Acceso (Tactical Cyberpunk)
+> Pantalla de login rediseñada con efectos Glassmorphism y polígonos complejos
+
+![Login Valhalla](docs/img/11-login-valhalla.png)
+
+---
+
 ## 💻 Requisitos Previos
 
 ### Hardware Mínimo
