@@ -354,11 +354,11 @@ Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propi
 | **Sistema Valhalla** | `3000` | Frontend (HUD) + Backend (API) unificados |
 
 ### Iniciar el Dashboard:
+
+Toda la infraestructura se gestiona ahora a través de Docker:
+
 ```bash
-# Servidor Unificado (Frontend + Backend)
-cd backend
-npm install
-npm start
+docker compose up -d --build
 ```
 
 ---
@@ -380,19 +380,14 @@ cp .env.example .env
 # 3. Instalar e iniciar Ollama + descargar modelo
 ollama pull qwen2.5-coder:7b
 
-# 4. Levantar toda la infraestructura
-docker compose up -d
+# 4. Levantar toda la infraestructura (SIEM + Honeypot + Dashboard)
+docker compose up -d --build
 
-# 5. Crear dashboards y monitores (esperar 3-5 min tras paso 4)
+# 5. Configurar Wazuh (esperar 3-5 min tras paso 4)
 pip install requests
 python create_dashboards.py
 python setup_monitors.py
 python setup_reports.py
-
-# 6. Iniciar Valhalla SOC Dashboard
-cd backend
-npm install
-npm start
 ```
 
 ### Acceder al Dashboard

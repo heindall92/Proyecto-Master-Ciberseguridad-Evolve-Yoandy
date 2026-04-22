@@ -7,13 +7,19 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
-from app.models import AIAnalysis, Alert, Event
+from app.db import get_db, engine
+from app.models import AIAnalysis, Alert, Event, User, Base
 from app.ollama_client import analyze_alert
-from app.schemas import AlertIn, AlertOut, AnalysisOut, EventIn, EventOut, Page
+from app.auth import create_access_token, verify_password, get_password_hash, get_current_user, require_role
+from app.schemas import (
+    AlertIn, AlertOut, AnalysisOut, EventIn, EventOut, Page,
+    UserIn, UserOut, UserCreate, UserUpdate, Token, LoginRequest, PasswordReset,
+    AgentEnrollIn, AgentEnrollOut, AgentOut
+)
+from app.wazuh_client import wazuh
 from app.settings import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -23,11 +29,32 @@ app = FastAPI(title="Valhalla SOC API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list(),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup():
+    # Ensure tables exist
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    # Create default admin if not exists
+    async with SessionLocal() as db:
+        q = select(User).where(User.username == "admin")
+        res = await db.execute(q)
+        if not res.scalar_one_or_none():
+            admin = User(
+                username="admin",
+                password_hash=get_password_hash("Valhalla2026!"),
+                role="admin"
+            )
+            db.add(admin)
+            await db.commit()
+            logger.info("Admin user created (default credentials: Valhalla2026!)")
 
 
 @app.get("/health")
@@ -174,4 +201,146 @@ async def analyze(alert_id: int, force: bool = False, db: AsyncSession = Depends
         recommended_action=analysis.recommended_action,
         created_at=analysis.created_at,
     )
+
+
+# ── Auth Routes ──────────────────────────────────────────────────────────────
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    q = select(User).where(User.username == req.username)
+    user = (await db.execute(q)).scalar_one_or_none()
+    if not user or not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    token = create_access_token(data={"sub": user.username})
+    return Token(access_token=token)
+
+@app.get("/api/auth/me", response_model=UserOut)
+async def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+# ── User Management ──────────────────────────────────────────────────────────
+
+@app.get("/api/users", response_model=list[UserOut])
+async def list_users(db: AsyncSession = Depends(get_db), _=Depends(require_role("admin"))):
+    q = select(User).order_by(User.username)
+    return (await db.execute(q)).scalars().all()
+
+@app.post("/api/users", response_model=UserOut)
+async def create_user(u: UserCreate, db: AsyncSession = Depends(get_db), _=Depends(require_role("admin"))):
+    new_user = User(
+        username=u.username.lower(),
+        email=u.email.lower() if u.email else None,
+        password_hash=get_password_hash(u.password),
+        role=u.role.lower()
+    )
+    db.add(new_user)
+    try:
+        await db.commit()
+        await db.refresh(new_user)
+        return new_user
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="El usuario ya existe")
+
+@app.put("/api/users/{user_id}", response_model=UserOut)
+async def update_user(user_id: int, u: UserUpdate, db: AsyncSession = Depends(get_db), _=Depends(require_role("admin"))):
+    from app.schemas import UserUpdate
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if u.username is not None:
+        user.username = u.username.lower()
+    if u.email is not None:
+        user.email = u.email.lower()
+    if u.role is not None:
+        user.role = u.role.lower()
+    if u.password:
+        user.password_hash = get_password_hash(u.password)
+        
+    try:
+        await db.commit()
+        await db.refresh(user)
+        return user
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="El nombre de usuario ya está en uso")
+
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(require_role("admin"))):
+    if user_id == current.id:
+        raise HTTPException(status_code=400, detail="No puedes borrarte a ti mismo")
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    await db.delete(user)
+    await db.commit()
+    return {"ok": True}
+
+@app.post("/api/users/{user_id}/reset-password")
+async def reset_password(user_id: int, req: PasswordReset, db: AsyncSession = Depends(get_db), _=Depends(require_role("admin"))):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user.password_hash = get_password_hash(req.new_password)
+    await db.commit()
+    return {"ok": True}
+
+
+# ── Agent Management (Wazuh Proxy) ───────────────────────────────────────────
+
+@app.get("/api/agents", response_model=list[AgentOut])
+async def list_agents(_=Depends(get_current_user)):
+    # Note: agents need to be mapped from Wazuh response to AgentOut
+    r = await wazuh.request("GET", "/agents?select=id,name,ip,os,status&limit=100")
+    if r.status_code != 200:
+        raise HTTPException(status_code=500, detail="Wazuh API Error")
+    
+    data = r.json().get("data", {}).get("affected_items", [])
+    out = []
+    for a in data:
+        out.append(AgentOut(
+            id=a["id"],
+            name=a["name"],
+            ip=a.get("ip"),
+            os=a.get("os", {}).get("name", "N/A"),
+            status=a["status"],
+            type="SIEM Agent", # Placeholder
+            agent="Wazuh",
+            group="default" # Default
+        ))
+    return out
+
+@app.post("/api/agents/enroll", response_model=AgentEnrollOut)
+async def enroll_agent(req: AgentEnrollIn, _=Depends(get_current_user)):
+    # 1. Create agent in Wazuh
+    r = await wazuh.request("POST", "/agents", json={"name": req.name})
+    if r.status_code != 200:
+        return AgentEnrollOut(ok=False, error=str(r.json().get("title", "Error")))
+    
+    agent_id = r.json().get("data", {}).get("id")
+    # 2. Get key
+    rk = await wazuh.request("GET", f"/agents/{agent_id}/key")
+    key = rk.json().get("data", {}).get("key")
+    
+    return AgentEnrollOut(ok=True, id=agent_id, key=key)
+
+
+# ── Dashboard Summary ────────────────────────────────────────────────────────
+
+@app.get("/api/dashboard")
+async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    # Basic aggregate for the tactical UI
+    alerts_total = (await db.execute(select(func.count(Alert.id)))).scalar() or 0
+    events_total = (await db.execute(select(func.count(Event.id)))).scalar() or 0
+    
+    return {
+        "metrics": {
+            "alerts": alerts_total,
+            "events": events_total,
+        },
+        "status": "operational"
+    }
+
+from app.db import SessionLocal
 
