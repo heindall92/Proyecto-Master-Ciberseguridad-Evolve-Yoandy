@@ -37,8 +37,9 @@
 8. [Guía de Puesta en Marcha](#-guía-de-puesta-en-marcha)
 9. [Dashboards y Visualizaciones](#-dashboards-y-visualizaciones)
 10. [Estructura del Proyecto](#-estructura-del-proyecto)
-11. [Preguntas Frecuentes (FAQ)](#-preguntas-frecuentes-faq)
-12. [Licencia y Créditos](#-licencia-y-créditos)
+11. [Aplicación de Escritorio (Standalone)](#-aplicación-de-escritorio-standalone)
+12. [Preguntas Frecuentes (FAQ)](#-preguntas-frecuentes-faq)
+13. [Licencia y Créditos](#-licencia-y-créditos)
 
 </details>
 
@@ -318,29 +319,9 @@ Wazuh Manager (dentro de Docker)
 ### Interfaz de Acceso (Tactical Cyberpunk)
 > Pantalla de login rediseñada con efectos Glassmorphism y polígonos complejos
 
-![Login Valhalla](docs/screenshots/login_v2.png)
+![Login Valhalla](docs/img/11-login-valhalla.png)
 
 ---
-
-## 🖥️ Standalone Desktop App (Electron)
-
-Valhalla SOC ahora puede ejecutarse como una aplicación de escritorio independiente para Windows. Esta versión está blindada contra caídas de red y permite el acceso táctico incluso si los servicios centrales (Wazuh/Docker) están fuera de línea.
-
-### Ventajas:
-- **Alta Disponibilidad:** Modo Offline automático que permite entrar al dashboard sin backend.
-- **Seguridad:** Aislamiento del entorno web estándar y bypass de CORS para comunicación local segura.
-- **Portabilidad:** Instalador `.exe` autónomo con el branding oficial de Valhalla.
-
-### Instalación y Compilación:
-Si deseas generar tu propio ejecutable:
-
-```bash
-cd frontend
-npm install
-npm run build:exe
-```
-
-El instalador se generará en: `frontend/dist_electron/Valhalla SOC Setup 0.1.0.exe`
 
 ---
 
@@ -501,6 +482,28 @@ Valhalla-SOC/
 ├── 📄 setup_monitors.py           ← Crear monitores de alertas
 └── 📄 setup_reports.py            ← Crear reportes de seguridad
 ```
+
+---
+
+## 🖥️ Aplicación de Escritorio (Standalone)
+
+Valhalla SOC incluye una versión nativa para Windows basada en **Electron**. Esta arquitectura ha sido diseñada para garantizar la continuidad de las operaciones tácticas, permitiendo el acceso a la consola de control incluso en escenarios de desconexión total o fallo en los servicios centrales (Wazuh/Docker).
+
+### Características Principales:
+- **Disponibilidad Continua (Modo Offline):** El sistema detecta automáticamente la pérdida de conexión con el backend y activa un modo de emergencia. Esto permite acceder a la interfaz y consultar los procedimientos operativos (Runbooks) almacenados localmente.
+- **Entorno Seguro:** Ejecución en un contenedor de escritorio aislado con políticas de seguridad optimizadas para la comunicación local.
+- **Despliegue Simplificado:** Generación de un instalador `.exe` autónomo con la identidad visual oficial de Valhalla SOC.
+
+### Instalación y Compilación:
+Para generar tu propio ejecutable de escritorio:
+
+```bash
+cd frontend
+npm install
+npm run build:exe
+```
+
+El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SOC Setup 0.1.0.exe`
 
 ---
 
