@@ -51,7 +51,7 @@ def query_ollama(description, ip):
     prompt = f"Eres un analista SOC. Alerta detectada: '{description}' desde IP {ip}. En 2 oraciones: describe el objetivo del ataque y el nivel de amenaza (Bajo/Medio/Alto/Critico). Solo el analisis, sin introducciones."
     
     payload = {
-        "model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+        "model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct"),
         "prompt": prompt,
         "stream": False,
         "options": {

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 Severity = Literal["low", "medium", "high", "critical"]
+TicketStatus = Literal["open", "in_progress", "escalated", "resolved", "closed"]
 
 
 class Page(BaseModel):
@@ -118,3 +119,109 @@ class AgentOut(BaseModel):
     agent: str
     group: Any | None = None
 
+
+# --- Tickets (Incident Management) ---
+
+class TicketCreate(BaseModel):
+    title: str
+    description: str | None = None
+    severity: Severity = "medium"
+    category: str | None = None
+    source_ip: str | None = None
+    affected_asset: str | None = None
+    wazuh_alert_id: str | None = None
+    assigned_to_id: int | None = None
+
+class TicketUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    severity: Severity | None = None
+    status: TicketStatus | None = None
+    category: str | None = None
+    source_ip: str | None = None
+    affected_asset: str | None = None
+    assigned_to_id: int | None = None
+    analysis_notes: str | None = None
+    resolution_notes: str | None = None
+
+class TicketAssign(BaseModel):
+    assigned_to_id: int
+
+class TicketResolve(BaseModel):
+    resolution_notes: str
+    status: TicketStatus = "resolved"
+
+class TicketAnalysis(BaseModel):
+    analysis_notes: str
+
+class TicketOut(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    severity: str
+    status: str
+    category: str | None
+    source_ip: str | None
+    affected_asset: str | None
+    wazuh_alert_id: str | None
+    assigned_to_id: int | None
+    reporter_id: int | None
+    assignee_username: str | None = None
+    reporter_username: str | None = None
+    ai_summary: str | None
+    ai_recommendation: str | None
+    analysis_notes: str | None
+    resolution_notes: str | None
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RUNBOOKS - Procedimientos operativos estándar
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RunbookIn(BaseModel):
+    name: str
+    category: str
+    description: str
+    containment_steps: list[str] = []
+    eradication_steps: list[str] = []
+    recovery_steps: list[str] = []
+    severity_applicable: str = "all"
+
+
+class RunbookOut(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: str
+    containment_steps: list[str]
+    eradication_steps: list[str]
+    recovery_steps: list[str]
+    severity_applicable: str
+    is_active: bool
+    created_by_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GEOLOCATION - Datos geográficos para Threat Map
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GeoLocation(BaseModel):
+    ip: str
+    country: str
+    country_code: str
+    city: str
+    isp: str
+    lat: float
+    lon: float
+    count: int = 1
+
+
+class ThreatMapData(BaseModel):
+    attacks: list[GeoLocation]
+    countries: list[dict]
+    total_attacks: int

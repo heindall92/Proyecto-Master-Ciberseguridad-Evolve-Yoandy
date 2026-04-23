@@ -200,7 +200,9 @@ export default function UsersView() {
                         style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
                        >
                          <option value="analista">ANALISTA</option>
+                         <option value="senior">ANALISTA SENIOR</option>
                          <option value="admin">ADMINISTRADOR</option>
+                         <option value="viewer">VISOR (SOLO LECTURA)</option>
                        </select>
                     </div>
 

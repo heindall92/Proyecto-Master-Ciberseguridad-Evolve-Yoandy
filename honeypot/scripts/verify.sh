@@ -125,8 +125,9 @@ W ""
 W "## TC-07 + TC-09 · Login + comandos en shell falsa"
 W ""
 if command -v python3 >/dev/null; then
-    python3 -m pip install --quiet --break-system-packages paramiko 2>/dev/null || \
-        python3 -m pip install --quiet paramiko 2>/dev/null || true
+    # paramiko 4.x es incompatible con Cowrie (cierra el canal) - pineamos <4
+    python3 -m pip install --quiet --break-system-packages 'paramiko<4' 2>/dev/null || \
+        python3 -m pip install --quiet 'paramiko<4' 2>/dev/null || true
     ATTACK="$(python3 - <<'PY' 2>&1
 try:
     import paramiko, time

@@ -318,7 +318,29 @@ Wazuh Manager (dentro de Docker)
 ### Interfaz de Acceso (Tactical Cyberpunk)
 > Pantalla de login rediseñada con efectos Glassmorphism y polígonos complejos
 
-![Login Valhalla](docs/img/11-login-valhalla.png)
+![Login Valhalla](docs/screenshots/login_v2.png)
+
+---
+
+## 🖥️ Standalone Desktop App (Electron)
+
+Valhalla SOC ahora puede ejecutarse como una aplicación de escritorio independiente para Windows. Esta versión está blindada contra caídas de red y permite el acceso táctico incluso si los servicios centrales (Wazuh/Docker) están fuera de línea.
+
+### Ventajas:
+- **Alta Disponibilidad:** Modo Offline automático que permite entrar al dashboard sin backend.
+- **Seguridad:** Aislamiento del entorno web estándar y bypass de CORS para comunicación local segura.
+- **Portabilidad:** Instalador `.exe` autónomo con el branding oficial de Valhalla.
+
+### Instalación y Compilación:
+Si deseas generar tu propio ejecutable:
+
+```bash
+cd frontend
+npm install
+npm run build:exe
+```
+
+El instalador se generará en: `frontend/dist_electron/Valhalla SOC Setup 0.1.0.exe`
 
 ---
 
