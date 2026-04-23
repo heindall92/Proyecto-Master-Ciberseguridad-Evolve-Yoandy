@@ -20,9 +20,40 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="analista", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    __table_args__ = (
-        Index("idx_users_role", role),
+    assigned_tickets: Mapped[list["Ticket"]] = relationship(
+        "Ticket", back_populates="assignee", foreign_keys="Ticket.assigned_to_id"
     )
+    reported_tickets: Mapped[list["Ticket"]] = relationship(
+        "Ticket", back_populates="reporter", foreign_keys="Ticket.reporter_id"
+    )
+
+    __table_args__ = (Index("idx_users_role", role),)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RUNBOOKS - Procedimientos operativos estándar
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Runbook(Base):
+    """Procedimientos operativos estándar del SOC."""
+    __tablename__ = "runbooks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # Pasos del runbook en JSON
+    containment_steps: Mapped[list] = mapped_column(JSON, default=list)
+    eradication_steps: Mapped[list] = mapped_column(JSON, default=list)
+    recovery_steps: Mapped[list] = mapped_column(JSON, default=list)
+    
+    # Metadatos
+    severity_applicable: Mapped[str] = mapped_column(String(32), default="all")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Event(Base):
@@ -82,4 +113,77 @@ class AIAnalysis(Base):
     alert: Mapped[Alert] = relationship(back_populates="analysis")
 
     __table_args__ = (Index("idx_ai_analysis_created_at", created_at.desc()),)
+
+
+class Ticket(Base):
+    """Incident management ticket."""
+    __tablename__ = "tickets"
+
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Criticality / Status
+    severity: Mapped[str] = mapped_column(String(16), default="medium", nullable=False)  # low/medium/high/critical
+    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)       # open/in_progress/escalated/resolved/closed
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)               # intrusion/malware/phishing/...
+
+    # Assignment
+    assigned_to_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reporter_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Wazuh correlation
+    wazuh_alert_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    affected_asset: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # AI Analysis
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Timeline
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Resolution
+    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_notes: Mapped[str | None] = mapped_column(Text, nullable=True)   # operator analysis notes
+
+    assignee: Mapped["User | None"] = relationship("User", back_populates="assigned_tickets", foreign_keys=[assigned_to_id])
+    reporter: Mapped["User | None"] = relationship("User", back_populates="reported_tickets", foreign_keys=[reporter_id])
+
+    __table_args__ = (
+        Index("idx_tickets_status", status),
+        Index("idx_tickets_severity", severity),
+        Index("idx_tickets_created_at", created_at.desc()),
+    )
+
+
+class IOCEntry(Base):
+    """Persistent IOC watchlist — malicious indicators tracked by analysts."""
+    __tablename__ = "ioc_entries"
+
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    ioc_type: Mapped[str] = mapped_column(String(16), nullable=False)       # ip / hash / domain / url
+    value: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    malicious_score: Mapped[int] = mapped_column(Integer, default=0)
+    total_engines: Mapped[int] = mapped_column(Integer, default=0)
+    country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    asn: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    as_owner: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    tags: Mapped[str | None] = mapped_column(Text, nullable=True)          # JSON list as string
+    status: Mapped[str] = mapped_column(String(32), default="watchlist")   # watchlist / blocked / resolved
+    analyst_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    related_ticket_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
+    added_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    vt_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)    # Full VT response snapshot
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_ioc_type", ioc_type),
+        Index("idx_ioc_status", status),
+        Index("idx_ioc_created_at", created_at.desc()),
+    )
 

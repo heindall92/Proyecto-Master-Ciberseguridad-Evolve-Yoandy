@@ -1,159 +1,157 @@
-import { useEffect, useState } from "react";
-import {
-  Sync as SyncIcon,
-  Add as AddIcon,
-} from "@mui/icons-material";
-import { listAgents, enrollAgent, AgentOut } from "../lib/api";
+import { useState, useEffect } from "react";
+import { listAgents, getAgentPackages, getAgentPorts, getAgentVulnerabilities, AgentOut } from "../lib/api";
 
 export default function AssetsView() {
   const [agents, setAgents] = useState<AgentOut[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newOs, setNewOs] = useState("linux");
-  const [result, setResult] = useState<any>(null);
-
-  const fetchAgents = async () => {
-    setLoading(true);
-    try {
-      const data = await listAgents();
-      setAgents(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [loading, setLoading] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<AgentOut | null>(null);
+  const [details, setDetails] = useState<any>({ packages: [], ports: [], vulns: [] });
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
-    fetchAgents();
+    listAgents().then(setAgents).finally(() => setLoading(false));
   }, []);
 
-  const onEnroll = async () => {
-    setLoading(true);
+  const handleSelectAgent = async (agent: AgentOut) => {
+    setSelectedAgent(agent);
+    setDetailsLoading(true);
     try {
-      const res = await enrollAgent(newName, newOs, "default");
-      setResult(res);
-      if (res.ok) fetchAgents();
-    } catch (e) {
-      setResult({ ok: false, error: String(e) });
+      const [pkgs, ports, vulns] = await Promise.all([
+        getAgentPackages(agent.id),
+        getAgentPorts(agent.id),
+        getAgentVulnerabilities(agent.id)
+      ]);
+      setDetails({ packages: pkgs, ports: ports, vulns: vulns });
+    } catch (err) {
+      console.error("Error loading agent details", err);
     } finally {
-      setLoading(false);
+      setDetailsLoading(false);
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--ff-mono)', color: 'var(--signal)', fontSize: '18px', letterSpacing: '2px' }}>INVENTARIO DE ACTIVOS</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
-           <button 
-            className="hud-btn" 
-            onClick={fetchAgents} 
-            disabled={loading}
-            style={{ padding: '8px 15px', background: 'none', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'var(--ff-mono)', fontSize: '11px' }}
-           >
-              <SyncIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 1 }} />
-              SINCRONIZAR
-           </button>
-           <button 
-            className="hud-btn" 
-            onClick={() => setEnrollOpen(true)}
-            style={{ padding: '8px 15px', background: 'var(--signal)', border: 'none', color: '#000', cursor: 'pointer', fontFamily: 'var(--ff-mono)', fontSize: '11px', fontWeight: 'bold' }}
-           >
-              <AddIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 1 }} />
-              ENROLAR AGENTE
-           </button>
-        </div>
-      </div>
+  if (loading) return <div className="panel" style={{ padding: '20px', color: 'var(--signal)' }}>CONECTANDO CON INVENTARIO DE ACTIVOS...</div>;
 
-      <div className="panel">
+  return (
+    <div className="view" style={{ display: 'grid', gridTemplateColumns: selectedAgent ? '1fr 1.5fr' : '1fr', gap: '16px', height: '100%' }}>
+      
+      {/* Agents List */}
+      <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="panel__head">
-           <span className="panel__title">AGENTES WAZUH REGISTRADOS</span>
-           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>TOTAL: {agents.length}</span>
+          <span className="panel__title">Inventario de Endpoints · Wazuh</span>
         </div>
-        <div className="panel__body" style={{ padding: '0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <div className="panel__body" style={{ padding: 0, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
-              <tr style={{ background: 'rgba(60,255,158,0.05)', color: 'var(--signal)', textAlign: 'left' }}>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ID_HEX</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>HOSTNAME</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>DIRECT_IP</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>OS_PLATFORM</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>STATUS</th>
+              <tr style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>Nombre</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>IP</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>S.O.</th>
               </tr>
             </thead>
             <tbody>
               {agents.map((a) => (
-                <tr key={a.id} className="tr-hover" style={{ borderBottom: '1px solid var(--line-faint)' }}>
-                  <td style={{ padding: '12px 20px', fontFamily: 'var(--ff-mono)', opacity: 0.6 }}>0x{a.id}</td>
-                  <td style={{ padding: '12px 20px', fontWeight: 800, color: 'var(--text-bright)' }}>{a.name.toUpperCase()}</td>
-                  <td style={{ padding: '12px 20px', fontFamily: 'var(--ff-mono)' }}>{a.ip}</td>
-                  <td style={{ padding: '12px 20px', color: 'var(--text-dim)', fontSize: '11px' }}>{a.os}</td>
-                  <td style={{ padding: '12px 20px' }}>
-                     <span style={{ 
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: '9px',
-                        fontWeight: 'bold',
-                        border: '1px solid',
-                        borderColor: a.status === 'active' ? 'var(--signal)' : 'var(--text-dim)',
-                        color: a.status === 'active' ? 'var(--signal)' : 'var(--text-dim)',
-                        background: a.status === 'active' ? 'rgba(60,255,158,0.1)' : 'transparent'
-                     }}>
-                        {a.status.toUpperCase()}
-                     </span>
+                <tr 
+                  key={a.id} 
+                  onClick={() => handleSelectAgent(a)}
+                  style={{ 
+                    borderBottom: '1px solid var(--line-faint)', 
+                    cursor: 'pointer',
+                    background: selectedAgent?.id === a.id ? 'rgba(60,255,158,0.1)' : 'transparent'
+                  }}
+                  className="alert-row"
+                >
+                  <td style={{ padding: '10px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: a.status === 'active' ? 'var(--signal)' : 'var(--danger)' }}></div>
                   </td>
+                  <td style={{ padding: '10px', fontWeight: 600 }}>{a.name}</td>
+                  <td style={{ padding: '10px' }}>{a.ip}</td>
+                  <td style={{ padding: '10px', color: 'var(--text-dim)' }}>{a.os}</td>
                 </tr>
               ))}
+              {agents.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: '30px', textAlign: 'center', opacity: 0.5, color: 'var(--text-dim)', letterSpacing: '2px' }}>
+                    0 AGENTES ENCONTRADOS · VERIFIQUE LA CONEXIÓN WAZUH
+                  </td>
+                </tr>
+              )}
+
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modal Enroll (Simple HUD version) */}
-      {enrollOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-           <div className="panel" style={{ width: '450px' }}>
-              <div className="panel__head">
-                 <span className="panel__title">ENROLAR NUEVO ACTIVO</span>
-                 <button onClick={() => { setEnrollOpen(false); setResult(null); }} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>X</button>
-              </div>
-              <div className="panel__body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    <label style={{ fontSize: '10px', color: 'var(--signal)' }}>HOSTNAME_TARGET</label>
-                    <input value={newName} onChange={e => setNewName(e.target.value)} style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)' }} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    <label style={{ fontSize: '10px', color: 'var(--signal)' }}>OS_FAMILY</label>
-                    <select value={newOs} onChange={e => setNewOs(e.target.value)} style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)' }}>
-                        <option value="linux">LINUX_X64</option>
-                        <option value="windows">WINDOWS_X64</option>
-                    </select>
-                  </div>
-                  <button onClick={onEnroll} disabled={loading} style={{ background: 'var(--signal)', color: '#000', border: 'none', padding: '12px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
-                     GENERAR CLAVE DE ALTA
-                  </button>
+      {/* Detail View */}
+      {selectedAgent && (
+        <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="panel__head">
+            <span className="panel__title">Detalle Técnico: {selectedAgent.name}</span>
+            <button className="action-btn" onClick={() => setSelectedAgent(null)}>CERRAR</button>
+          </div>
+          
+          <div className="panel__body" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+             
+             {/* Tabs Header */}
+             <div style={{ display: 'flex', gap: '2px', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.05)', borderTop: '2px solid var(--signal)', fontSize: '10px', fontWeight: 600 }}>SISTEMA Y RED</div>
+             </div>
 
-                  {result && (
-                    <div style={{ marginTop: '15px', padding: '15px', border: '1px solid', borderColor: result.ok ? 'var(--signal)' : 'var(--danger)', background: 'rgba(0,0,0,0.5)' }}>
-                       {result.ok ? (
-                         <>
-                           <div style={{ color: 'var(--signal)', fontWeight: 'bold', fontSize: '11px' }}>✓ AGENTE REGISTRADO</div>
-                           <div style={{ fontSize: '10px', marginTop: '10px', opacity: 0.7 }}>CERT_KEY:</div>
-                           <div style={{ background: '#000', padding: '8px', fontSize: '10px', fontFamily: 'var(--ff-mono)', wordBreak: 'break-all', marginTop: '5px', border: '1px solid var(--line-faint)' }}>{result.key}</div>
-                         </>
-                       ) : (
-                         <div style={{ color: 'var(--danger)' }}>ERROR: {result.error}</div>
-                       )}
+             {detailsLoading ? (
+               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--signal)' }}>SINCRONIZANDO DATOS DE AGENTE...</div>
+             ) : (
+               <>
+                 {/* Networking Section */}
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div className="panel" style={{ padding: '15px' }}>
+                       <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>PUERTOS EN ESCUCHA</div>
+                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {details.ports.slice(0, 15).map((p: any, i: number) => (
+                            <span key={i} style={{ padding: '2px 6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--line)', borderRadius: '4px', fontSize: '9px' }}>
+                              {p.protocol.toUpperCase()} {p.local_port}
+                            </span>
+                          ))}
+                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
-           </div>
+                    <div className="panel" style={{ padding: '15px' }}>
+                       <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>ESTADO DE VULNERABILIDADES</div>
+                       <div style={{ fontSize: '18px', fontWeight: 800, color: details.vulns.length > 0 ? 'var(--danger)' : 'var(--signal)' }}>
+                          {details.vulns.length} DETECTADAS
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Packages List */}
+                 <div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>SOFTWARE INSTALADO (ÚLTIMOS 100)</div>
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '4px' }}>
+                       <table style={{ width: '100%', fontSize: '10px' }}>
+                          <thead style={{ color: 'var(--text-faint)' }}>
+                             <tr>
+                                <th style={{ textAlign: 'left' }}>Nombre</th>
+                                <th style={{ textAlign: 'left' }}>Versión</th>
+                                <th style={{ textAlign: 'right' }}>Arquitectura</th>
+                             </tr>
+                          </thead>
+                          <tbody>
+                             {details.packages.slice(0, 100).map((pkg: any, i: number) => (
+                               <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                                  <td style={{ padding: '4px 0' }}>{pkg.name}</td>
+                                  <td>{pkg.version}</td>
+                                  <td style={{ textAlign: 'right' }}>{pkg.architecture}</td>
+                               </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
+               </>
+             )}
+
+          </div>
         </div>
       )}
+
     </div>
   );
 }
