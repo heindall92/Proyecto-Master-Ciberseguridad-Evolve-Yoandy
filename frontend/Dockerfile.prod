@@ -1,0 +1,16 @@
+# Stage 1 — Build React app
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json tsconfig.json vite.config.ts ./
+RUN npm install
+COPY app ./app
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+RUN npm run build
+
+# Stage 2 — Serve with Nginx + TLS
+FROM nginx:alpine
+COPY --from=builder /app/app/dist /usr/share/nginx/html
+COPY ../nginx/nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80 443
+CMD ["nginx", "-g", "daemon off;"]

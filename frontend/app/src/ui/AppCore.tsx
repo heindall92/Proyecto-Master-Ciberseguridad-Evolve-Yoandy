@@ -7,13 +7,14 @@ import {
   login,
   getCurrentUser,
   getDashboardSummary,
+  getOpenTicketsCount,
   UserOut,
 } from "../lib/api";
 
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
-import IncidentsView from "./IncidentsView";
+// import IncidentsView from "./IncidentsView";
 import SiemView from "./SiemView";
 import ThreatIntelView from "./ThreatIntelView";
 import CowrieView from "./CowrieView";
@@ -178,10 +179,15 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
-      getDashboardSummary().then(setStats).catch(console.error);
+      // Usar endpoint optimizado para evitar dependencia de Wazuh
+      getOpenTicketsCount()
+        .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
+        .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
       const iv = setInterval(() => {
-        getDashboardSummary().then(setStats).catch(console.error);
-      }, 30000);
+        getOpenTicketsCount()
+          .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
+          .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
+      }, 15000);
       return () => clearInterval(iv);
     }
   }, [user]);
@@ -368,8 +374,8 @@ export default function App() {
               {stats?.metrics?.tickets_open > 0 ? (
                 <div style={{ padding: '4px 0' }}>
                   <div style={{ padding: '6px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>{stats.metrics.tickets_open} ticket(s) abierto(s)</div>
-                  <button onClick={() => { setView("incidents"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: '#FFD700', fontSize: '11px' }}>🔴 Ticket #{Math.floor(Math.random() * 9000) + 1000} - Incidente abierto</button>
-                  <button onClick={() => { setView("incidents"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '10px' }}>Ver todos los tickets</button>
+                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: '#FFD700', fontSize: '11px' }}>{stats.metrics.tickets_open} incidente(s) abierto(s) — Ver en Workspace</button>
+                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.05)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '10px', fontWeight: 600 }}>→ IR A WORKSPACE</button>
                 </div>
               ) : (
                 <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>Sin notificaciones</div>
@@ -382,7 +388,7 @@ export default function App() {
           <div className="sidenav__label">// MÓDULOS</div>
           <NavBtn id="overview" label="Overview" sub="panorama general" icon="i-overview" />
           <NavBtn id="siem" label="SIEM" sub="alertas wazuh" icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
-          <NavBtn id="incidents" label="Incidentes" sub="tickets abiertos" icon="i-incident" badge={stats?.metrics?.tickets_open} color="danger" />
+          {/* <NavBtn id="incidents" label="Incidentes" sub="tickets abiertos" icon="i-incident" badge={stats?.metrics?.tickets_open} color="danger" /> */}
           <NavBtn id="assets" label="Activos" sub="endpoints · srv" icon="i-assets" badge={stats?.metrics?.unique_agents} />
           <NavBtn id="cowrie" label="Honeypots" sub="señuelos · cowrie" icon="i-threat" badge="Ssh/Tel" color="amber" />
           <NavBtn id="threat" label="Threat Intel" sub="misp · virustotal" icon="i-threat" badge="IOCs" />
@@ -404,7 +410,7 @@ export default function App() {
           {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} />}
           {view === 'assets' && <AssetsView />}
           {view === 'users' && <UsersView />}
-          {view === 'incidents' && <IncidentsView />}
+          {/* {view === 'incidents' && <IncidentsView />} */}
           {view === 'siem' && <SiemView />}
           {view === 'threat' && <ThreatIntelView />}
           {view === 'cowrie' && <CowrieView />}

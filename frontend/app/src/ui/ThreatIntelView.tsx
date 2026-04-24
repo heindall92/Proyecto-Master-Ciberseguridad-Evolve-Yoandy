@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { vtCheckIp, vtCheckHash, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
+import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
 export default function ThreatIntelView() {
   const [query, setQuery] = useState("");
@@ -30,7 +30,7 @@ export default function ThreatIntelView() {
       let res;
       if (type === "ip") res = await vtCheckIp(query);
       else if (type === "hash") res = await vtCheckHash(query);
-      else res = await vtCheckHash(query); // Fallback or domain if implemented
+      else res = await vtCheckDomain(query);
       setResult(res);
       setActiveTab("DETALLES");
     } catch (e) {
@@ -97,7 +97,7 @@ export default function ThreatIntelView() {
         <div className="panel__head">
           <span className="panel__title">Motor de Inteligencia de Amenazas · VT REPORT ENGINE</span>
         </div>
-        <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', height: '100%' }}>
+        <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', flex: 1, minHeight: 0 }}>
 
           {/* Search Bar */}
           <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
@@ -142,7 +142,7 @@ export default function ThreatIntelView() {
 
           {/* Result Area */}
           {result && result.found && !loading && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
 
               {/* Banner */}
               <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: '20px', alignItems: 'center', background: result.malicious > 0 ? 'rgba(255,50,50,0.04)' : 'rgba(0,255,136,0.04)', border: `1px solid ${result.malicious > 0 ? 'rgba(255,71,87,0.25)' : 'rgba(0,255,136,0.25)'}`, borderRadius: '4px', padding: '15px', marginBottom: '15px', flexShrink: 0 }}>
@@ -219,15 +219,29 @@ export default function ThreatIntelView() {
                 {activeTab === "DETALLES" && (
                   <>
                     {result.ioc_type === "ip" && (
+                      <>
+                        {result.categories && Object.keys(result.categories).length > 0 && (
+                          <section>
+                            <h4 style={{ color: 'var(--danger)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 10px 0', borderBottom: '1px solid rgba(255,71,87,0.2)', paddingBottom: '6px' }}>CATEGORÍAS DE AMENAZA</h4>
+                            {Object.entries(result.categories as Record<string, string>).map(([vendor, label]) => (
+                              <DetailRow key={vendor} label={vendor} value={label} color="var(--amber)" />
+                            ))}
+                          </section>
+                        )}
                         <section>
-                            <h4 style={{ color: 'var(--cyan)', borderLeft: '3px solid var(--cyan)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 10px 0' }}>INFORMACIÓN DE RED Y GEOLOCALIZACIÓN</h4>
-                            <DetailRow label="País" value={result.country} />
-                            <DetailRow label="Continente" value={result.continent} />
-                            <DetailRow label="Propietario del AS" value={result.as_owner} />
-                            <DetailRow label="Número de AS (ASN)" value={result.asn} />
-                            <DetailRow label="Red (Subnet)" value={result.network} mono />
-                            <DetailRow label="Registro Regional" value={result.regional_internet_registry} />
+                          <h4 style={{ color: 'var(--cyan)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 10px 0', borderBottom: '1px solid rgba(74,227,255,0.2)', paddingBottom: '6px' }}>INFORMACIÓN DE RED Y GEOLOCALIZACIÓN</h4>
+                          <DetailRow label="País" value={result.country} />
+                          <DetailRow label="Continente" value={result.continent} />
+                          <DetailRow label="Propietario del AS" value={result.as_owner} />
+                          <DetailRow label="Número de AS (ASN)" value={result.asn} />
+                          <DetailRow label="Red (Subnet)" value={result.network} mono />
+                          <DetailRow label="Registro Regional" value={result.regional_internet_registry} />
+                          <DetailRow label="Primera Sumisión" value={result.first_submission_date} />
+                          <DetailRow label="Última Sumisión" value={result.last_submission_date} />
+                          <DetailRow label="Último Análisis" value={result.last_analysis_date} />
+                          <DetailRow label="Última Modificación" value={result.last_modification_date} />
                         </section>
+                      </>
                     )}
                     {result.ioc_type === "hash" && (
                         <section>
@@ -303,7 +317,7 @@ export default function ThreatIntelView() {
       </div>
 
       {/* Sidebar: Watchlist */}
-      <div className="panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="panel__title">IOC WATCHLIST</span>
             <span style={{ fontSize: '10px', background: 'var(--danger)', color: '#fff', padding: '2px 6px', borderRadius: '10px' }}>{watchlist.length} ACTIVOS</span>

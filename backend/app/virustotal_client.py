@@ -71,6 +71,15 @@ async def check_ip(ip: str) -> dict[str, Any]:
                 # WHOIS
                 "whois": d.get("whois", ""),
                 "whois_date": _ts(d.get("whois_date")),
+                # Submission dates
+                "first_submission_date": _ts(d.get("first_submission_date")),
+                "last_submission_date": _ts(d.get("last_submission_date")),
+                # Categories by vendor (only malicious/suspicious with a label)
+                "categories": {
+                    vendor: res.get("result") or res.get("category", "")
+                    for vendor, res in d.get("last_analysis_results", {}).items()
+                    if res.get("category") in ("malicious", "suspicious") and (res.get("result") or res.get("category"))
+                },
             }
     except Exception as e:
         logger.warning("VT IP check failed for %s: %s", ip, e)

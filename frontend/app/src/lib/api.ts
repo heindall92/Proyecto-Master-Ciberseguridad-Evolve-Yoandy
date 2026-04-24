@@ -105,6 +105,26 @@ export function getDashboardSummary() {
   return http<any>("/api/dashboard");
 }
 
+export function getOpenTicketsCount() {
+  return http<{open: number}>("/api/tickets/count/open");
+}
+
+export function syncWazuhAlerts(hours = 1) {
+  return http<{created: number, skipped: number, error: string | null}>(`/api/wazuh/sync-alerts?hours=${hours}`);
+}
+
+export function autoCreateTicket(alertData: {
+  title: string;
+  description?: string;
+  severity?: string;
+  source_ip?: string;
+  affected_asset?: string;
+  wazuh_alert_id?: string;
+  category?: string;
+}) {
+  return http<any>("/api/wazuh/auto-create-ticket", { method: "POST", body: JSON.stringify(alertData) });
+}
+
 // Auth
 export async function login(username: string, password: string) {
   const res = await http<{ access_token: string }>("/api/auth/login", {
@@ -219,6 +239,14 @@ export function resolveTicket(ticketId: number, notes: string) {
   });
 }
 
+export function deleteTicket(ticketId: number) {
+  return http<{ ok: boolean }>(`/api/tickets/${ticketId}`, { method: "DELETE" });
+}
+
+export function purgeResolvedTickets(days = 30) {
+  return http<{ deleted: number; cutoff_days: number }>(`/api/tickets/purge/resolved?days=${days}`, { method: "DELETE" });
+}
+
 // Wazuh Telemetry & Analytics
 export function getTopAttackers(limit = 20, hours = 24) {
   return http<any[]>(`/api/wazuh/top-attackers?limit=${limit}&hours=${hours}`);
@@ -255,6 +283,10 @@ export function vtCheckIp(ip: string) {
 
 export function vtCheckHash(hash: string) {
   return http<any>(`/api/vt/hash/${hash}`);
+}
+
+export function vtCheckDomain(domain: string) {
+  return http<any>(`/api/vt/domain/${domain}`);
 }
 
 // Ollama Status

@@ -2,8 +2,9 @@ from __future__ import annotations
 import logging
 logger = logging.getLogger("valhalla.main")
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
+import asyncio
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,17 +41,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
-# Security headers middleware
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
-        return response
-
 app = FastAPI(title="Valhalla SOC API", version="2.0.0")
 
 # Add security headers
@@ -73,10 +63,55 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+from app import opensearch_client as osc
+from app.wazuh_client import wazuh
+from app.ollama_client import analyze_alert
+from app import virustotal_client as vt
+
 from app.lsa_monitor import router as lsa_router
 
 app.include_router(lsa_router)
 
+
+async def _auto_sync_loop():
+    """Background task: sync Wazuh alerts and create tickets every 2 minutes."""
+    await asyncio.sleep(30)  # wait for startup
+    while True:
+        try:
+            alerts = await osc.get_recent_alerts(limit=50, hours=2)
+            async with SessionLocal() as db:
+                admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
+                if admin:
+                    created = 0
+                    for alert in alerts:
+                        alert_id = alert.get("id") or alert.get("rule_id")
+                        if not alert_id:
+                            continue
+                        severity = alert.get("severity", "").lower()
+                        if severity not in ("high", "critical"):
+                            continue
+                        existing = (await db.execute(select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id)))).scalar_one_or_none()
+                        if existing:
+                            continue
+                        ticket = Ticket(
+                            title=f"Wazuh: {alert.get('description', 'Alert')}",
+                            description=alert.get("description", ""),
+                            severity=severity,
+                            category="wazuh-detected",
+                            source_ip=alert.get("source_ip") or None,
+                            affected_asset=alert.get("agent_name") or None,
+                            wazuh_alert_id=str(alert_id),
+                            reporter_id=admin.id,
+                            status="open"
+                        )
+                        db.add(ticket)
+                        created += 1
+                    if created:
+                        await db.commit()
+                        logger.info(f"Auto-sync: created {created} tickets from Wazuh alerts")
+        except Exception as e:
+            logger.warning(f"Auto-sync failed: {e}")
+        await asyncio.sleep(120)
 
 @app.on_event("startup")
 async def startup():
@@ -87,6 +122,7 @@ async def startup():
         if not (await db.execute(q)).scalar_one_or_none():
             db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin"))
             await db.commit()
+    asyncio.create_task(_auto_sync_loop())
 
 
 @app.get("/health")
@@ -130,7 +166,7 @@ async def list_alerts(page: Page = Depends(), db: AsyncSession = Depends(get_db)
     return (await db.execute(select(Alert).order_by(desc(Alert.timestamp)).limit(page.limit).offset(page.offset))).scalars().all()
 
 @app.post("/api/analyze/{alert_id}", response_model=AnalysisOut)
-async def analyze(alert_id: int, force: bool = False, db: AsyncSession = Depends(get_db)):
+async def analyze(alert_id: int, force: bool = False, auto_ticket: bool = True, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     alert = (await db.execute(select(Alert).where(Alert.id == alert_id))).scalar_one_or_none()
     if not alert: raise HTTPException(404, "Alert not found")
     existing = (await db.execute(select(AIAnalysis).where(AIAnalysis.alert_id == alert_id))).scalar_one_or_none()
@@ -152,6 +188,24 @@ async def analyze(alert_id: int, force: bool = False, db: AsyncSession = Depends
         await db.rollback()
         analysis = (await db.execute(select(AIAnalysis).where(AIAnalysis.alert_id == alert_id))).scalar_one_or_none()
         if not analysis: raise
+    
+    # Auto-crear ticket si severidad es high o critical
+    if auto_ticket and data.get("severity") in ["high", "critical"]:
+        existing_ticket = (await db.execute(select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id)))).scalar_one_or_none()
+        if not existing_ticket:
+            ticket = Ticket(
+                title=f"AI Alert #{alert_id}: {data['attack_type']}",
+                description=f"Ollama Analysis:\n{data['summary']}\n\nRecommended: {data['recommended_action']}",
+                severity=data["severity"],
+                category="ai-detected",
+                wazuh_alert_id=str(alert_id),
+                reporter_id=current.id,
+                status="open"
+            )
+            db.add(ticket)
+            await db.commit()
+            logger.info(f"Auto-created ticket for AI analysis of alert #{alert_id}: severity={data['severity']}")
+    
     return AnalysisOut(alert_id=analysis.alert_id, attack_type=analysis.attack_type, severity=analysis.severity, summary=analysis.summary, recommended_action=analysis.recommended_action, created_at=analysis.created_at)
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -297,8 +351,18 @@ async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_curren
     alerts_total = (await db.execute(select(func.count(Alert.id)))).scalar() or 0
     events_total = (await db.execute(select(func.count(Event.id)))).scalar() or 0
     tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["open", "in_progress", "escalated"])))).scalar() or 0
-    wazuh_stats = await osc.get_dashboard_stats(24)
-    return {"metrics": {"alerts": alerts_total, "events": events_total, "tickets_open": tickets_open, **wazuh_stats}, "status": "operational"}
+    wazuh_stats = {}
+    try:
+        wazuh_stats = await osc.get_dashboard_stats(24)
+    except Exception as e:
+        logger.warning(f"Dashboard: Wazuh stats unavailable: {e}")
+    return {"metrics": {"alerts": alerts_total, "events": events_total, "tickets_open": tickets_open, "total_alerts_24h": 0, **wazuh_stats}, "status": "operational"}
+
+@app.get("/api/tickets/count/open")
+async def get_open_tickets_count(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    """Optimized endpoint for just open tickets count - used for notifications"""
+    tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["open", "in_progress", "escalated"])))).scalar() or 0
+    return {"open": tickets_open}
 
 # ── Tickets (Incident Management) ─────────────────────────────────────────────
 
@@ -373,6 +437,27 @@ async def analyze_ticket(ticket_id: int, payload: TicketAnalysis, db: AsyncSessi
     t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one()
     return _ticket_out(t2)
 
+@app.delete("/api/tickets/{ticket_id}")
+async def delete_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    t = await db.get(Ticket, ticket_id)
+    if not t: raise HTTPException(404, "Ticket not found")
+    await db.delete(t)
+    await db.commit()
+    return {"ok": True}
+
+@app.delete("/api/tickets/purge/resolved")
+async def purge_resolved_tickets(days: int = 30, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(Ticket).where(Ticket.status.in_(["resolved", "closed"]), Ticket.updated_at < cutoff)
+    )
+    tickets_to_delete = result.scalars().all()
+    count = len(tickets_to_delete)
+    for t in tickets_to_delete:
+        await db.delete(t)
+    await db.commit()
+    return {"deleted": count, "cutoff_days": days}
+
 @app.get("/api/tickets/stats/summary")
 async def ticket_stats(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     total = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
@@ -416,9 +501,99 @@ async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_curr
 async def recent_alerts(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_recent_alerts(limit, hours)
 
-@app.get("/api/wazuh/stats")
-async def wazuh_stats(hours: int = 24, _=Depends(get_current_user)):
-    return await osc.get_dashboard_stats(hours)
+@app.post("/api/wazuh/auto-create-ticket", response_model=TicketOut)
+async def auto_create_ticket_from_alert(
+    alert_data: dict,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user)
+):
+    """
+    Crea ticket automáticamente desde alerta de Wazuh o análisis de Ollama.
+    Fuente: wazuh, ollama, manual
+    """
+    title = alert_data.get("title")
+    description = alert_data.get("description")
+    severity = alert_data.get("severity", "medium")
+    source_ip = alert_data.get("source_ip")
+    affected_asset = alert_data.get("affected_asset")
+    wazuh_alert_id = alert_data.get("wazuh_alert_id")
+    category = alert_data.get("category", "security")
+    
+    if not title:
+        raise HTTPException(400, "Title is required")
+    
+    t = Ticket(
+        title=title,
+        description=description,
+        severity=severity.lower(),
+        category=category,
+        source_ip=source_ip,
+        affected_asset=affected_asset,
+        wazuh_alert_id=wazuh_alert_id,
+        reporter_id=current.id,
+        status="open"
+    )
+    db.add(t)
+    await db.commit()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == t.id))).scalar_one()
+    logger.info(f"Auto-created ticket #{t.id} from {alert_data.get('source', 'unknown')}: {title}")
+    return _ticket_out(t2)
+
+@app.get("/api/wazuh/sync-alerts", response_model=dict)
+async def sync_wazuh_alerts(hours: int = 1, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """
+    Sincroniza alertas de Wazuh y crea tickets automáticamente para alertas de alta severidad.
+    """
+    if not settings.opensearch_url:
+        return {"created": 0, "skipped": 0, "error": "OpenSearch not configured"}
+    
+    try:
+        alerts = await osc.get_recent_alerts(limit=50, hours=hours)
+    except Exception as e:
+        logger.warning(f"Failed to fetch Wazuh alerts: {e}")
+        return {"created": 0, "skipped": 0, "error": str(e)}
+    
+    created = 0
+    skipped = 0
+    
+    for alert in alerts:
+        alert_id = alert.get("id")
+        if not alert_id:
+            continue
+        
+        # Verificar si ya existe ticket para esta alerta
+        existing = (await db.execute(select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id)))).scalar_one_or_none()
+        if existing:
+            skipped += 1
+            continue
+        
+        severity = alert.get("severity", "").lower()
+        #Solo crear ticket para severidad alta
+        if severity in ["high", "critical"]:
+            title = f"Wazuh Alert #{alert_id}: {alert.get('rule', 'Unknown')}"
+            description = alert.get("description", "")
+            source_ip = alert.get("srcip")
+            affected_asset = alert.get("agent_name")
+            
+            ticket = Ticket(
+                title=title[:200],
+                description=description[:1000] if description else None,
+                severity=severity,
+                category="wazuh-detected",
+                source_ip=source_ip,
+                affected_asset=affected_asset,
+                wazuh_alert_id=str(alert_id),
+                reporter_id=current.id,
+                status="open"
+            )
+            db.add(ticket)
+            created += 1
+    
+    if created > 0:
+        await db.commit()
+        logger.info(f"Auto-created {created} tickets from Wazuh alerts")
+    
+    return {"created": created, "skipped": skipped, "error": None}
 
 @app.get("/api/wazuh/services")
 async def wazuh_services(_=Depends(get_current_user)):

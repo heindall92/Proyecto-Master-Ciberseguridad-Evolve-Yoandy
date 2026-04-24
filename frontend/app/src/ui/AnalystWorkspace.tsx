@@ -5,8 +5,11 @@ import {
   updateTicket,
   assignTicket,
   resolveTicket,
+  deleteTicket,
+  purgeResolvedTickets,
   listUsers,
   getDashboardSummary,
+  syncWazuhAlerts,
   type TicketOut,
   type UserOut,
 } from '../lib/api';
@@ -78,11 +81,34 @@ export default function AnalystWorkspace() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [ticketsData, usersData, statsData] = await Promise.all([
-        listTickets(),
-        listUsers(),
-        getDashboardSummary(),
-      ]);
+      let ticketsData: TicketOut[] = [];
+      let usersData: UserOut[] = [];
+      let statsData: any = null;
+
+      // Llamadas independientes - si una falla, las demás continúan
+      try {
+        ticketsData = await listTickets();
+        console.log('[Workspace] Tickets loaded:', ticketsData.length);
+      } catch(e) {
+        console.error('[Workspace] Error loading tickets:', e);
+      }
+
+      try {
+        usersData = await listUsers();
+        console.log('[Workspace] Users loaded:', usersData.length);
+      } catch(e) {
+        console.error('[Workspace] Error loading users:', e);
+        usersData = [];
+      }
+
+      try {
+        statsData = await getDashboardSummary();
+        console.log('[Workspace] Stats loaded:', statsData);
+      } catch(e) {
+        console.error('[Workspace] Error loading stats:', e);
+        statsData = null;
+      }
+
       const mapped: TicketCard[] = ticketsData.map((t: TicketOut) => ({
         id: t.id,
         title: t.title,
@@ -112,6 +138,8 @@ export default function AnalystWorkspace() {
 
   useEffect(() => {
     fetchData();
+    const iv = setInterval(fetchData, 30_000);
+    return () => clearInterval(iv);
   }, [fetchData]);
 
   const handleDragStart = (e: React.DragEvent, ticketId: number) => {
@@ -223,19 +251,21 @@ export default function AnalystWorkspace() {
     if (!createForm.title.trim()) return;
     setSaving(true);
     try {
-      await createTicket({
+      const payload = {
         title: createForm.title,
-        description: createForm.description,
+        description: createForm.description || null,
         severity: createForm.severity,
-        category: createForm.category,
+        category: createForm.category || null,
         source_ip: createForm.source_ip || null,
         affected_asset: createForm.affected_asset || null,
-      });
+      };
+      await createTicket(payload);
       setShowCreateModal(false);
       setCreateForm({ title: '', description: '', severity: 'medium', category: '', source_ip: '', affected_asset: '' });
       await fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create ticket:', err);
+      alert('Error al crear incidente: ' + (err?.message || err?.toString() || 'Error desconocido'));
     } finally {
       setSaving(false);
     }
@@ -414,6 +444,22 @@ export default function AnalystWorkspace() {
                   </span>
                   <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{colTickets.length}</span>
                 </div>
+                {col.id === 'resolved' && colTickets.length > 0 && (
+                  <button
+                    title="Eliminar resueltos con más de 30 días"
+                    onClick={async () => {
+                      if (!window.confirm(`¿Eliminar tickets resueltos de más de 30 días? Esta acción no se puede deshacer.`)) return;
+                      try {
+                        const r = await purgeResolvedTickets(30);
+                        await fetchData();
+                        alert(`${r.deleted} tickets eliminados`);
+                      } catch (e) { console.error(e); }
+                    }}
+                    style={{ fontSize: '9px', background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.3)', color: '#FF4D4D', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    PURGAR 30d+
+                  </button>
+                )}
               </div>
 
               {/* Cards Container */}
@@ -589,25 +635,34 @@ export default function AnalystWorkspace() {
           zIndex: 1000,
           boxShadow: '-10px 0 30px rgba(0,0,0,0.5)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>
               Incident #{selectedTicket.id}
             </h2>
-            <button
-              onClick={() => setSelectedTicket(null)}
-              aria-label="Close incident details"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-dim)',
-                fontSize: '20px',
-                cursor: 'pointer',
-                padding: '4px',
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {selectedTicket.status === 'resolved' && (
+                <button
+                  onClick={async () => {
+                    if (!window.confirm('¿Eliminar este ticket resuelto permanentemente?')) return;
+                    try {
+                      await deleteTicket(selectedTicket.id);
+                      setSelectedTicket(null);
+                      await fetchData();
+                    } catch (e) { console.error(e); }
+                  }}
+                  style={{ background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.4)', color: '#FF4D4D', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ELIMINAR
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedTicket(null)}
+                aria-label="Close incident details"
+                style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '20px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Status Badge */}
