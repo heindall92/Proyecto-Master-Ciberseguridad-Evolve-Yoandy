@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
 import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, vtCheckIp, AlertOut, AgentOut } from "../lib/api";
 
@@ -122,48 +122,33 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const [vtLoading, setVTLoading] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     const fetchData = async () => {
+      if (!mounted) return;
       try {
-        // Usar solo dashboard que no depende de Wazuh
-        const dash = await getDashboardSummary();
+        const [dash, alts, top, vol] = await Promise.all([
+          getDashboardSummary(),
+          getRecentAlerts(50).catch(() => []),
+          getTopAttackers(10).catch(() => []),
+          getAlertVolume(24).catch(() => [])
+        ]);
+        if (!mounted) return;
         setSummary(dash);
+        setAlerts(alts || []);
+        setTopAttackers(top || []);
+        setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
         
-        // Intentar obtener alertas de Wazuh (puede fallar si no está disponible)
-        try {
-          const alts = await getRecentAlerts(100);
-          setAlerts(alts || []);
-        } catch(e) {
-          console.warn("Wazuh alerts unavailable:", e);
-          setAlerts([]);
-        }
-        
-        try {
-          const top = await getTopAttackers(10);
-          setTopAttackers(top || []);
-        } catch(e) {
-          setTopAttackers([]);
-        }
-        
-        try {
-          const vol = await getAlertVolume(24);
-          setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
-        } catch(e) {
-          setVolumePoints([]);
-        }
-        
-        try {
-          const ags = await listAgents();
-          setAgents(ags || []);
-        } catch(e) {
-          setAgents([]);
+        if (Math.random() > 0.7) {
+          const ags = await listAgents().catch(() => []);
+          if (mounted) setAgents(ags || []);
         }
       } catch (e) {
         console.error("fetchData error:", e);
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchData, 30000);
+    return () => { mounted = false; clearInterval(interval); };
   }, []);
 
   const handleSyncWazuh = async () => {
