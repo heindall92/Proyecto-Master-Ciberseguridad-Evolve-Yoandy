@@ -14,7 +14,7 @@ import {
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
-// import IncidentsView from "./IncidentsView";
+import IncidentsView from "./IncidentsView";
 import SiemView from "./SiemView";
 import ThreatIntelView from "./ThreatIntelView";
 import CowrieView from "./CowrieView";
@@ -187,7 +187,7 @@ export default function App() {
         getOpenTicketsCount()
           .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
           .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
-      }, 15000);
+      }, 5000);
       return () => clearInterval(iv);
     }
   }, [user]);
@@ -388,7 +388,7 @@ export default function App() {
           <div className="sidenav__label">// MÓDULOS</div>
           <NavBtn id="overview" label="Overview" sub="panorama general" icon="i-overview" />
           <NavBtn id="siem" label="SIEM" sub="alertas wazuh" icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
-          {/* <NavBtn id="incidents" label="Incidentes" sub="tickets abiertos" icon="i-incident" badge={stats?.metrics?.tickets_open} color="danger" /> */}
+          <NavBtn id="incidents" label="Incidentes" sub="tickets abiertos" icon="i-incident" badge={stats?.metrics?.tickets_open} color="danger" />
           <NavBtn id="assets" label="Activos" sub="endpoints · srv" icon="i-assets" badge={stats?.metrics?.unique_agents} />
           <NavBtn id="cowrie" label="Honeypots" sub="señuelos · cowrie" icon="i-threat" badge="Ssh/Tel" color="amber" />
           <NavBtn id="threat" label="Threat Intel" sub="misp · virustotal" icon="i-threat" badge="IOCs" />
@@ -408,6 +408,7 @@ export default function App() {
 
         <main className="main" style={{ gridColumn: '2 / -1' }}>
           {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} />}
+          {view === 'incidents' && <IncidentsView />}
           {view === 'assets' && <AssetsView />}
           {view === 'users' && <UsersView />}
           {/* {view === 'incidents' && <IncidentsView />} */}
