@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
-import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, AlertOut, AgentOut } from "../lib/api";
+import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, vtCheckIp, AlertOut, AgentOut } from "../lib/api";
 
 function useContainerWidth() {
   const [width, setWidth] = useState(1200);
@@ -66,7 +66,7 @@ function SevBar({ label, count, total, color }: { label: string, count: number, 
   );
 }
 
-const DEFAULT_ACTIVE = ["kpi-1", "kpi-2", "kpi-3", "kpi-4", "siem-flow", "chart-vol", "chart-levels", "top-attack"];
+const DEFAULT_ACTIVE = ["kpi-1", "kpi-2", "kpi-3", "kpi-4", "siem-flow", "chart-vol", "chart-levels", "top-attack", "threat-intel"];
 
 const DEFAULT_LAYOUT: any = {
   lg: [
@@ -78,6 +78,7 @@ const DEFAULT_LAYOUT: any = {
     { i: "chart-vol", x: 8, y: 2, w: 4, h: 8 },
     { i: "chart-levels", x: 8, y: 10, w: 4, h: 8 },
     { i: "top-attack", x: 8, y: 18, w: 4, h: 10 },
+    { i: "threat-intel", x: 8, y: 28, w: 4, h: 10 },
   ]
 };
 
@@ -117,6 +118,8 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const [agents, setAgents] = useState<AgentOut[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{created: number, skipped: number} | null>(null);
+  const [topAttackerVT, setTopAttackerVT] = useState<any>(null);
+  const [vtLoading, setVTLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -173,6 +176,20 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       console.error("Sync error:", err);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleVTLookup = async (ip: string) => {
+    if (!ip) return;
+    setVTLoading(true);
+    setTopAttackerVT(null);
+    try {
+      const vtResult = await vtCheckIp(ip);
+      setTopAttackerVT({ ...vtResult, queryIp: ip });
+    } catch (err) {
+      console.error("VT lookup error:", err);
+    } finally {
+      setVTLoading(false);
     }
   };
 
@@ -351,6 +368,20 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                     <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: rankColor }}>{a.count}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '22px' }}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleVTLookup(a.ip); }}
+                      style={{ 
+                        fontSize: '8px', 
+                        padding: '1px 6px', 
+                        background: 'rgba(255,255,255,0.05)', 
+                        border: '1px solid var(--line)', 
+                        borderRadius: '2px',
+                        color: 'var(--text-dim)', 
+                        cursor: 'pointer'
+                      }}
+                    >
+                      VT
+                    </button>
                     <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '1px', overflow: 'hidden' }}>
                       <div style={{ width: `${barPct}%`, height: '100%', background: rankColor, opacity: 0.6, transition: 'width 0.5s ease' }} />
                     </div>
@@ -361,8 +392,56 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           </div>
         </section>
       );
-    }}
-  }), [summary, alerts, topAttackers, volumePoints, agents, siemPageState, setSiemPageState]);
+    }},
+    "threat-intel": { name: "Threat Intel", w: 4, h: 5, icon: "🛡️", render: () => (
+      <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="panel__head" style={{ cursor: 'move' }}>
+          <span className="panel__title">VIRUSTOTAL</span>
+        </div>
+        <div className="panel__body" style={{ padding: '8px', overflowY: 'auto', flex: 1, fontSize: '10px' }}>
+          {vtLoading && (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--signal)' }}>ESCANEANDO...</div>
+          )}
+          {!topAttackerVT && !vtLoading && (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '10px' }}>
+              Haz click en "VT" en un atacante para analizar
+            </div>
+          )}
+          {topAttackerVT && !vtLoading && topAttackerVT.found && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-bright)' }}>{topAttackerVT.queryIp}</span>
+                <span style={{ 
+                  fontSize: '9px', 
+                  padding: '2px 6px', 
+                  background: topAttackerVT.malicious > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(0,255,136,0.2)',
+                  border: `1px solid ${topAttackerVT.malicious > 0 ? 'var(--danger)' : 'var(--signal)'}`,
+                  color: topAttackerVT.malicious > 0 ? 'var(--danger)' : 'var(--signal)'
+                }}>
+                  {topAttackerVT.malicious}/{topAttackerVT.total || 94}
+                </span>
+              </div>
+              <div style={{ color: 'var(--text-dim)' }}>
+                {topAttackerVT.country} · {topAttackerVT.as_owner}
+              </div>
+              {topAttackerVT.tags && topAttackerVT.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {topAttackerVT.tags.slice(0, 5).map((tag: string, i: number) => (
+                    <span key={i} style={{ fontSize: '8px', padding: '2px 4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {topAttackerVT && !vtLoading && !topAttackerVT.found && (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '10px' }}>
+              IP no encontrada en VirusTotal
+            </div>
+          )}
+        </div>
+      </section>
+    )}
+  }), [summary, alerts, topAttackers, volumePoints, agents, siemPageState, setSiemPageState, topAttackerVT, vtLoading, handleVTLookup]);
 
   const onLayoutChange = (layout: any, allLayouts: any) => {
     setLayouts(allLayouts);

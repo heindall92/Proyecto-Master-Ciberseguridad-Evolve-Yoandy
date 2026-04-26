@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { listAgents, getAgentPackages, getAgentPorts, getAgentVulnerabilities, AgentOut } from "../lib/api";
+import { listAgents, getAgentPackages, getAgentPorts, getAgentVulnerabilities, vtCheckIp, AgentOut } from "../lib/api";
 
 export default function AssetsView() {
   const [agents, setAgents] = useState<AgentOut[]>([]);
@@ -7,6 +7,8 @@ export default function AssetsView() {
   const [selectedAgent, setSelectedAgent] = useState<AgentOut | null>(null);
   const [details, setDetails] = useState<any>({ packages: [], ports: [], vulns: [] });
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [agentVT, setAgentVT] = useState<any>(null);
+  const [vtLoading, setVtLoading] = useState(false);
 
   useEffect(() => {
     listAgents().then(setAgents).finally(() => setLoading(false));
@@ -14,6 +16,7 @@ export default function AssetsView() {
 
   const handleSelectAgent = async (agent: AgentOut) => {
     setSelectedAgent(agent);
+    setAgentVT(null);
     setDetailsLoading(true);
     try {
       const [pkgs, ports, vulns] = await Promise.all([
@@ -26,6 +29,20 @@ export default function AssetsView() {
       console.error("Error loading agent details", err);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const handleVTLookup = async (ip: string) => {
+    if (!ip) return;
+    setVtLoading(true);
+    setAgentVT(null);
+    try {
+      const vtResult = await vtCheckIp(ip);
+      setAgentVT({ ...vtResult, queryIp: ip });
+    } catch (err) {
+      console.error("VT lookup error:", err);
+    } finally {
+      setVtLoading(false);
     }
   };
 
@@ -87,7 +104,18 @@ export default function AssetsView() {
         <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head">
             <span className="panel__title">Detalle Técnico: {selectedAgent.name}</span>
-            <button className="action-btn" onClick={() => setSelectedAgent(null)}>CERRAR</button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {selectedAgent.ip && (
+                <button 
+                  className="action-btn" 
+                  onClick={() => handleVTLookup(selectedAgent.ip!)}
+                  style={{ background: 'var(--signal)', color: '#000', fontSize: '9px' }}
+                >
+                  VIRUSTOTAL
+                </button>
+              )}
+              <button className="action-btn" onClick={() => setSelectedAgent(null)}>CERRAR</button>
+            </div>
           </div>
           
           <div className="panel__body" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -113,13 +141,42 @@ export default function AssetsView() {
                           ))}
                        </div>
                     </div>
-                    <div className="panel" style={{ padding: '15px' }}>
+<div className="panel" style={{ padding: '15px' }}>
                        <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>ESTADO DE VULNERABILIDADES</div>
                        <div style={{ fontSize: '18px', fontWeight: 800, color: details.vulns.length > 0 ? 'var(--danger)' : 'var(--signal)' }}>
                           {details.vulns.length} DETECTADAS
                        </div>
                     </div>
-                 </div>
+                  </div>
+
+                  {/* VirusTotal Analysis */}
+                  {(agentVT || vtLoading) && (
+                    <div style={{ padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>ANÁLISIS VIRUSTOTAL</div>
+                      {vtLoading && <div style={{ color: 'var(--signal)' }}>ESCANEANDO...</div>}
+                      {agentVT && !vtLoading && agentVT.found && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontFamily: 'var(--mono)' }}>{agentVT.queryIp}</span>
+                            <span style={{ 
+                              fontSize: '9px', 
+                              padding: '2px 6px', 
+                              background: agentVT.malicious > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(0,255,136,0.2)',
+                              color: agentVT.malicious > 0 ? 'var(--danger)' : 'var(--signal)'
+                            }}>
+                              {agentVT.malicious}/{agentVT.total || 94} malicious
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                            {agentVT.country} · {agentVT.as_owner}
+                          </div>
+                        </div>
+                      )}
+                      {agentVT && !vtLoading && !agentVT.found && (
+                        <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>Sin datos en VirusTotal</div>
+                      )}
+                    </div>
+                  )}
 
                  {/* Packages List */}
                  <div>
