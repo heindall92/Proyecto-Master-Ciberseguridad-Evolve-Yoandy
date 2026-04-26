@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
 export default function ThreatIntelView() {
@@ -8,6 +8,27 @@ export default function ThreatIntelView() {
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS">("DETALLES");
+  const [vendorPage, setVendorPage] = useState(1);
+  const vendorScrollRef = useRef<HTMLDivElement>(null);
+  const VENDORS_PER_PAGE = 20;
+
+  useEffect(() => {
+    if (activeTab !== "VENDORS" || !vendorScrollRef.current) return;
+    const handleScroll = () => {
+      const el = vendorScrollRef.current;
+      if (el && el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
+        setVendorPage(p => {
+          if (result.vendor_results && p * VENDORS_PER_PAGE < result.vendor_results.length) {
+            return p + 1;
+          }
+          return p;
+        });
+      }
+    };
+    const el = vendorScrollRef.current;
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [activeTab, result]);
 
   const loadWatchlist = async () => {
     try {
@@ -33,6 +54,7 @@ export default function ThreatIntelView() {
       else res = await vtCheckDomain(query);
       setResult(res);
       setActiveTab("DETALLES");
+      setVendorPage(1);
     } catch (e) {
       alert("Error en la consulta. Verifique la conexión con el backend o la API Key.");
     } finally {
@@ -268,27 +290,45 @@ export default function ThreatIntelView() {
                   </>
                 )}
 
-                {activeTab === "VENDORS" && (
-                   <section>
-                       <h4 style={{ color: 'var(--danger)', borderLeft: '3px solid var(--danger)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>RESULTADOS POR MOTOR DE SEGURIDAD</h4>
-                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
-                           {result.vendor_results && result.vendor_results.map((v: any, idx: number) => {
-                               const isMalicious = v.category === "malicious";
-                               const isSuspicious = v.category === "suspicious";
-                               const color = isMalicious ? "var(--danger)" : isSuspicious ? "var(--amber)" : "var(--signal)";
-                               return (
-                                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', border: `1px solid ${isMalicious || isSuspicious ? color : 'var(--line)'}`, padding: '8px 12px', borderRadius: '4px' }}>
-                                       <div style={{ color: 'var(--text-bright)', fontSize: '12px', fontWeight: 600 }}>{v.vendor}</div>
-                                       <div style={{ color: color, fontSize: '11px', fontFamily: 'var(--mono)', textAlign: 'right' }}>
-                                           <div>{v.result || v.category}</div>
-                                           {v.method && <div style={{ fontSize: '9px', opacity: 0.6 }}>({v.method})</div>}
-                                       </div>
-                                   </div>
-                               )
-                           })}
-                       </div>
-                   </section>
-                )}
+{activeTab === "VENDORS" && (
+                   <section ref={vendorScrollRef} style={{ flex: 1, overflowY: 'auto' }}>
+                       <h4 style={{ color: 'var(--danger)', borderLeft: '3px solid var(--danger)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>RESULTADOS POR MOTOR DE SEGURIDAD ({result.vendor_results?.length || 0})</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
+                            {result.vendor_results && result.vendor_results.slice(0, vendorPage * VENDORS_PER_PAGE).map((v: any, idx: number) => {
+                                const isMalicious = v.category === "malicious";
+                                const isSuspicious = v.category === "suspicious";
+                                const color = isMalicious ? "var(--danger)" : isSuspicious ? "var(--amber)" : "var(--signal)";
+                                return (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', border: `1px solid ${isMalicious || isSuspicious ? color : 'var(--line)'}`, padding: '8px 12px', borderRadius: '4px' }}>
+                                        <div style={{ color: 'var(--text-bright)', fontSize: '12px', fontWeight: 600 }}>{v.vendor}</div>
+                                        <div style={{ color: color, fontSize: '11px', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                                            <div>{v.result || v.category}</div>
+                                            {v.method && <div style={{ fontSize: '9px', opacity: 0.6 }}>({v.method})</div>}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        {result.vendor_results && result.vendor_results.length > vendorPage * VENDORS_PER_PAGE && (
+                            <button 
+                                onClick={() => setVendorPage(p => p + 1)}
+                                style={{ 
+                                    marginTop: '15px', 
+                                    padding: '10px 20px', 
+                                    background: 'rgba(255,255,255,0.05)', 
+                                    border: '1px solid var(--line)', 
+                                    color: 'var(--text-bright)', 
+                                    borderRadius: '4px', 
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    width: '100%'
+                                }}
+                            >
+                                VER MÁS ({result.vendor_results.length - vendorPage * VENDORS_PER_PAGE} restantes)
+                            </button>
+                        )}
+                    </section>
+                 )}
 
                 {activeTab === "WHOIS" && (
                     <section>
