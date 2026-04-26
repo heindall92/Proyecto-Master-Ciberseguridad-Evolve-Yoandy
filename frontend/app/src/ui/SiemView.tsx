@@ -84,7 +84,7 @@ export default function SiemView() {
 
   useEffect(() => {
     fetchData();
-    const iv = setInterval(fetchData, 15_000);
+    const iv = setInterval(fetchData, 30000);
     return () => clearInterval(iv);
   }, []);
 
