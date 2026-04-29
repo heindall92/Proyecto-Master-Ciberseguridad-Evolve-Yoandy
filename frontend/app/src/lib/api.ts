@@ -278,15 +278,21 @@ export function getAlertLevels(hours = 24) {
 
 // VirusTotal
 export function vtCheckIp(ip: string) {
-  return http<any>(`/api/vt/ip/${ip}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/vt/ip/${ip}`, { headers });
 }
 
 export function vtCheckHash(hash: string) {
-  return http<any>(`/api/vt/hash/${hash}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/vt/hash/${hash}`, { headers });
 }
 
 export function vtCheckDomain(domain: string) {
-  return http<any>(`/api/vt/domain/${domain}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/vt/domain/${domain}`, { headers });
 }
 
 // Ollama Status

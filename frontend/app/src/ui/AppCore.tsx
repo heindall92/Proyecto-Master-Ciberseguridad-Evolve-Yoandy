@@ -22,6 +22,7 @@ import AnalystWorkspace from "./AnalystWorkspace";
 import ThreatMapView from "./ThreatMapView";
 import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
+import ExecutiveReport from "./ExecutiveReport";
 
 const darkTheme = createTheme({ palette: { mode: "dark" } });
 
@@ -50,7 +51,7 @@ const AlexanaLetter = ({ char, ...props }: any) => {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 2.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, viewBox: "0 0 24 24", ...props };
   const getLetter = () => {
     switch(char) {
-      case 'V': return <><path d="M 4 4 L 12 20 L 16 12"/><circle cx="20" cy="4" r="1.5" stroke="none" fill="currentColor"/></>;
+      case 'V': return <><path d="M 5 5 L 12 19 L 19 5"/><circle cx="12" cy="5" r="1.5" stroke="none" fill="currentColor"/></>;
       case 'A': return <><path d="M 12 2 L 20 20"/><path d="M 12 2 L 8 10"/><circle cx="4" cy="20" r="1.5" stroke="none" fill="currentColor"/></>;
       case 'L': return <><path d="M 4 2 L 4 20"/><path d="M 12 20 L 20 20"/><circle cx="8" cy="20" r="1.5" stroke="none" fill="currentColor"/></>;
       case 'H': return <><path d="M 4 2 L 4 22"/><path d="M 4 12 L 20 12 L 20 22"/><circle cx="20" cy="4" r="1.5" stroke="none" fill="currentColor"/></>;
@@ -244,7 +245,7 @@ export default function App() {
                    background: 'linear-gradient(145deg, rgba(60,255,158,0.15), rgba(0,0,0,0.4))', 
                    boxShadow: '0 8px 24px rgba(0,0,0,0.4), inset 0 0 12px rgba(60,255,158,0.1)' 
                  }}>
-                    <img src="./icon.png" style={{ width: "46px", height: "46px", objectFit: "contain", filter: `drop-shadow(0 0 8px ${isOffline ? "var(--danger)" : "var(--signal)"}) grayscale(1) brightness(2)` }} alt="logo" />
+                    <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
                  <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>
                     Welcome Back, Operador
@@ -307,13 +308,43 @@ export default function App() {
       <CssBaseline />
       <SvgSymbols />
       <div className="app">
+        <style>
+          {`
+            @media print {
+              .topbar, .sidenav, .status-chips, .tweaks { display: none !important; }
+              .app { display: block !important; height: auto !important; background: none !important; }
+              .main { display: block !important; grid-column: 1 / -1 !important; overflow: visible !important; height: auto !important; }
+              body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .panel { background: white !important; border: 1px solid #ccc !important; box-shadow: none !important; color: black !important; break-inside: avoid; }
+              .panel__title { color: black !important; text-shadow: none !important; }
+              .panel__head { background: #f0f0f0 !important; border-bottom: 1px solid #ccc !important; }
+              * { color: black !important; }
+            }
+          `}
+        </style>
         
         <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
-          <div className="topbar__brand">
-            <div className="topbar__logo" style={{ background: "transparent", border: "none" }}><img src="./icon.png" style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 0 5px var(--signal))" }} alt="logo" /></div>
-            <div>
-               <div className="topbar__title">SOC <em>VALHALLA</em></div>
-               <div className="topbar__sub">BLUE TEAM · WAZUH 4.9.5 · CLASSIFIED // EYES ONLY</div>
+          <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div className="topbar__logo" style={{ 
+               width: '32px', height: '32px', 
+               background: 'rgba(60,255,158,0.05)', 
+               border: '1px solid var(--signal)', 
+               display: 'flex', alignItems: 'center', justifyContent: 'center',
+               transform: 'rotate(45deg)',
+               boxShadow: '0 0 10px var(--signal-glow)',
+               marginRight: '8px'
+            }}>
+               <div style={{ transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlexanaLetter char="V" style={{ width: '22px', height: '22px', color: 'var(--signal)' }} />
+               </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px' }}>
+               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                 <AlexanaWord word="VALHALLA" height="18px" />
+                 <AlexanaWord word="SOC" height="12px" color="var(--signal)" />
+                 <AlexanaWord word="PRO" height="12px" color="rgba(255,255,255,0.5)" />
+               </div>
+               <div className="topbar__sub" style={{ fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>BLUE TEAM · WAZUH 4.9.5 · CLASSIFIED // EYES ONLY</div>
             </div>
           </div>
 
@@ -396,6 +427,7 @@ export default function App() {
           <NavBtn id="lsamonitor" label="LSA Monitor" sub="credential guard" icon="i-overview" />
           <NavBtn id="runbooks" label="Runbooks" sub="procedimientos" icon="i-playbook" />
           <NavBtn id="workspace" label="Workspace" sub="análisis · kanban" icon="i-workspace" />
+          <NavBtn id="executive-report" label="Exec Report" sub="informe ejecutivo" icon="i-metrics" />
           <NavBtn id="users" label="Usuarios" sub="gestion de personal" icon="i-overview" />
           
           <div className="sidenav__label" style={{ marginTop: 'auto' }}>// session</div>
@@ -406,7 +438,7 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="main" style={{ gridColumn: '2 / -1' }}>
+        <main className="main" style={{ gridColumn: '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} />}
           {view === 'assets' && <AssetsView />}
           {view === 'users' && <UsersView />}
@@ -418,7 +450,8 @@ export default function App() {
           {view === 'runbooks' && <RunbooksView />}
           {view === 'lsamonitor' && <LSAMonitorView />}
           {view === 'workspace' && <AnalystWorkspace />}
-          {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace'].includes(view) && (
+          {view === 'executive-report' && <ExecutiveReport />}
+          {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report'].includes(view) && (
             <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <div style={{ color: 'var(--signal)', letterSpacing: '2px' }}>CONSTRUCCIÓN EN PROCESO // MODULE: {view.toUpperCase()}</div>
             </div>

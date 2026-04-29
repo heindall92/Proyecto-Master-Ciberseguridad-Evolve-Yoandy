@@ -61,7 +61,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["*"],
 )
 from app import opensearch_client as osc
 from app.wazuh_client import wazuh
@@ -608,22 +608,25 @@ async def wazuh_services(_=Depends(get_current_user)):
 # ── VirusTotal ────────────────────────────────────────────────────────────────
 
 @app.get("/api/vt/ip/{ip}")
-async def vt_check_ip(ip: str, _=Depends(get_current_user)):
-    if not settings.virustotal_api_key:
+async def vt_check_ip(ip: str, request: Request, _=Depends(get_current_user)):
+    vt_key = request.headers.get("X-VT-API-Key") or settings.virustotal_api_key
+    if not vt_key:
         raise HTTPException(503, "VirusTotal API key not configured")
-    return await vt.check_ip(ip)
+    return await vt.check_ip(ip, vt_key)
 
 @app.get("/api/vt/hash/{file_hash}")
-async def vt_check_hash(file_hash: str, _=Depends(get_current_user)):
-    if not settings.virustotal_api_key:
+async def vt_check_hash(file_hash: str, request: Request, _=Depends(get_current_user)):
+    vt_key = request.headers.get("X-VT-API-Key") or settings.virustotal_api_key
+    if not vt_key:
         raise HTTPException(503, "VirusTotal API key not configured")
-    return await vt.check_hash(file_hash)
+    return await vt.check_hash(file_hash, vt_key)
 
 @app.get("/api/vt/domain/{domain}")
-async def vt_check_domain(domain: str, _=Depends(get_current_user)):
-    if not settings.virustotal_api_key:
+async def vt_check_domain(domain: str, request: Request, _=Depends(get_current_user)):
+    vt_key = request.headers.get("X-VT-API-Key") or settings.virustotal_api_key
+    if not vt_key:
         raise HTTPException(503, "VirusTotal API key not configured")
-    return await vt.check_domain(domain)
+    return await vt.check_domain(domain, vt_key)
 
 # ── IOC Registry ──────────────────────────────────────────────────────────────
 

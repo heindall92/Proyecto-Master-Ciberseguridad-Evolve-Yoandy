@@ -56,7 +56,8 @@ export default function ExecutiveReport() {
   return (
     <Box
       sx={{
-        height: "100vh",
+        flex: 1,
+        minHeight: 0,
         overflowY: "auto",
         overflowX: "hidden",
         p: 2,
@@ -128,7 +129,7 @@ export default function ExecutiveReport() {
       )}
 
       {data && (
-        <Grid container spacing={2}>
+        <Grid container spacing={2} alignItems="flex-start">
           <Grid size={{ xs: 12, md: 4 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">

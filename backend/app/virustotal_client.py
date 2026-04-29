@@ -9,8 +9,8 @@ logger = logging.getLogger("valhalla.virustotal")
 VT_BASE = "https://www.virustotal.com/api/v3"
 
 
-def _headers() -> dict:
-    return {"x-apikey": settings.virustotal_api_key}
+def _headers(api_key: str) -> dict:
+    return {"x-apikey": api_key}
 
 
 def _ts(unix: int | None) -> str:
@@ -32,10 +32,10 @@ def _vendor_list(results: dict) -> list:
     return sorted(out, key=lambda x: (x["category"] not in ("malicious", "suspicious"), x["vendor"]))
 
 
-async def check_ip(ip: str) -> dict[str, Any]:
+async def check_ip(ip: str, api_key: str) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.get(f"{VT_BASE}/ip_addresses/{ip}", headers=_headers())
+            r = await c.get(f"{VT_BASE}/ip_addresses/{ip}", headers=_headers(api_key))
             if r.status_code == 404:
                 return {"found": False, "ip": ip}
             r.raise_for_status()
@@ -86,10 +86,10 @@ async def check_ip(ip: str) -> dict[str, Any]:
         return {"found": False, "ip": ip, "error": str(e)}
 
 
-async def check_hash(file_hash: str) -> dict[str, Any]:
+async def check_hash(file_hash: str, api_key: str) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.get(f"{VT_BASE}/files/{file_hash}", headers=_headers())
+            r = await c.get(f"{VT_BASE}/files/{file_hash}", headers=_headers(api_key))
             if r.status_code == 404:
                 return {"found": False, "hash": file_hash}
             r.raise_for_status()
@@ -122,10 +122,10 @@ async def check_hash(file_hash: str) -> dict[str, Any]:
         return {"found": False, "hash": file_hash, "error": str(e)}
 
 
-async def check_domain(domain: str) -> dict[str, Any]:
+async def check_domain(domain: str, api_key: str) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.get(f"{VT_BASE}/domains/{domain}", headers=_headers())
+            r = await c.get(f"{VT_BASE}/domains/{domain}", headers=_headers(api_key))
             if r.status_code == 404:
                 return {"found": False, "domain": domain}
             r.raise_for_status()

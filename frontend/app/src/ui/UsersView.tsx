@@ -15,7 +15,7 @@ export default function UsersView() {
   // Form state
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("analista");
+  const [role, setRole] = useState("analyst");
   const [password, setPassword] = useState("");
 
   const fetchUsers = async () => {
@@ -48,7 +48,7 @@ export default function UsersView() {
     setEditingUserId(null);
     setUsername("");
     setEmail("");
-    setRole("analista");
+    setRole("analyst");
     setPassword("");
     setModalOpen(true);
   };
@@ -199,8 +199,7 @@ export default function UsersView() {
                         onChange={e => setRole(e.target.value)} 
                         style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
                        >
-                         <option value="analista">ANALISTA</option>
-                         <option value="senior">ANALISTA SENIOR</option>
+                         <option value="analyst">ANALISTA</option>
                          <option value="admin">ADMINISTRADOR</option>
                          <option value="viewer">VISOR (SOLO LECTURA)</option>
                        </select>

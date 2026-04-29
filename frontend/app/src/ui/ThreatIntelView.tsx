@@ -8,6 +8,8 @@ export default function ThreatIntelView() {
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS">("DETALLES");
+  const [apiKey, setApiKey] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadWatchlist = async () => {
     try {
@@ -20,7 +22,42 @@ export default function ThreatIntelView() {
 
   useEffect(() => {
     loadWatchlist();
+    const savedKey = localStorage.getItem("vt_api_key");
+    if (savedKey) setApiKey(savedKey);
   }, []);
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem("vt_api_key", apiKey);
+    alert("API Key de VirusTotal guardada en la sesión actual.");
+    setShowConfig(false);
+  };
+
+  const testApiKey = async () => {
+    if (!apiKey) return alert("Ingrese una API Key primero");
+    
+    // Guardar temporalmente para que api.ts la lea
+    const previousKey = localStorage.getItem("vt_api_key");
+    localStorage.setItem("vt_api_key", apiKey);
+    
+    try {
+      // Hacemos una llamada real al backend, que a su vez llama a VT con la nueva key.
+      const testRes = await vtCheckIp("8.8.8.8");
+      if (testRes && !testRes.error) {
+        alert("¡Ping exitoso! La API Key de VirusTotal está funcionando correctamente y ha sido guardada.");
+        setShowConfig(false);
+      } else {
+        throw new Error(testRes?.error || "Respuesta inválida de VirusTotal");
+      }
+    } catch (e: any) {
+      // Revertimos si falla
+      if (previousKey) {
+        localStorage.setItem("vt_api_key", previousKey);
+      } else {
+        localStorage.removeItem("vt_api_key");
+      }
+      alert(`Error verificando API Key: ${e.message || "Credenciales inválidas o sin cuota"}`);
+    }
+  };
 
   const handleSearch = async () => {
     if (!query) return;
@@ -94,10 +131,34 @@ export default function ThreatIntelView() {
 
       {/* Main Analysis Panel */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="panel__head">
+        <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">Motor de Inteligencia de Amenazas · VT REPORT ENGINE</span>
+          <button 
+            onClick={() => setShowConfig(!showConfig)}
+            style={{ background: 'var(--signal)', border: 'none', color: '#000', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            ⚙️ CONFIG API
+          </button>
         </div>
         <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', flex: 1, minHeight: 0 }}>
+          
+          {/* API Config Panel */}
+          {showConfig && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', border: '1px solid var(--signal)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-bright)', marginBottom: '8px' }}>Configuración de VirusTotal API Key</div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input 
+                  type="password" 
+                  value={apiKey} 
+                  onChange={e => setApiKey(e.target.value)} 
+                  placeholder="Ingrese su VirusTotal API Key..."
+                  style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--text-bright)', padding: '6px' }}
+                />
+                <button onClick={handleSaveApiKey} style={{ padding: '6px 12px', background: 'var(--signal)', color: '#000', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>GUARDAR</button>
+                <button onClick={testApiKey} style={{ padding: '6px 12px', background: 'var(--cyan)', color: '#000', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>COMPROBAR (PING)</button>
+              </div>
+            </div>
+          )}
 
           {/* Search Bar */}
           <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
