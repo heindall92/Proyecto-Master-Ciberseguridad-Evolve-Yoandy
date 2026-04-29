@@ -3,11 +3,8 @@ import {
   Alert as MUIAlert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
-  Divider,
   Stack,
   Typography,
 } from "@mui/material";
@@ -56,18 +53,32 @@ export default function ExecutiveReport() {
     window.print();
   }
 
-  const panelSx = {
-    bgcolor: "#0f0f0f",
-    border: "1px solid #00ff41",
-    boxShadow: "0 0 14px rgba(0, 255, 65, 0.35)",
-    color: "#00ff41",
-    fontFamily: "monospace",
-  } as const;
-
   return (
-    <Box sx={{ minHeight: "100vh", p: 3, bgcolor: "#0a0a0a", color: "#00ff41", fontFamily: "monospace" }}>
+    <Box
+      sx={{
+        height: "100vh",
+        overflowY: "auto",
+        overflowX: "hidden",
+        p: 2,
+        bgcolor: "var(--bg-void)",
+        color: "var(--text)",
+        fontFamily: "var(--mono)",
+        background:
+          "radial-gradient(ellipse at 20% 0%, rgba(60,255,158,0.04), transparent 55%), radial-gradient(ellipse at 85% 100%, rgba(74,227,255,0.03), transparent 55%), var(--bg-void)",
+      }}
+    >
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h4" sx={{ fontFamily: "monospace", fontWeight: 700 }}>
+        <Typography
+          variant="h5"
+          sx={{
+            fontFamily: "var(--sans)",
+            fontWeight: 700,
+            color: "var(--text-bright)",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            textShadow: "0 0 10px var(--signal-glow)",
+          }}
+        >
           Executive Report Generator
         </Typography>
         <Stack direction="row" spacing={1}>
@@ -75,14 +86,28 @@ export default function ExecutiveReport() {
             variant="outlined"
             onClick={() => void load()}
             disabled={loading}
-            sx={{ color: "#00ff41", borderColor: "#00ff41", fontFamily: "monospace" }}
+            sx={{
+              color: "var(--signal)",
+              borderColor: "var(--line-strong)",
+              fontFamily: "var(--sans)",
+              fontWeight: 700,
+              letterSpacing: "1px",
+              "&:hover": { borderColor: "var(--signal)", backgroundColor: "rgba(60,255,158,0.1)" },
+            }}
           >
             {loading ? "Cargando..." : "Refrescar"}
           </Button>
           <Button
-            variant="contained"
+            variant="outlined"
             onClick={exportPdf}
-            sx={{ bgcolor: "#00ff41", color: "#0a0a0a", fontFamily: "monospace", fontWeight: 700 }}
+            sx={{
+              color: "var(--signal)",
+              borderColor: "var(--line-strong)",
+              fontFamily: "var(--sans)",
+              fontWeight: 700,
+              letterSpacing: "1px",
+              "&:hover": { borderColor: "var(--signal)", backgroundColor: "rgba(60,255,158,0.1)" },
+            }}
           >
             Exportar PDF
           </Button>
@@ -97,94 +122,96 @@ export default function ExecutiveReport() {
 
       {!data && loading && (
         <Stack alignItems="center" sx={{ py: 10 }}>
-          <CircularProgress sx={{ color: "#00ff41", mb: 2 }} />
-          <Typography sx={{ fontFamily: "monospace" }}>Generando reporte ejecutivo...</Typography>
+          <CircularProgress sx={{ color: "var(--signal)", mb: 2 }} />
+          <Typography sx={{ fontFamily: "var(--mono)", letterSpacing: "1px" }}>Generando reporte ejecutivo...</Typography>
         </Stack>
       )}
 
       {data && (
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 4 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", mb: 2 }}>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Riesgo Global</Typography>
+              </Box>
+              <Box className="panel__body">
+                <Typography variant="body2" sx={{ mb: 2, color: "var(--text-dim)", letterSpacing: "1px", textTransform: "uppercase" }}>
                   Score de riesgo global
                 </Typography>
                 <Box sx={{ position: "relative", display: "inline-flex", mx: "auto", width: "100%", justifyContent: "center" }}>
-                  <CircularProgress variant="determinate" value={100} size={160} thickness={4} sx={{ color: "rgba(0,255,65,0.2)", position: "absolute" }} />
+                  <CircularProgress variant="determinate" value={100} size={160} thickness={4} sx={{ color: "var(--line)", position: "absolute" }} />
                   <CircularProgress variant="determinate" value={data.riskScore} size={160} thickness={4} sx={{ color: riskColor }} />
                   <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: "absolute", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Typography variant="h4" sx={{ fontFamily: "monospace", color: riskColor }}>
+                    <Typography variant="h4" sx={{ fontFamily: "var(--mono)", color: riskColor, textShadow: "0 0 10px rgba(60,255,158,0.2)" }}>
                       {data.riskScore}
                     </Typography>
                   </Box>
                 </Box>
-                <Typography sx={{ mt: 2, opacity: 0.85, textAlign: "center" }}>
+                <Typography sx={{ mt: 2, color: "var(--text-dim)", textAlign: "center", letterSpacing: "0.6px" }}>
                   Fuente: {data.source === "api" ? "Backend en linea" : "Fallback simulado"}
                 </Typography>
-              </CardContent>
-            </Card>
+              </Box>
+            </Box>
           </Grid>
 
           <Grid size={{ xs: 12, md: 8 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace" }}>
-                  Resumen ejecutivo (Ollama)
-                </Typography>
-                <Divider sx={{ my: 1.5, borderColor: "rgba(0,255,65,0.35)" }} />
-                <Typography sx={{ lineHeight: 1.7 }}>{data.executiveSummary}</Typography>
-              </CardContent>
-            </Card>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Resumen Ejecutivo (Ollama)</Typography>
+              </Box>
+              <Box className="panel__body">
+                <Typography sx={{ lineHeight: 1.7, color: "var(--text)" }}>{data.executiveSummary}</Typography>
+              </Box>
+            </Box>
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", mb: 1 }}>
-                  Metricas clave
-                </Typography>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Metricas Clave</Typography>
+              </Box>
+              <Box className="panel__body">
                 <Stack spacing={1}>
                   <Typography>Total alertas: {data.metrics.totalAlerts}</Typography>
                   <Typography>Criticas: {data.metrics.criticalAlerts}</Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Chip label={`LOW ${data.metrics.bySeverity.low}`} color="success" size="small" />
-                    <Chip label={`MEDIUM ${data.metrics.bySeverity.medium}`} color="warning" size="small" />
-                    <Chip label={`HIGH ${data.metrics.bySeverity.high}`} color="error" size="small" />
-                    <Chip label={`CRITICAL ${data.metrics.bySeverity.critical}`} color="error" variant="outlined" size="small" />
+                    <Chip label={`LOW ${data.metrics.bySeverity.low}`} size="small" sx={{ borderColor: "var(--signal-dim)", color: "var(--signal-dim)" }} variant="outlined" />
+                    <Chip label={`MEDIUM ${data.metrics.bySeverity.medium}`} size="small" sx={{ borderColor: "var(--amber)", color: "var(--amber)" }} variant="outlined" />
+                    <Chip label={`HIGH ${data.metrics.bySeverity.high}`} size="small" sx={{ borderColor: "var(--danger)", color: "var(--danger)" }} variant="outlined" />
+                    <Chip label={`CRITICAL ${data.metrics.bySeverity.critical}`} size="small" sx={{ borderColor: "var(--danger)", color: "var(--danger)" }} variant="outlined" />
                   </Stack>
                 </Stack>
-              </CardContent>
-            </Card>
+              </Box>
+            </Box>
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", mb: 1 }}>
-                  Top amenazas
-                </Typography>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Top Amenazas</Typography>
+              </Box>
+              <Box className="panel__body">
                 <Stack spacing={1}>
                   {data.topThreats.map((threat) => (
                     <Stack key={threat.attackType} direction="row" justifyContent="space-between" alignItems="center">
                       <Typography sx={{ maxWidth: "72%" }}>{threat.attackType}</Typography>
                       <Stack direction="row" spacing={1} alignItems="center">
-                        <Chip label={threat.severity.toUpperCase()} color={severityColor(threat.severity)} size="small" />
+                        <Chip label={threat.severity.toUpperCase()} color={severityColor(threat.severity)} size="small" variant="outlined" />
                         <Typography>x{threat.count}</Typography>
                       </Stack>
                     </Stack>
                   ))}
                 </Stack>
-              </CardContent>
-            </Card>
+              </Box>
+            </Box>
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", mb: 1 }}>
-                  Cumplimiento ISO/IEC 27001:2022
-                </Typography>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Cumplimiento ISO/IEC 27001:2022</Typography>
+              </Box>
+              <Box className="panel__body">
                 <Typography sx={{ mb: 1.5 }}>Nivel estimado: {data.iso27001.overall}%</Typography>
                 <Stack spacing={1}>
                   {data.iso27001.controls.map((control) => (
@@ -195,29 +222,32 @@ export default function ExecutiveReport() {
                           size="small"
                           label={control.status.toUpperCase()}
                           color={control.status === "covered" ? "success" : control.status === "partial" ? "warning" : "error"}
+                          variant="outlined"
                         />
                       </Stack>
-                      <Typography sx={{ opacity: 0.8 }}>{control.note}</Typography>
+                      <Typography sx={{ color: "var(--text-dim)" }}>{control.note}</Typography>
                     </Box>
                   ))}
                 </Stack>
-              </CardContent>
-            </Card>
+              </Box>
+            </Box>
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={panelSx}>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontFamily: "monospace", mb: 1 }}>
-                  Recomendaciones priorizadas
-                </Typography>
+            <Box className="panel" sx={{ position: "relative" }}>
+              <Box className="panel__head">
+                <Typography className="panel__title">Recomendaciones Priorizadas</Typography>
+              </Box>
+              <Box className="panel__body">
                 <Stack spacing={1}>
                   {data.recommendations.map((item) => (
-                    <Typography key={item}>- {item}</Typography>
+                    <Typography key={item} sx={{ color: "var(--text)" }}>
+                      - {item}
+                    </Typography>
                   ))}
                 </Stack>
-              </CardContent>
-            </Card>
+              </Box>
+            </Box>
           </Grid>
         </Grid>
       )}
