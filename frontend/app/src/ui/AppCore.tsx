@@ -14,7 +14,6 @@ import {
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
-import { playNotificationSound } from "./audio";
 import { translations } from "./translations";
 // import IncidentsView from "./IncidentsView";
 import SiemView from "./SiemView";
