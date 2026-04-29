@@ -11,14 +11,10 @@
             "id": "47ed77a18d4fb007",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs-julieta/cambios.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "cambios"
+              "title": "Nueva pestaña"
             }
           }
         ]
@@ -94,7 +90,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs-julieta/cambios.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +99,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Enlaces entrantes de cambios"
+              "title": "Enlaces entrantes"
             }
           },
           {
@@ -113,12 +108,11 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs-julieta/cambios.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Enlaces salientes de cambios"
+              "title": "Enlaces salientes"
             }
           },
           {
@@ -156,13 +150,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs-julieta/cambios.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Esquema de cambios"
+              "title": "Esquema"
             }
           }
         ]
@@ -185,17 +178,34 @@
   },
   "active": "47ed77a18d4fb007",
   "lastOpenFiles": [
-    "frontend/node_modules/browserslist/parse.js",
-    "frontend/node_modules/browserslist/node.js",
-    "frontend/node_modules/browserslist/error.js",
-    "frontend/node_modules/electron-to-chromium/versions.js",
-    "frontend/node_modules/gensync/index.js",
-    "frontend/node_modules/@develar/schema-utils/dist/util/Range.js",
-    "frontend/node_modules/@develar/schema-utils/dist/keywords/absolutePath.js",
-    "frontend/node_modules/@develar/schema-utils/declarations/util/Range.d.ts",
-    "frontend/node_modules/@develar/schema-utils/declarations/keywords/absolutePath.d.ts",
-    "frontend/node_modules/@develar/schema-utils/dist/ValidationError.js",
-    "frontend/node_modules/@develar/schema-utils/dist/validate.js",
+    "docs-julieta/images/executive1.png",
+    "docs-julieta/images/executive2.png",
+    "frontend/app/src/ui/ExecutiveReport.tsx",
+    "frontend/app/src/lib/reportApi.ts",
+    "frontend/app/dist/assets/index-BEoI4EzG.js",
+    "frontend/app/dist/index.html",
+    "frontend/app/dist/assets",
+    "frontend/app/dist",
+    "docs-julieta/images/screenshot-2.png",
+    "docs-julieta/images/screenshot-1.png",
+    "docs-julieta/README.md",
+    "docs-julieta/images",
+    "docs-julieta/componentes.md",
+    "docs-julieta/cambios.md",
+    "docs-julieta/arquitectura.md",
+    "docs-julieta",
+    "temp_extract/uploads/cabeca32035a679c117bb859f0e48f69.jpg",
+    "temp_extract/uploads",
+    "temp_extract/styles.css",
+    "frontend/app/public/bg-login.png",
+    "docs/img/11-login-valhalla.png",
+    "docs/MEJORAS_GESTION_2026-04-21_Yoandy.md",
+    "docs/INFORME_MEJORAS_2026-04-23.md",
+    "docs/INFORME_ACTUALIZACION.md",
+    "Fotos de su funcionamiento en local/Proyecto SOC Foto presentacion.png",
+    "frontend/node_modules/@types/responselike/README.md",
+    "frontend/node_modules/@types/ms/README.md",
+    "frontend/node_modules/@types/leaflet/README.md",
     "frontend/node_modules/@develar/schema-utils/README.md",
     "frontend/node_modules/@develar/schema-utils/CHANGELOG.md",
     "frontend/node_modules/boolean/README.md",
@@ -211,25 +221,8 @@
     "frontend/node_modules/ajv/lib/dotjs/README.md",
     "frontend/node_modules/ajv/README.md",
     "frontend/node_modules/minizlib/README.md",
-    "frontend/node_modules/got/readme.md",
-    "frontend/node_modules/builder-util-runtime/readme.md",
-    "frontend/node_modules/ajv-keywords/keywords/dotjs/README.md",
-    "frontend/node_modules/ajv-keywords/README.md",
-    "frontend/node_modules/js-yaml/README.md",
-    "frontend/node_modules/undici-types/README.md",
-    "frontend/node_modules/call-bind-apply-helpers/README.md",
-    "frontend/node_modules/call-bind-apply-helpers/CHANGELOG.md",
-    "frontend/node_modules/yargs/README.md",
-    "frontend/node_modules/ci-info/README.md",
     "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/64x64.png",
     "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/512x512.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/48x48.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/32x32.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/256x256.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/16x16.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/128x128.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/1024x1024.png",
-    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/proton-native.svg",
-    "frontend/node_modules/app-builder-lib/templates/icons/electron-linux/64x64.png"
+    "frontend/node_modules/app-builder-lib/templates/icons/proton-native/linux/48x48.png"
   ]
 }
