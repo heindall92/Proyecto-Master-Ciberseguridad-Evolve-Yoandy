@@ -46,6 +46,12 @@ desktop.ini
 MedHomologa-Pro/node_modules/
 MedHomologa-Pro/.next/
 
+# Build outputs
+frontend/app/dist/
+frontend/dist_electron/
+dist/
+dist_electron/
+
 # Archivos personales de automatizacion (local only)
 # Estos scripts son para uso personal del desarrollador principal
 # No deben subirse al repo compartido

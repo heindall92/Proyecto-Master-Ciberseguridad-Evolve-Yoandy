@@ -1,0 +1,13 @@
+========================================
+    CREDENCIALES DE ACCESO - VALHALLA SOC
+========================================
+
+URL del Dashboard: http://localhost:3000
+
+OPERATOR_ID : admin
+ACCESS_KEY  : Valhalla2026!
+
+========================================
+Nota: Estas credenciales dan acceso de nivel
+administrador al Tactical HUD.
+========================================

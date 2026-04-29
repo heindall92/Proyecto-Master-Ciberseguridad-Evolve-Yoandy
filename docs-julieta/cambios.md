@@ -71,6 +71,28 @@
 - [[componentes]]
 - [[cambios]]
 
+## 2026-04-29 (resolución de conflictos merge)
+
+### Cambio
+- Se resolvieron conflictos de merge en:
+  - `frontend/app/src/main.tsx`
+  - `frontend/package.json`
+  - `frontend/package-lock.json`
+
+### Criterio aplicado
+- Base: conservar cambios provenientes de `main`.
+- Excepción requerida: mantener ruta `/executive-report` activa en `main.tsx`.
+- Dependencias: mantener paquete de `main` y asegurar `react-router-dom` instalado.
+
+### Resultado
+- `main.tsx` quedó con `AppCore` como ruta raíz (`/`) y nueva ruta `/executive-report` hacia `ExecutiveReport`.
+- `package.json` conserva dependencias de `main` (incluyendo `react-grid-layout` y `react-leaflet`) y añade `react-router-dom`.
+- `package-lock.json` fue regenerado sin marcadores de conflicto y contiene `react-router-dom`.
+
+### Verificación
+- No quedan marcadores `<<<<<<<`, `=======`, `>>>>>>>` en los 3 archivos.
+- `react-router-dom` confirmado en `package.json` y `package-lock.json`.
+
 ## 2026-04-21 (implementación Executive Report)
 
 ### Cambio

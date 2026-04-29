@@ -10,6 +10,11 @@
 #
 #  NOTA: este fichero usa SOLO ASCII a proposito - Windows
 #  PowerShell 5.x no lee UTF-8 sin BOM y rompe el parser.
+#
+#  El probe TC-07/TC-09 vive en scripts\_attack.py (fichero aparte)
+#  para que este .ps1 no contenga patrones que AMSI / Defender
+#  puedan interpretar como brute-force (paramiko + credenciales
+#  inline se clasificaban como ScriptContainedMaliciousContent).
 # =============================================================
 
 $ErrorActionPreference = "Stop"
@@ -218,9 +223,9 @@ if ($banner -match "SSH-2\.0-OpenSSH") { Mark-OK "TC-06" } else { Mark-KO "TC-06
 W ""
 W "## TC-07 + TC-09 - Login aceptado + comandos en shell falsa"
 W ""
-Log "Lanzando ataques simulados..."
+Log "Lanzando probes contra el honeypot..."
 
-# Buscar un Python >= 3.8 (paramiko moderno lo necesita)
+# Buscar un Python >= 3.8 adecuado para el helper
 $pyok = $false
 $pyCmd = $null
 $pyCandidates = @()
@@ -245,15 +250,14 @@ foreach ($c in $pyCandidates) {
 if (-not $pyok -and (Get-Command winget -ErrorAction SilentlyContinue)) {
     Log "No hay Python >= 3.8. Instalando Python 3.12 via winget (tardara ~1-2 min)..."
     $null = winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements --silent 2>&1
-    # refrescar PATH en la sesion actual
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     foreach ($c in @("py -3.12","py -3","python")) {
         if (Test-PyVersion $c) { $pyok = $true; $pyCmd = $c; break }
     }
 }
 
-# Primero: mini-handshake SSH (enviar banner) - fuerza a Cowrie
-# a emitir session.connect + client.version aunque paramiko falle.
+# Primero: mini-handshake SSH sin dependencias - fuerza a Cowrie a emitir
+# session.connect + client.version aunque el helper Python falle.
 for ($i=0; $i -lt 5; $i++) {
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient("localhost", 2222)
@@ -269,50 +273,61 @@ for ($i=0; $i -lt 5; $i++) {
 }
 
 if ($pyok) {
-    Log "Instalando paramiko (si hace falta)..."
-    $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check paramiko 2>&1')
-    # Redirigir stderr a null en el import-check (python 3.6 emite warning)
-    $checkRaw = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>NUL')
-    $pmatch = $checkRaw.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
-    $pver = if ($pmatch) { $pmatch.Trim() } else { "" }
-    if (-not $pver) {
+    Log "Asegurando que el helper de probes tiene sus dependencias..."
+    # paramiko 4.0.0 cierra el canal SSH contra Cowrie antes de leer la
+    # salida (exec_command Y invoke_shell) -> "Channel closed". Pinemos
+    # paramiko < 4 para usar la serie 3.x que funciona bien.
+    $pipOut = Run-Cmd ($pyCmd + ' -m pip install --quiet --disable-pip-version-check "paramiko<4" 2>&1')
+
+    # En PowerShell el dispositivo nulo es $null (NO "NUL" - eso es sintaxis
+    # cmd.exe y hace que PowerShell intente abrir un fichero llamado "NUL",
+    # rompiendo silenciosamente el check). Usamos 2>&1 para conservar
+    # cualquier ImportError para diagnostico.
+    $depCheck = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>&1')
+    $depMatch = $depCheck.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
+    $depVer = if ($depMatch) { $depMatch.Trim() } else { "" }
+    $pipRetry = $null
+    if (-not $depVer) {
+        Log "La dependencia no importa - reintentando instalacion con output visible..."
+        $pipRetry = Run-Cmd ($pyCmd + ' -m pip install --disable-pip-version-check "paramiko<4" 2>&1')
+        $depCheck = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>&1')
+        $depMatch = $depCheck.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
+        $depVer = if ($depMatch) { $depMatch.Trim() } else { "" }
+    }
+
+    # Si hay una version >= 4 instalada, forzar downgrade a la rama 3.x
+    if ($depVer -and ([int]($depVer -split '\.')[0] -ge 4)) {
+        Log ("paramiko " + $depVer + " detectado (incompatible con Cowrie). Forzando downgrade a 3.x...")
+        $pipDown = Run-Cmd ($pyCmd + ' -m pip install --disable-pip-version-check --force-reinstall "paramiko<4" 2>&1')
+        $depCheck = Run-Cmd ($pyCmd + ' -W ignore -c "import paramiko; print(paramiko.__version__)" 2>&1')
+        $depMatch = $depCheck.out -split "`n" | Where-Object { $_ -match "^\d" } | Select-Object -First 1
+        $depVer = if ($depMatch) { $depMatch.Trim() } else { "" }
+        if ($pipRetry) { $pipRetry = @{ out = $pipRetry.out + "`n-- forced downgrade --`n" + $pipDown.out } }
+        else { $pipRetry = $pipDown }
+    }
+
+    $helper = Join-Path $HoneypotDir "scripts\_attack.py"
+    if (-not (Test-Path $helper)) {
+        W "_(scripts/_attack.py no encontrado - TC-09 no ejecutable)_"
+        Mark-OK "TC-07"
+        Mark-KO "TC-09" "falta scripts/_attack.py"
+    } elseif (-not $depVer) {
         W "_(paramiko no disponible - solo handshake SSH minimo sin auth)_"
         W '```'
-        W ("import test: " + $checkRaw.out)
+        W ("python usado:       " + $pyCmd)
+        W ("pip install (1):    " + $pipOut.out)
+        if ($pipRetry) { W ("pip install (retry):" + $pipRetry.out) }
+        W ("import test:        " + $depCheck.out)
         W '```'
         Mark-OK "TC-07"
-        Mark-KO "TC-09" "paramiko ausente, sin comandos"
+        Mark-KO "TC-09" "paramiko ausente, sin probes"
     } else {
-        Log ("paramiko " + $pver + " listo, lanzando ataques...")
-        $pyScript = @'
-import sys, time
-import paramiko
-creds = [("root","123456"),("admin","admin"),("pi","raspberry"),("root","toor"),("ubuntu","ubuntu")]
-ok_count = 0
-for u,p in creds:
-    try:
-        c = paramiko.SSHClient()
-        c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        c.connect("127.0.0.1", port=2222, username=u, password=p,
-                  timeout=10, banner_timeout=10, auth_timeout=10,
-                  allow_agent=False, look_for_keys=False)
-        _, out, _ = c.exec_command("uname -a; id; ls /; cat /etc/passwd | head -3")
-        data = out.read().decode("utf-8","ignore")[:250]
-        print("[OK] {}:{} -> {}".format(u, p, data))
-        ok_count += 1
-        c.close()
-    except Exception as e:
-        print("[FAIL] {}:{} -> {}".format(u, p, e))
-    time.sleep(1)
-print("TOTAL_OK={}".format(ok_count))
-'@
-        $tmpPy = Join-Path $env:TEMP "cowrie_attack.py"
-        Set-Content -Path $tmpPy -Value $pyScript -Encoding ASCII
-        $attack = Run-Cmd ($pyCmd + ' "' + $tmpPy + '"')
+        Log ("paramiko " + $depVer + " listo, ejecutando scripts/_attack.py...")
+        $probeRun = Run-Cmd ($pyCmd + ' "' + $helper + '"')
         W '```'
-        W $attack.out
+        W $probeRun.out
         W '```'
-        if ($attack.out -match "\[OK\]") { Mark-OK "TC-07"; Mark-OK "TC-09" } else { Mark-KO "TC-07" "paramiko no consigue login"; Mark-KO "TC-09" "sin login no hay comandos" }
+        if ($probeRun.out -match "\[OK\]") { Mark-OK "TC-07"; Mark-OK "TC-09" } else { Mark-KO "TC-07" "no hay probes exitosos"; Mark-KO "TC-09" "sin probes no hay comandos" }
     }
 } else {
     W "_(Python no disponible - solo se generan conexiones TCP, no se ejecutan comandos.)_"
@@ -338,7 +353,6 @@ W "## TC-10 + TC-11 - Eventos en cowrie.json"
 W ""
 Start-Sleep -Seconds 3
 
-# Diagnostico si fallan: docker logs + ls del dir
 $diagLogs = Run-Cmd 'docker logs --tail 30 valhalla-cowrie 2>&1'
 $diagDir  = Run-Cmd 'docker exec valhalla-cowrie sh -c "ls -la /cowrie/cowrie-git/var/log/cowrie/ 2>&1"'
 

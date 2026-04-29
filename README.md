@@ -37,8 +37,9 @@
 8. [Guía de Puesta en Marcha](#-guía-de-puesta-en-marcha)
 9. [Dashboards y Visualizaciones](#-dashboards-y-visualizaciones)
 10. [Estructura del Proyecto](#-estructura-del-proyecto)
-11. [Preguntas Frecuentes (FAQ)](#-preguntas-frecuentes-faq)
-12. [Licencia y Créditos](#-licencia-y-créditos)
+11. [Aplicación de Escritorio (Standalone)](#-aplicación-de-escritorio-standalone)
+12. [Preguntas Frecuentes (FAQ)](#-preguntas-frecuentes-faq)
+13. [Licencia y Créditos](#-licencia-y-créditos)
 
 </details>
 
@@ -315,6 +316,15 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
+### Interfaz de Acceso (Tactical Cyberpunk)
+> Pantalla de login rediseñada con efectos Glassmorphism y polígonos complejos
+
+![Login Valhalla](docs/img/11-login-valhalla.png)
+
+---
+
+---
+
 ## 💻 Requisitos Previos
 
 ### Hardware Mínimo
@@ -351,20 +361,14 @@ Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propi
 ### Componentes:
 | Componente | Puerto | Descripción |
 |---|---|---|
-| **Frontend** | `3000` | Interfaz web del usuario |
-| **Backend** | `3001` | API REST con autenticación JWT |
+| **Sistema Valhalla** | `3000` | Frontend (HUD) + Backend (API) unificados |
 
 ### Iniciar el Dashboard:
-```bash
-# Backend (API)
-cd backend
-npm install
-npm start
 
-# Frontend (UI) - En otra terminal
-cd frontend
-npm install
-npm start
+Toda la infraestructura se gestiona ahora a través de Docker:
+
+```bash
+docker compose up -d --build
 ```
 
 ---
@@ -386,28 +390,21 @@ cp .env.example .env
 # 3. Instalar e iniciar Ollama + descargar modelo
 ollama pull qwen2.5-coder:7b
 
-# 4. Levantar toda la infraestructura
-docker compose up -d
+# 4. Levantar toda la infraestructura (SIEM + Honeypot + Dashboard)
+docker compose up -d --build
 
-# 5. Crear dashboards y monitores (esperar 3-5 min tras paso 4)
+# 5. Configurar Wazuh (esperar 3-5 min tras paso 4)
 pip install requests
 python create_dashboards.py
 python setup_monitors.py
 python setup_reports.py
-
-# 6. Iniciar el Frontend y Backend de Valhalla SOC (en terminales separados)
-# Terminal 1 - Backend:
-cd backend && npm install && npm start
-
-# Terminal 2 - Frontend:
-cd frontend && npm install && npm start
 ```
 
 ### Acceder al Dashboard
 
 | Servicio | URL | Credenciales |
 |---|---|---|
-| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | Ver `backend/.env.example` |
+| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | admin / Valhalla2026! (por defecto) |
 | 📊 Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
 | 🔌 Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
 | 🗄️ OpenSearch | `https://localhost:9200` | admin / admin |
@@ -485,6 +482,28 @@ Valhalla-SOC/
 ├── 📄 setup_monitors.py           ← Crear monitores de alertas
 └── 📄 setup_reports.py            ← Crear reportes de seguridad
 ```
+
+---
+
+## 🖥️ Aplicación de Escritorio (Standalone)
+
+Valhalla SOC incluye una versión nativa para Windows basada en **Electron**. Esta arquitectura ha sido diseñada para garantizar la continuidad de las operaciones tácticas, permitiendo el acceso a la consola de control incluso en escenarios de desconexión total o fallo en los servicios centrales (Wazuh/Docker).
+
+### Características Principales:
+- **Disponibilidad Continua (Modo Offline):** El sistema detecta automáticamente la pérdida de conexión con el backend y activa un modo de emergencia. Esto permite acceder a la interfaz y consultar los procedimientos operativos (Runbooks) almacenados localmente.
+- **Entorno Seguro:** Ejecución en un contenedor de escritorio aislado con políticas de seguridad optimizadas para la comunicación local.
+- **Despliegue Simplificado:** Generación de un instalador `.exe` autónomo con la identidad visual oficial de Valhalla SOC.
+
+### Instalación y Compilación:
+Para generar tu propio ejecutable de escritorio:
+
+```bash
+cd frontend
+npm install
+npm run build:exe
+```
+
+El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SOC Setup 0.1.0.exe`
 
 ---
 

@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import App from "./ui/App";
+import AppCore from "./ui/AppCore";
 import ExecutiveReport from "./ui/ExecutiveReport";
 
 const theme = createTheme({
@@ -15,7 +15,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <CssBaseline />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
+          <Route path="/" element={<AppCore />} />
           <Route path="/executive-report" element={<ExecutiveReport />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -23,4 +23,3 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ThemeProvider>
   </React.StrictMode>,
 );
-

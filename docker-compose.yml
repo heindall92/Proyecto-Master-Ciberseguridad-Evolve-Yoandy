@@ -17,6 +17,11 @@ services:
   # ──────────────────────────────────────────────────
   attacker:
     image: kalilinux/kali-rolling
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     container_name: valhalla-attacker
     hostname: attacker
     tty: true
@@ -32,6 +37,11 @@ services:
   # ──────────────────────────────────────────────────
   wazuh.indexer:
     image: wazuh/wazuh-indexer:4.9.2
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     hostname: wazuh.indexer
     restart: always
     ports:
@@ -51,9 +61,8 @@ services:
       cp -L /source_certs/wazuh.indexer-key.pem  /usr/share/wazuh-indexer/certs/indexer-key.pem &&
       cp -L /source_certs/admin.pem              /usr/share/wazuh-indexer/certs/admin.pem &&
       cp -L /source_certs/admin-key.pem          /usr/share/wazuh-indexer/certs/admin-key.pem &&
-      chown -R 1000:1000 /usr/share/wazuh-indexer/certs/ &&
-      chmod 500 /usr/share/wazuh-indexer/certs/ &&
-      chmod 400 /usr/share/wazuh-indexer/certs/* &&
+      chmod 755 /usr/share/wazuh-indexer/certs/ &&
+      chmod 644 /usr/share/wazuh-indexer/certs/* &&
       sed -i 's|/etc/wazuh-indexer/certs/|/usr/share/wazuh-indexer/certs/|g' /usr/share/wazuh-indexer/opensearch.yml &&
       exec /entrypoint.sh opensearchwrapper
       "
@@ -79,6 +88,11 @@ services:
   # ──────────────────────────────────────────────────
   wazuh.manager:
     image: wazuh/wazuh-manager:4.9.2
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     hostname: wazuh.manager
     restart: always
     ports:
@@ -158,8 +172,8 @@ services:
       cp -L /source_certs/wazuh.dashboard.pem       /etc/wazuh-dashboard/certs/dashboard.pem &&
       cp -L /source_certs/wazuh.dashboard-key.pem   /etc/wazuh-dashboard/certs/dashboard-key.pem &&
       chown -R 1000:1000 /etc/wazuh-dashboard/certs/ &&
-      chmod 500 /etc/wazuh-dashboard/certs/ &&
-      chmod 400 /etc/wazuh-dashboard/certs/* &&
+      chmod 555 /etc/wazuh-dashboard/certs/ &&
+      chmod 444 /etc/wazuh-dashboard/certs/* &&
       sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       sed -i 's|#opensearch.password:|opensearch.password: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
@@ -184,6 +198,11 @@ services:
   # ──────────────────────────────────────────────────
   cowrie:
     image: cowrie/cowrie:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "3"
     container_name: valhalla-cowrie
     restart: unless-stopped
     ports:
@@ -265,6 +284,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_started
+    volumes:
+      - ./backend:/app
     networks:
       - valhalla-net
 
@@ -279,6 +300,9 @@ services:
     restart: unless-stopped
     ports:
       - "${DASHBOARD_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
     networks:
