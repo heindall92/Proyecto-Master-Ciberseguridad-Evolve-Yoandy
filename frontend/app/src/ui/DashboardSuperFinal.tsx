@@ -81,8 +81,9 @@ const DEFAULT_LAYOUT: any = {
   ]
 };
 
-export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog = false, setShowWidgetCatalog }: { isLockedProp?: boolean; showWidgetCatalog?: boolean; setShowWidgetCatalog?: (v: boolean) => void }) {
+export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog = false, setShowWidgetCatalog, lang = "es" }: { isLockedProp?: boolean; showWidgetCatalog?: boolean; setShowWidgetCatalog?: (v: boolean) => void; lang?: "es" | "en" }) {
   const { ref, width } = useContainerWidth();
+  const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
   
   const [layouts, setLayouts] = useState(() => {
     const saved = localStorage.getItem("valhalla.dashboard.layout.v6");
@@ -169,6 +170,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     try {
       const result = await syncWazuhAlerts(1);
       setSyncResult(result);
+      fetchData(); // Refresh after sync
     } catch (err) {
       console.error("Sync error:", err);
     } finally {
@@ -212,8 +214,8 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           <div className="panel__head" style={{ cursor: 'move' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 6px var(--signal)', animation: 'pulse 2s infinite', display: 'inline-block' }} />
-              <span className="panel__title">SIEM · WAZUH EVENTS</span>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{alerts.length} eventos</span>
+              <span className="panel__title">SIEM · {t('siem_sub').toUpperCase()}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{alerts.length} eventos</span>
             </div>
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
               <button
@@ -223,17 +225,17 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                   background: syncing ? 'rgba(0,255,136,0.1)' : 'rgba(0,255,136,0.15)',
                   color: 'var(--signal)', border: '1px solid rgba(0,255,136,0.3)',
                   padding: '2px 8px', cursor: syncing ? 'not-allowed' : 'pointer',
-                  fontSize: '9px', letterSpacing: '1px', fontFamily: 'var(--mono)'
+                  fontSize: '11px', letterSpacing: '1px', fontFamily: 'var(--mono)', fontWeight: 'bold'
                 }}
               >{syncing ? '···' : '+INC'}</button>
-              <button onClick={() => setSiemPageState(p => Math.max(0, p - 1))} disabled={siemPageState === 0} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '10px' }}>◄</button>
-              <span style={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>{siemPageState + 1}/{totalPages}</span>
-              <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '10px' }}>►</button>
+              <button onClick={() => setSiemPageState(p => Math.max(0, p - 1))} disabled={siemPageState === 0} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>◄</button>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>{siemPageState + 1}/{totalPages}</span>
+              <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>►</button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '52px 70px 90px 1fr', gap: '0 8px', padding: '4px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 1fr', gap: '0 8px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             {['SEV','HORA','AGENTE','DESCRIPCIÓN'].map(h => (
-              <span key={h} style={{ fontSize: '8px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.25)' }}>{h}</span>
+              <span key={h} style={{ fontSize: '11px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.3)', fontWeight: 'bold' }}>{h}</span>
             ))}
           </div>
           <div className="panel__body" style={{ padding: 0, overflowY: 'auto', flex: 1 }}>
@@ -245,27 +247,27 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               const color = SEV_COLOR[sev] || '#38bdf8';
               return (
                 <div key={al.id || i} style={{
-                  display: 'grid', gridTemplateColumns: '52px 70px 90px 1fr',
-                  gap: '0 8px', padding: '5px 12px',
+                  display: 'grid', gridTemplateColumns: '65px 85px 110px 1fr',
+                  gap: '0 8px', padding: '10px 12px',
                   borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  alignItems: 'center', fontSize: '10px',
+                  alignItems: 'center', fontSize: '12px',
                   transition: 'background 0.15s'
                 }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   <span style={{
-                    fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
-                    color, padding: '1px 4px', background: `${color}15`,
-                    textAlign: 'center', display: 'inline-block'
+                    fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
+                    color, padding: '2px 6px', background: `${color}15`,
+                    textAlign: 'center', display: 'inline-block', border: `1px solid ${color}30`
                   }}>{sev.toUpperCase().slice(0, 4)}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--mono)', fontSize: '9px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
                     {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--mono)', fontSize: '9px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--mono)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {al.agent_name || al.agent_id || '—'}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '10px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
                     {al.description || `Rule ${al.rule_id}`}
                   </span>
                 </div>

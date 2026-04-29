@@ -14,6 +14,7 @@ import {
   type UserOut,
 } from '../lib/api';
 import { playNotificationSound, playResolvedSound } from './audio';
+import { translations } from './translations';
 
 type KanbanStatus = 'open' | 'in_progress' | 'escalated' | 'resolved';
 
@@ -35,8 +36,8 @@ interface TicketCard {
   created_at: string;
 }
 
-const COLUMNS: { id: KanbanStatus; label: string; color: string }[] = [
-  { id: 'open', label: 'TRIAGE (NEW)', color: '#4D9FFF' },
+const getColumns = (t: any): { id: KanbanStatus; label: string; color: string }[] => [
+  { id: 'open', label: t('workspace_sub').toUpperCase().includes('KANBAN') ? 'TRIAGE (NEW)' : 'TRIAGE', color: '#4D9FFF' },
   { id: 'in_progress', label: 'INVESTIGATION', color: '#FF9F1C' },
   { id: 'escalated', label: 'MITIGATION & RESPONSE', color: '#FF4D4D' },
   { id: 'resolved', label: 'RESOLVED', color: '#4DFFA6' },
@@ -51,7 +52,8 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
 
-export default function AnalystWorkspace() {
+export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }) {
+  const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
   const [tickets, setTickets] = useState<TicketCard[]>([]);
   const [users, setUsers] = useState<UserOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -416,7 +418,7 @@ export default function AnalystWorkspace() {
 
       {/* Board */}
       <div style={{ display: 'flex', gap: '20px', flex: 1, overflowX: 'auto', paddingBottom: '10px' }}>
-        {COLUMNS.map(col => {
+        {getColumns(t).map(col => {
           const colTickets = getTicketsByStatus(col.id);
           const isDragOver = dragOverCol === col.id;
           return (

@@ -14,6 +14,8 @@ import {
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
+import { playNotificationSound } from "./audio";
+import { translations } from "./translations";
 // import IncidentsView from "./IncidentsView";
 import SiemView from "./SiemView";
 import ThreatIntelView from "./ThreatIntelView";
@@ -90,7 +92,17 @@ export default function App() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
   const [notifSeen, setNotifSeen] = useState(false);
-  const [isLocked, setIsLocked] = useState(true); // Start locked
+  const [isLocked, setIsLocked] = useState(true);
+  const [lang, setLang] = useState<"es" | "en">(localStorage.getItem('valhalla_lang') as "es" | "en" || "es");
+  const [lastTicketCount, setLastTicketCount] = useState(0);
+
+  const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
+
+  const toggleLang = () => {
+    const newLang = lang === "es" ? "en" : "es";
+    setLang(newLang);
+    localStorage.setItem('valhalla_lang', newLang);
+  }; // Start locked
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
@@ -178,22 +190,35 @@ export default function App() {
     document.body.setAttribute("data-scan", scanlines ? "on" : "off");
   }, [scheme, scanlines]);
 
-  useEffect(() => {
-    if (user) {
-      // Usar endpoint optimizado para evitar dependencia de Wazuh
+  const fetchStats = () => {
       getOpenTicketsCount()
         .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
         .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
+  }
+
+  useEffect(() => {
+    if (stats?.metrics?.tickets_open > lastTicketCount) {
+      playNotificationSound();
+      setNotifSeen(false);
+    }
+    setLastTicketCount(stats?.metrics?.tickets_open || 0);
+  }, [stats?.metrics?.tickets_open]);
+
+  useEffect(() => {
+    if (user) {
+      fetchStats();
       const iv = setInterval(() => {
-        getOpenTicketsCount()
-          .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
-          .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
+        fetchStats();
       }, 15000);
       return () => clearInterval(iv);
     }
   }, [user]);
 
-  console.log("App render state:", { loading, hasUser: !!user, token });
+  useEffect(() => {
+    if (view !== 'overview') {
+       fetchStats();
+    }
+  }, [view]);
 
   if (loading) {
     return <div style={{ color: 'var(--signal)', padding: '20px' }}>CARGANDO...</div>;
@@ -228,7 +253,8 @@ export default function App() {
             </div>
             
             <p style={{ margin: '10px 0 0 5px', fontSize: '13px', color: 'var(--text-dim)', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'var(--mono)' }}>
-              Plataforma de Monitorización y<br/>Respuesta Táctica con IA
+              {lang === 'es' ? 'Plataforma de Monitorización y' : 'Platform for Monitoring and'}<br/>
+              {lang === 'es' ? 'Respuesta Táctica con IA' : 'Tactical AI Response'}
             </p>
           </div>
 
@@ -248,14 +274,14 @@ export default function App() {
                     <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
                  <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>
-                    Welcome Back, Operador
+                    {t('welcome')}
                  </h2>
               </div>
 
               <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                  
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>Usuario / ID</label>
+                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('user_id')}</label>
                    <input name="u" placeholder="admin" style={{ 
                      background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', 
                      padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px',
@@ -264,7 +290,7 @@ export default function App() {
                  </div>
 
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>Contraseña</label>
+                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('password')}</label>
                    <input name="p" type="password" placeholder="••••••••" style={{ 
                      background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', 
                      padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px',
@@ -273,15 +299,21 @@ export default function App() {
                  </div>
 
                  <div style={{ textAlign: 'right', marginTop: '-8px' }}>
-                   <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>¿Olvidó su contraseña?</span>
+                   <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>{t('forgot_pw')}</span>
                  </div>
 
                  <button type="submit" className="login-btn">
-                    INICIAR SESIÓN
+                    {t('login_btn')}
                  </button>
 
                  <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--sans)' }}>
-                    Credenciales por defecto: <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>admin</span> / <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>Valhalla2026!</span>
+                    {t('default_creds')}: <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>admin</span> / <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>Valhalla2026!</span>
+                 </div>
+
+                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
+                    <button type="button" onClick={toggleLang} style={{ background: 'rgba(60,255,158,0.1)', border: '1px solid rgba(60,255,158,0.3)', color: 'var(--signal)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}>
+                       {lang === 'es' ? 'CAMBIAR A INGLÉS' : 'CHANGE TO SPANISH'}
+                    </button>
                  </div>
               </form>
             </div>
@@ -351,17 +383,17 @@ export default function App() {
           <div className="status-chips">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>ESTADO</span>
-                <span style={{ color: 'var(--signal)', fontWeight: 600 }}>OPERATIVO</span>
+                <span style={{ color: 'var(--text-faint)' }}>{t('status')}</span>
+                <span style={{ color: 'var(--signal)', fontWeight: 600 }}>{t('operative')}</span>
               </div>
               <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>INCIDENTES</span>
+                <span style={{ color: 'var(--text-faint)' }}>{t('incidents')}</span>
                 <span style={{ color: stats?.metrics?.tickets_open > 0 ? 'var(--danger)' : 'var(--signal)', fontWeight: 600 }}>{stats?.metrics?.tickets_open || 0}</span>
               </div>
               <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>ALERTAS 24H</span>
+                <span style={{ color: 'var(--text-faint)' }}>{t('alerts_24h')}</span>
                 <span style={{ color: stats?.metrics?.total_alerts_24h > 0 ? 'var(--danger)' : 'var(--text-dim)', fontWeight: 600 }}>{stats?.metrics?.total_alerts_24h || 0}</span>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal)" strokeWidth="2" style={{ marginLeft: '8px' }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -383,16 +415,19 @@ export default function App() {
             </button>
           </div>
         </header>
-{userMenuOpen && (
+
+        {userMenuOpen && (
           <div style={{ position: 'fixed', top: 50, right: 10, zIndex: 2147483647 }} onClick={() => setUserMenuOpen(false)}>
-            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '140px', zIndex: 2147483647, boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '160px', zIndex: 2147483647, boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: '4px 0' }}>
-              <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--amber)', fontSize: '11px' }}>🔄 SYNC</button>
-              <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>➕ ADD WIDGET</button>
-              <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? '🔓 UNLOCK' : '🔒 LOCK'}</button>
-              <button onClick={() => setTweaksOpen(true)} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>⚙️ TWEAKS</button>
+              <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--amber)', fontSize: '11px' }}>{t('sync')}</button>
+              <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
+              <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
+              <button onClick={() => setTweaksOpen(true)} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{t('tweaks')}</button>
               <div style={{ borderTop: '1px solid var(--line-faint)', margin: '2px 0' }}></div>
-              <button onClick={logout} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--danger)', fontSize: '11px' }}>⏻ EXIT</button>
+              <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}</button>
+              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '2px 0' }}></div>
+              <button onClick={logout} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--danger)', fontSize: '11px' }}>{t('exit')}</button>
               </div>
             </div>
           </div>
@@ -401,36 +436,35 @@ export default function App() {
         {notifMenuOpen && (
           <div style={{ position: 'fixed', top: 50, right: 60, zIndex: 2147483647 }} onClick={() => setNotifMenuOpen(false)}>
             <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '280px', maxHeight: '300px', zIndex: 2147483647, boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>NOTIFICACIONES</div>
+              <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{t('notifications')}</div>
               {stats?.metrics?.tickets_open > 0 ? (
                 <div style={{ padding: '4px 0' }}>
-                  <div style={{ padding: '6px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>{stats.metrics.tickets_open} ticket(s) abierto(s)</div>
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: '#FFD700', fontSize: '11px' }}>{stats.metrics.tickets_open} incidente(s) abierto(s) — Ver en Workspace</button>
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.05)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '10px', fontWeight: 600 }}>→ IR A WORKSPACE</button>
+                  <div style={{ padding: '6px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>{stats.metrics.tickets_open} {t('incidents').toLowerCase()} abierto(s)</div>
+                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: '#FFD700', fontSize: '11px' }}>{stats.metrics.tickets_open} {t('incidents').toLowerCase()} — {t('view_in_workspace')}</button>
+                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.05)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '10px', fontWeight: 600 }}>{t('ir_to_workspace')}</button>
                 </div>
               ) : (
-                <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>Sin notificaciones</div>
+                <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_notifications')}</div>
               )}
             </div>
           </div>
         )}
 
         <aside className="sidenav">
-          <div className="sidenav__label">// MÓDULOS</div>
-          <NavBtn id="overview" label="Overview" sub="panorama general" icon="i-overview" />
-          <NavBtn id="siem" label="SIEM" sub="alertas wazuh" icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
-          {/* <NavBtn id="incidents" label="Incidentes" sub="tickets abiertos" icon="i-incident" badge={stats?.metrics?.tickets_open} color="danger" /> */}
-          <NavBtn id="assets" label="Activos" sub="endpoints · srv" icon="i-assets" badge={stats?.metrics?.unique_agents} />
-          <NavBtn id="cowrie" label="Honeypots" sub="señuelos · cowrie" icon="i-threat" badge="Ssh/Tel" color="amber" />
-          <NavBtn id="threat" label="Threat Intel" sub="misp · virustotal" icon="i-threat" badge="IOCs" />
-          <NavBtn id="threatmap" label="Threat Map" sub="ataques geo" icon="i-map" />
-          <NavBtn id="lsamonitor" label="LSA Monitor" sub="credential guard" icon="i-overview" />
-          <NavBtn id="runbooks" label="Runbooks" sub="procedimientos" icon="i-playbook" />
-          <NavBtn id="workspace" label="Workspace" sub="análisis · kanban" icon="i-workspace" />
-          <NavBtn id="executive-report" label="Exec Report" sub="informe ejecutivo" icon="i-metrics" />
-          <NavBtn id="users" label="Usuarios" sub="gestion de personal" icon="i-overview" />
+          <div className="sidenav__label">{t('modules')}</div>
+          <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
+          <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
+          <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />
+          <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />
+          <NavBtn id="threat" label={t('threat_intel')} sub={t('threat_intel_sub')} icon="i-threat" badge="IOCs" />
+          <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
+          <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />
+          <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
+          <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
+          <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />
+          <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />
           
-          <div className="sidenav__label" style={{ marginTop: 'auto' }}>// session</div>
+          <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
           <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
             ROOT@VALHALLA:~#<br/>
             SID: 0x7A4F · L3<br/>
@@ -439,7 +473,7 @@ export default function App() {
         </aside>
 
         <main className="main" style={{ gridColumn: '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} />}
+          {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
           {view === 'assets' && <AssetsView />}
           {view === 'users' && <UsersView />}
           {/* {view === 'incidents' && <IncidentsView />} */}
@@ -449,7 +483,7 @@ export default function App() {
           {view === 'threatmap' && <ThreatMapView />}
           {view === 'runbooks' && <RunbooksView />}
           {view === 'lsamonitor' && <LSAMonitorView />}
-          {view === 'workspace' && <AnalystWorkspace />}
+          {view === 'workspace' && <AnalystWorkspace lang={lang} />}
           {view === 'executive-report' && <ExecutiveReport />}
           {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report'].includes(view) && (
             <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
