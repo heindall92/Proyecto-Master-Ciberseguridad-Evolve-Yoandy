@@ -18,6 +18,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("analyst");
+  const [rank, setRank] = useState("L1 Analyst");
   const [password, setPassword] = useState("");
 
   const fetchUsers = async () => {
@@ -51,6 +52,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
     setUsername("");
     setEmail("");
     setRole("analyst");
+    setRank("L1 Analyst");
     setPassword("");
     setModalOpen(true);
   };
@@ -60,6 +62,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
     setUsername(user.username);
     setEmail(user.email || "");
     setRole(user.role);
+    setRank(user.rank || "L1 Analyst");
     setPassword(""); // Keep empty so user only types if they want to change
     setModalOpen(true);
   };
@@ -75,7 +78,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
     }
 
     try {
-      const payload: any = { username, role, email };
+      const payload: any = { username, role, rank, email };
       if (password) {
         payload.password = password;
       }
@@ -120,6 +123,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ID_UID</th>
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>OPERADOR</th>
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>EMAIL</th>
+                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>RANGO_OPERATIVO</th>
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>NIVEL_ACCESO</th>
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ALTA_REGISTRO</th>
                 <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ACCIONES</th>
@@ -131,6 +135,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
                   <td style={{ padding: '12px 20px', fontFamily: 'var(--ff-mono)', opacity: 0.6 }}>{u.id.toString().padStart(4, '0')}</td>
                   <td style={{ padding: '12px 20px', fontWeight: 800, color: 'var(--text-bright)' }}>{u.username.toUpperCase()}</td>
                   <td style={{ padding: '12px 20px', opacity: 0.8 }}>{u.email?.toLowerCase() || 'N/A'}</td>
+                  <td style={{ padding: '12px 20px', fontWeight: 'bold', color: 'var(--cyan)' }}>{u.rank?.toUpperCase() || 'L1 ANALYST'}</td>
                   <td style={{ padding: '12px 20px' }}>
                      <span style={{ 
                         padding: '2px 8px', 
@@ -192,6 +197,20 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
                         style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }} 
                         placeholder="neo@valhalla.soc"
                        />
+                    </div>
+
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>RANGO_OPERATIVO (RANK)</label>
+                       <select 
+                        value={rank} 
+                        onChange={e => setRank(e.target.value)} 
+                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
+                       >
+                         <option value="L1 Analyst">L1 ANALYST</option>
+                         <option value="L2 Responder">L2 RESPONDER</option>
+                         <option value="L3 Blue Team">L3 BLUE TEAM</option>
+                         <option value="SOC Manager">SOC MANAGER</option>
+                       </select>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>

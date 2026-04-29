@@ -8,7 +8,10 @@ import {
   getCurrentUser,
   getDashboardSummary,
   getOpenTicketsCount,
+  listTickets,
+  assignTicket,
   UserOut,
+  TicketOut,
 } from "../lib/api";
 
 import AssetsView from "./AssetsView";
@@ -24,6 +27,7 @@ import ThreatMapView from "./ThreatMapView";
 import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
 import ExecutiveReport from "./ExecutiveReport";
+import ProfileView from "./ProfileView";
 
 const darkTheme = createTheme({ palette: { mode: "dark" } });
 
@@ -94,29 +98,60 @@ export default function App() {
   const [isLocked, setIsLocked] = useState(true);
   const [lang, setLang] = useState<"es" | "en">(localStorage.getItem('valhalla_lang') as "es" | "en" || "es");
   const [lastTicketCount, setLastTicketCount] = useState(0);
+  const [intelIp, setIntelIp] = useState<string | undefined>(undefined);
+  const [workspaceData, setWorkspaceData] = useState<any>(null);
+  const [tvMode, setTvMode] = useState(false);
+  const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
+  const [profilePic, setProfilePic] = useState<string | null>(localStorage.getItem('valhalla_profile_pic'));
 
-  const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
+  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
   const toggleLang = () => {
     const newLang = lang === "es" ? "en" : "es";
     setLang(newLang);
     localStorage.setItem('valhalla_lang', newLang);
-  }; // Start locked
+  };
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
-  const [prevTicketsOpen, setPrevTicketsOpen] = useState<number | null>(null);
+  const updateProfilePic = (newPic: string | null) => {
+    setProfilePic(newPic);
+    if (newPic) {
+      try {
+        localStorage.setItem('valhalla_profile_pic', newPic);
+      } catch (e) {
+        console.warn("Local storage limit reached. Image might not persist.");
+      }
+    } else {
+      localStorage.removeItem('valhalla_profile_pic');
+    }
+  };
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
-    if (prevTicketsOpen !== null && ticketsNow > prevTicketsOpen && !notifSeen) {
+    if (ticketsNow > lastTicketCount) {
       playNotificationSound();
+      setNotifSeen(false);
     }
-    if (prevTicketsOpen !== null && ticketsNow > 0 && prevTicketsOpen === 0 && !notifSeen) {
-      playNotificationSound();
-    }
-    setPrevTicketsOpen(ticketsNow);
-  }, [stats?.metrics?.tickets_open, notifSeen]);
+    setLastTicketCount(ticketsNow);
+  }, [stats?.metrics?.tickets_open]);
+
+  useEffect(() => {
+    const handleNavigateIntel = (e: any) => {
+      setIntelIp(e.detail.ip);
+      setView("threat");
+    };
+    const handleNavigateWorkspace = (e: any) => {
+      setWorkspaceData(e.detail);
+      setView("workspace");
+    };
+    window.addEventListener('navigate-to-intel', handleNavigateIntel);
+    window.addEventListener('navigate-to-workspace', handleNavigateWorkspace);
+    return () => {
+      window.removeEventListener('navigate-to-intel', handleNavigateIntel);
+      window.removeEventListener('navigate-to-workspace', handleNavigateWorkspace);
+    };
+  }, []);
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +165,7 @@ export default function App() {
         setIsOffline(true);
         alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
         setToken("offline-mode-token");
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true });
+        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
         setLoading(false);
       } else {
         alert("ERROR: Credenciales inválidas.");
@@ -146,17 +181,13 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    
-    // First check: if no token, show login immediately
     if (!token) {
       setLoading(false);
       return;
     }
-    
-    // Token exists - validate it
     if (token === "offline-mode-token") {
         setIsOffline(true);
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true });
+        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
         setLoading(false);
         return;
     }
@@ -191,33 +222,36 @@ export default function App() {
 
   const fetchStats = () => {
       getOpenTicketsCount()
-        .then((r) => { setStats({metrics: {tickets_open: r.open}}); })
-        .catch((e) => { console.error('[Dashboard] Error:', e); setStats({metrics: {tickets_open: 0}}); });
-  }
+        .then((r) => { 
+          setStats((prev: any) => ({...prev, metrics: {...(prev?.metrics || {}), tickets_open: r.open}})); 
+        })
+        .catch((e) => { console.error('[Dashboard] Error:', e); });
+      
+      listTickets('open', undefined, 5)
+        .then(setRecentOpenTickets)
+        .catch(console.error);
 
-  useEffect(() => {
-    if (stats?.metrics?.tickets_open > lastTicketCount) {
-      playNotificationSound();
-      setNotifSeen(false);
-    }
-    setLastTicketCount(stats?.metrics?.tickets_open || 0);
-  }, [stats?.metrics?.tickets_open]);
+      getDashboardSummary().then(s => setStats(s)).catch(console.error);
+  }
 
   useEffect(() => {
     if (user) {
       fetchStats();
-      const iv = setInterval(() => {
-        fetchStats();
-      }, 15000);
+      const iv = setInterval(fetchStats, 15000);
       return () => clearInterval(iv);
     }
   }, [user]);
 
-  useEffect(() => {
-    if (view !== 'overview') {
-       fetchStats();
+  const handleAssignToMe = async (ticketId: number) => {
+    if (!user) return;
+    try {
+      await assignTicket(ticketId, user.id);
+      fetchStats();
+      playResolvedSound();
+    } catch (err) {
+      console.error("Error assigning ticket", err);
     }
-  }, [view]);
+  };
 
   if (loading) {
     return <div style={{ color: 'var(--signal)', padding: '20px' }}>CARGANDO...</div>;
@@ -230,16 +264,10 @@ export default function App() {
           background: 'url("./bg-login.png") center/cover no-repeat, var(--bg-void)'
       }}>
         <SvgSymbols />
-
         <div style={{ display: 'flex', height: '100%' }}>
-          {/* Left Column - Branding */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '60px' }}>
-            
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-              <div style={{ 
-                width: '64px', height: '64px', background: 'var(--signal)', borderRadius: '12px',
-                display: 'grid', placeItems: 'center', boxShadow: '0 0 20px var(--signal-glow)'
-              }}>
+              <div style={{ width: '64px', height: '64px', background: 'var(--signal)', borderRadius: '12px', display: 'grid', placeItems: 'center', boxShadow: '0 0 20px var(--signal-glow)' }}>
                  <AlexanaLetter char="V" style={{ width: '40px', height: '40px', color: '#000' }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -250,65 +278,33 @@ export default function App() {
                  </div>
               </div>
             </div>
-            
             <p style={{ margin: '10px 0 0 5px', fontSize: '13px', color: 'var(--text-dim)', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'var(--mono)' }}>
               {lang === 'es' ? 'Plataforma de Monitorización y' : 'Platform for Monitoring and'}<br/>
               {lang === 'es' ? 'Respuesta Táctica con IA' : 'Tactical AI Response'}
             </p>
           </div>
-
-          {/* Right Column - Login Panel */}
           <div style={{ width: '450px', display: 'flex', alignItems: 'center', marginRight: '200px' }}>
             <div className="cyber-panel-wrap">
               <div className="cyber-panel">
-              
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-                 <div style={{ 
-                   width: '72px', height: '72px', borderRadius: '18px', 
-                   border: '1px solid rgba(60,255,158,0.4)', 
-                   display: 'grid', placeItems: 'center', 
-                   background: 'linear-gradient(145deg, rgba(60,255,158,0.15), rgba(0,0,0,0.4))', 
-                   boxShadow: '0 8px 24px rgba(0,0,0,0.4), inset 0 0 12px rgba(60,255,158,0.1)' 
-                 }}>
+                 <div style={{ width: '72px', height: '72px', borderRadius: '18px', border: '1px solid rgba(60,255,158,0.4)', display: 'grid', placeItems: 'center', background: 'linear-gradient(145deg, rgba(60,255,158,0.15), rgba(0,0,0,0.4))', boxShadow: '0 8px 24px rgba(0,0,0,0.4), inset 0 0 12px rgba(60,255,158,0.1)' }}>
                     <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
-                 <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>
-                    {t('welcome')}
-                 </h2>
+                 <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>{t('welcome')}</h2>
               </div>
-
               <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                 
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                    <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('user_id')}</label>
-                   <input name="u" placeholder="admin" style={{ 
-                     background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', 
-                     padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px',
-                     outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
-                   }} onFocus={e => { e.target.style.borderColor = 'var(--signal)'; e.target.style.background = 'rgba(0,0,0,0.5)'; }} onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.15)'; e.target.style.background = 'rgba(0,0,0,0.3)'; }} autoFocus />
+                   <input name="u" placeholder="admin" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} autoFocus />
                  </div>
-
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                    <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('password')}</label>
-                   <input name="p" type="password" placeholder="••••••••" style={{ 
-                     background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', 
-                     padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px',
-                     outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
-                   }} onFocus={e => { e.target.style.borderColor = 'var(--signal)'; e.target.style.background = 'rgba(0,0,0,0.5)'; }} onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.15)'; e.target.style.background = 'rgba(0,0,0,0.3)'; }} />
+                   <input name="p" type="password" placeholder="••••••••" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} />
                  </div>
-
-                 <div style={{ textAlign: 'right', marginTop: '-8px' }}>
-                   <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>{t('forgot_pw')}</span>
-                 </div>
-
-                 <button type="submit" className="login-btn">
-                    {t('login_btn')}
-                 </button>
-
+                 <button type="submit" className="login-btn">{t('login_btn')}</button>
                  <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--sans)' }}>
                     {t('default_creds')}: <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>admin</span> / <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>Valhalla2026!</span>
                  </div>
-
                  <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
                     <button type="button" onClick={toggleLang} style={{ background: 'rgba(60,255,158,0.1)', border: '1px solid rgba(60,255,158,0.3)', color: 'var(--signal)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}>
                        {lang === 'es' ? 'CAMBIAR A INGLÉS' : 'CHANGE TO SPANISH'}
@@ -334,37 +330,20 @@ export default function App() {
     </button>
   );
 
+  const incidentCount = stats?.metrics?.tickets_open || 0;
+  const incidentText = incidentCount === 1 ? t('incidents_open_singular') : t('incidents_open_plural');
+  const incidentHeaderLabel = incidentCount === 1 ? (lang === 'es' ? 'INCIDENTE' : 'INCIDENT') : t('incidents');
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <SvgSymbols />
-      <div className="app">
-        <style>
-          {`
-            @media print {
-              .topbar, .sidenav, .status-chips, .tweaks { display: none !important; }
-              .app { display: block !important; height: auto !important; background: none !important; }
-              .main { display: block !important; grid-column: 1 / -1 !important; overflow: visible !important; height: auto !important; }
-              body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .panel { background: white !important; border: 1px solid #ccc !important; box-shadow: none !important; color: black !important; break-inside: avoid; }
-              .panel__title { color: black !important; text-shadow: none !important; }
-              .panel__head { background: #f0f0f0 !important; border-bottom: 1px solid #ccc !important; }
-              * { color: black !important; }
-            }
-          `}
-        </style>
+      <div className={`app ${tvMode ? 'tv-mode' : ''}`}>
         
+        {!tvMode && (
         <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
           <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div className="topbar__logo" style={{ 
-               width: '32px', height: '32px', 
-               background: 'rgba(60,255,158,0.05)', 
-               border: '1px solid var(--signal)', 
-               display: 'flex', alignItems: 'center', justifyContent: 'center',
-               transform: 'rotate(45deg)',
-               boxShadow: '0 0 10px var(--signal-glow)',
-               marginRight: '8px'
-            }}>
+            <div className="topbar__logo" style={{ width: '32px', height: '32px', background: 'rgba(60,255,158,0.05)', border: '1px solid var(--signal)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'rotate(45deg)', boxShadow: '0 0 10px var(--signal-glow)', marginRight: '8px' }}>
                <div style={{ transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <AlexanaLetter char="V" style={{ width: '22px', height: '22px', color: 'var(--signal)' }} />
                </div>
@@ -387,8 +366,8 @@ export default function App() {
               </div>
               <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{t('incidents')}</span>
-                <span style={{ color: stats?.metrics?.tickets_open > 0 ? 'var(--danger)' : 'var(--signal)', fontWeight: 600 }}>{stats?.metrics?.tickets_open || 0}</span>
+                <span style={{ color: 'var(--text-faint)' }}>{incidentHeaderLabel}</span>
+                <span style={{ color: incidentCount > 0 ? 'var(--danger)' : 'var(--signal)', fontWeight: 600 }}>{incidentCount}</span>
               </div>
               <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
@@ -397,36 +376,50 @@ export default function App() {
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal)" strokeWidth="2" style={{ marginLeft: '8px' }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(false); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0 8px', cursor: 'pointer', background: 'none', border: 'none', marginRight: '8px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stats?.metrics?.tickets_open > 0 && !notifSeen ? "#FFD700" : "var(--signal)"} strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              {stats?.metrics?.tickets_open > 0 && !notifSeen && <span style={{ position: 'absolute', top: '-2px', right: '2px', width: '6px', height: '6px', background: 'var(--danger)', borderRadius: '50%', animation: 'blink 1s infinite' }}></span>}
+            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0 8px', cursor: 'pointer', background: 'none', border: 'none', marginRight: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={incidentCount > 0 && !notifSeen ? "#FFD700" : "var(--signal)"} strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {incidentCount > 0 && !notifSeen && <span style={{ position: 'absolute', top: '-2px', right: '2px', width: '6px', height: '6px', background: 'var(--danger)', borderRadius: '50%', animation: 'blink 1s infinite' }}></span>}
             </button>
             <div style={{ width: '1px', height: '32px', background: 'var(--signal-dim)', margin: '0 4px' }}></div>
             <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'none', border: 'none', padding: '4px 8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{user.username.toUpperCase()}</span>
-                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>ANALISTA</span>
+                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--signal-dim)' }}>
-                <span style={{ fontSize: '14px' }}>👤</span>
+              <div style={{ 
+                width: '28px', height: '28px', borderRadius: '50%', 
+                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                border: '1px solid var(--signal-dim)',
+                overflow: 'hidden',
+                position: 'relative'
+              }}>
+                {profilePic ? (
+                  <img src={profilePic} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: '14px' }}>👤</span>
+                )}
               </div>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
             </button>
           </div>
         </header>
+        )}
 
         {userMenuOpen && (
           <div style={{ position: 'fixed', top: 50, right: 10, zIndex: 2147483647 }} onClick={() => setUserMenuOpen(false)}>
-            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '160px', zIndex: 2147483647, boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '4px 0' }}>
-              <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--amber)', fontSize: '11px' }}>{t('sync')}</button>
-              <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
-              <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
-              <button onClick={() => setTweaksOpen(true)} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--text)', fontSize: '11px' }}>{t('tweaks')}</button>
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '2px 0' }}></div>
-              <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}</button>
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '2px 0' }}></div>
-              <button onClick={logout} style={{ width: '100%', padding: '6px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: 'var(--danger)', fontSize: '11px' }}>{t('exit')}</button>
+            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '220px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '6px 0' }}>
+              <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{t('sync')}</button>
+              <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
+              <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
+              <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('tweaks')}</button>
+              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
+              <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cyan)', fontSize: '11px', fontWeight: 'bold' }}>{t('profile_settings')}</button>
+              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
+              <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}: {lang.toUpperCase()}</button>
+              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
+              <button onClick={logout} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '11px', fontWeight: 'bold' }}>{t('exit')}</button>
               </div>
             </div>
           </div>
@@ -434,21 +427,50 @@ export default function App() {
 
         {notifMenuOpen && (
           <div style={{ position: 'fixed', top: 50, right: 60, zIndex: 2147483647 }} onClick={() => setNotifMenuOpen(false)}>
-            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '280px', maxHeight: '300px', zIndex: 2147483647, boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{t('notifications')}</div>
-              {stats?.metrics?.tickets_open > 0 ? (
-                <div style={{ padding: '4px 0' }}>
-                  <div style={{ padding: '6px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>{stats.metrics.tickets_open} {t('incidents').toLowerCase()} abierto(s)</div>
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'none', border: 'none', display: 'block', textAlign: 'left', color: '#FFD700', fontSize: '11px' }}>{stats.metrics.tickets_open} {t('incidents').toLowerCase()} — {t('view_in_workspace')}</button>
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); setNotifSeen(true); }} style={{ width: '100%', padding: '8px 10px', cursor: 'pointer', background: 'rgba(60,255,158,0.05)', border: 'none', display: 'block', textAlign: 'left', color: 'var(--signal)', fontSize: '10px', fontWeight: 600 }}>{t('ir_to_workspace')}</button>
-                </div>
-              ) : (
-                <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_notifications')}</div>
-              )}
+            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '320px', maxHeight: '450px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t('notifications')}</span>
+                <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
+              </div>
+              <div style={{ padding: '4px 0' }}>
+                {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => (
+                  <div key={tk.id} style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '9px', color: tk.severity === 'critical' ? 'var(--danger)' : tk.severity === 'high' ? 'var(--amber)' : 'var(--cyan)', fontWeight: 'bold' }}>
+                        {tk.severity.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>ID: {tk.id}</span>
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} 
+                        style={{ padding: '4px 8px', background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        {t('ir_to_workspace')}
+                      </button>
+                      <button 
+                        onClick={() => handleAssignToMe(tk.id)}
+                        style={{ padding: '4px 8px', background: 'rgba(51,204,255,0.1)', border: '1px solid rgba(51,204,255,0.3)', color: 'var(--cyan)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        {t('assign_to_me')}
+                      </button>
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_recent_incidents')}</div>
+                )}
+                {incidentCount > 0 && (
+                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'var(--amber)', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    {lang === 'es' ? 'VER TODOS LOS TICKETS' : 'VIEW ALL TICKETS'} ({incidentCount})
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
 
+        {!tvMode && (
         <aside className="sidenav">
           <div className="sidenav__label">{t('modules')}</div>
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
@@ -470,21 +492,22 @@ export default function App() {
             {t('operator')}: {user.username.toUpperCase()}
           </div>
         </aside>
+        )}
 
-        <main className="main" style={{ gridColumn: '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
           {view === 'assets' && <AssetsView lang={lang} />}
           {view === 'users' && <UsersView lang={lang} />}
-          {/* {view === 'incidents' && <IncidentsView lang={lang} />} */}
           {view === 'siem' && <SiemView lang={lang} />}
-          {view === 'threat' && <ThreatIntelView lang={lang} />}
+          {view === 'threat' && <ThreatIntelView lang={lang} initialIp={intelIp} />}
           {view === 'cowrie' && <CowrieView lang={lang} />}
           {view === 'threatmap' && <ThreatMapView lang={lang} />}
           {view === 'runbooks' && <RunbooksView lang={lang} />}
           {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
-          {view === 'workspace' && <AnalystWorkspace lang={lang} />}
+          {view === 'workspace' && <AnalystWorkspace lang={lang} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
           {view === 'executive-report' && <ExecutiveReport lang={lang} />}
-          {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report'].includes(view) && (
+          {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
+          {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
             <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <div style={{ color: 'var(--signal)', letterSpacing: '2px' }}>CONSTRUCCIÓN EN PROCESO // MODULE: {view.toUpperCase()}</div>
             </div>
@@ -506,6 +529,7 @@ export default function App() {
                  ))}
               </div>
               <button onClick={() => setScanlines(!scanlines)} style={{ padding: '8px', background: 'none', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: '10px' }}>SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
+              <button onClick={() => setTvMode(!tvMode)} style={{ padding: '8px', background: tvMode ? 'var(--signal)' : 'none', border: '1px solid var(--line)', color: tvMode ? '#000' : 'var(--text)', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>{t('tv_mode')}</button>
               <button onClick={() => setTweaksOpen(false)} style={{ color: 'var(--danger)', padding: '8px', background: 'none', border: 'none', cursor: 'pointer' }}>CERRAR</button>
            </div>
         </div>

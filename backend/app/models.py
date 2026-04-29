@@ -18,6 +18,7 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(String(32), default="analista", nullable=False)
+    rank: Mapped[str] = mapped_column(String(64), default="L1 Analyst", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     assigned_tickets: Mapped[list["Ticket"]] = relationship(
@@ -43,10 +44,12 @@ class Runbook(Base):
     category: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     
-    # Pasos del runbook en JSON
+    # Pasos del runbook en JSON (soporta texto y comandos opcionales)
+    identification_steps: Mapped[list] = mapped_column(JSON, default=list) # Fase de Verificación
     containment_steps: Mapped[list] = mapped_column(JSON, default=list)
     eradication_steps: Mapped[list] = mapped_column(JSON, default=list)
     recovery_steps: Mapped[list] = mapped_column(JSON, default=list)
+    post_mortem_steps: Mapped[list] = mapped_column(JSON, default=list) # Lecciones aprendidas
     
     # Metadatos
     severity_applicable: Mapped[str] = mapped_column(String(32), default="all")
@@ -136,6 +139,8 @@ class Ticket(Base):
     wazuh_alert_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     affected_asset: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    affected_user: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mitre_technique: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # AI Analysis
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -152,6 +157,7 @@ class Ticket(Base):
 
     assignee: Mapped["User | None"] = relationship("User", back_populates="assigned_tickets", foreign_keys=[assigned_to_id])
     reporter: Mapped["User | None"] = relationship("User", back_populates="reported_tickets", foreign_keys=[reporter_id])
+    evidence: Mapped[list["Evidence"]] = relationship("Evidence", back_populates="ticket", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_tickets_status", status),
@@ -186,4 +192,19 @@ class IOCEntry(Base):
         Index("idx_ioc_status", status),
         Index("idx_ioc_created_at", created_at.desc()),
     )
+
+
+class Evidence(Base):
+    """File attachments for tickets (logs, screenshots, etc.)"""
+    __tablename__ = "evidence"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="evidence")
 

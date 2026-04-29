@@ -27,6 +27,15 @@ SYSTEM_PROMPT = (
     "IMPORTANTE: No uses acentos ni caracteres especiales, solo ASCII plano."
 )
 
+SYSTEM_PROMPT_REPORT = (
+    "Eres un CISO (Chief Information Security Officer) redactando un reporte ejecutivo mensual para la directiva. "
+    "Tu objetivo es resumir el estado de seguridad de la infraestructura basandote en las metricas proporcionadas. "
+    "Debes sonar profesional, directo y enfocado en el riesgo de negocio. "
+    "Proporciona un resumen de 3-4 parrafos que cubra: 1. Estado general, 2. Amenazas principales detectadas, "
+    "3. Eficacia de la monitorizacion y 4. Recomendacion estrategica. "
+    "Responde UNICAMENTE con el texto del resumen en espanol, sin formato markdown complejo, solo texto plano ASCII."
+)
+
 
 def _fallback(alert_id: int) -> dict[str, Any]:
     return {
@@ -166,4 +175,30 @@ async def analyze_alert(alert_id: int, context: dict[str, Any]) -> OllamaResult:
     except Exception as e:
         logger.warning("Ollama analyze failed: %s", e, exc_info=True)
         return OllamaResult(ok=False, data=_fallback(alert_id))
+
+
+async def generate_executive_summary(metrics_context: dict[str, Any]) -> str:
+    """Generates a high-level executive report summary using Ollama."""
+    chat_payload = {
+        "model": settings.ollama_model,
+        "stream": False,
+        "options": {"temperature": 0.5},
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_REPORT},
+            {
+                "role": "user",
+                "content": f"Basado en estas metricas de seguridad del SOC:\n{json.dumps(metrics_context, indent=2)}\nRedacta el resumen ejecutivo."
+            },
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(f"{settings.ollama_base_url.rstrip('/')}/api/chat", json=chat_payload)
+            r.raise_for_status()
+            body = r.json()
+            return body.get("message", {}).get("content", "Error generando resumen ejecutivo.").strip()
+    except Exception as e:
+        logger.warning("Ollama report generation failed: %s", e)
+        return "El sistema de IA no esta disponible para generar el resumen en este momento. Se recomienda revisar las metricas tecnicas adjuntas."
 

@@ -1,14 +1,21 @@
 import { useState, useEffect } from "react";
 import { listRunbooks, createRunbook, updateRunbook, deleteRunbook } from "../lib/api";
 
+interface RunbookStep {
+  text: string;
+  command?: string;
+}
+
 interface Runbook {
   id: number;
   name: string;
   category: string;
   description: string;
-  containment_steps: string[];
-  eradication_steps: string[];
-  recovery_steps: string[];
+  identification_steps: RunbookStep[];
+  containment_steps: RunbookStep[];
+  eradication_steps: RunbookStep[];
+  recovery_steps: RunbookStep[];
+  post_mortem_steps: RunbookStep[];
   severity_applicable: string;
   is_active: boolean;
 }
@@ -70,13 +77,30 @@ export default function RunbooksView() {
 
   const newRunbook = () => ({
     id: 0,
-    name: "",
-    category: "intrusion",
-    description: "",
-    containment_steps: [""],
-    eradication_steps: [""],
-    recovery_steps: [""],
-    severity_applicable: "all",
+    name: "NUEVO PROCEDIMIENTO OPERATIVO",
+    category: "malware",
+    description: "Procedimiento estándar basado en NIST 800-61 r2",
+    identification_steps: [
+      { text: "Verificar alerta en Wazuh SIEM y cruzar con logs de Sysmon", command: "Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational'; Id=1}" },
+      { text: "Validar hash del archivo malicioso en VirusTotal", command: "Get-FileHash -Path C:\\path\\to\\malware.exe -Algorithm SHA256" }
+    ],
+    containment_steps: [
+      { text: "Aislar host de la red (VLAN de Cuarentena)", command: "Set-NetAdapter -Name 'Ethernet' -VlanID 999" },
+      { text: "Bloquear IP de C2 en el Firewall perimetral", command: "New-NetFirewallRule -DisplayName 'Block C2' -Direction Outbound -RemoteAddress '{{ip}}' -Action Block" }
+    ],
+    eradication_steps: [
+      { text: "Preservar evidencia: Volcado de memoria RAM", command: "procdump.exe -ma lsass.exe memory_dump.dmp" },
+      { text: "Eliminar persistencia (Tareas programadas / Registro)", command: "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'Malware'" }
+    ],
+    recovery_steps: [
+      { text: "Restaurar sistema desde backup verificado", command: "" },
+      { text: "Forzar cambio de contraseñas de cuentas comprometidas", command: "Update-LocalUser -Name '{{user}}' -Password $newPass" }
+    ],
+    post_mortem_steps: [
+      { text: "Documentar cronología del incidente y vectores de entrada", command: "" },
+      { text: "Identificar brechas en controles preventivos y actualizar reglas EDR", command: "" }
+    ],
+    severity_applicable: "high",
     is_active: true,
   });
 
@@ -241,19 +265,22 @@ function RunbookDetail({
     setForm(f => ({ ...f, [field]: value }));
   };
 
-  const updateStep = (section: string, index: number, value: string) => {
-    const steps = [...form[section as keyof Runbook] as string[]];
-    steps[index] = value;
+  const updateStep = (section: string, index: number, value: Partial<RunbookStep>) => {
+    const sectionKey = section as keyof Runbook;
+    const steps = [...(form[sectionKey] as RunbookStep[] || [])];
+    steps[index] = { ...steps[index], ...value };
     setForm(f => ({ ...f, [section]: steps }));
   };
 
   const addStep = (section: string) => {
-    const steps = [...form[section as keyof Runbook] as string[], ""];
+    const sectionKey = section as keyof Runbook;
+    const steps = [...(form[sectionKey] as RunbookStep[] || []), { text: "", command: "" }];
     setForm(f => ({ ...f, [section]: steps }));
   };
 
   const removeStep = (section: string, index: number) => {
-    const steps = (form[section as keyof Runbook] as string[]).filter((_, i) => i !== index);
+    const sectionKey = section as keyof Runbook;
+    const steps = (form[sectionKey] as RunbookStep[] || []).filter((_, i) => i !== index);
     setForm(f => ({ ...f, [section]: steps }));
   };
 
@@ -342,10 +369,21 @@ function RunbookDetail({
           )}
         </div>
 
+        {/* Identification */}
+        <StepsSection 
+          title="Identification & Analysis (Identificación)" 
+          steps={form.identification_steps || []}
+          editing={editing}
+          onUpdate={(i, v) => updateStep("identification_steps", i, v)}
+          onAdd={() => addStep("identification_steps")}
+          onRemove={(i) => removeStep("identification_steps", i)}
+          icon="🔍"
+        />
+
         {/* Containment */}
         <StepsSection 
           title="Containment (Contención)" 
-          steps={form.containment_steps}
+          steps={form.containment_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("containment_steps", i, v)}
           onAdd={() => addStep("containment_steps")}
@@ -356,7 +394,7 @@ function RunbookDetail({
         {/* Eradication */}
         <StepsSection 
           title="Eradication (Erradicación)" 
-          steps={form.eradication_steps}
+          steps={form.eradication_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("eradication_steps", i, v)}
           onAdd={() => addStep("eradication_steps")}
@@ -367,12 +405,23 @@ function RunbookDetail({
         {/* Recovery */}
         <StepsSection 
           title="Recovery (Recuperación)" 
-          steps={form.recovery_steps}
+          steps={form.recovery_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("recovery_steps", i, v)}
           onAdd={() => addStep("recovery_steps")}
           onRemove={(i) => removeStep("recovery_steps", i)}
           icon="♻️"
+        />
+
+        {/* Post Mortem */}
+        <StepsSection 
+          title="Lessons Learned (Lecciones Aprendidas)" 
+          steps={form.post_mortem_steps || []}
+          editing={editing}
+          onUpdate={(i, v) => updateStep("post_mortem_steps", i, v)}
+          onAdd={() => addStep("post_mortem_steps")}
+          onRemove={(i) => removeStep("post_mortem_steps", i)}
+          icon="📝"
         />
       </div>
     </div>
@@ -389,15 +438,15 @@ function StepsSection({
   icon 
 }: {
   title: string;
-  steps: string[];
+  steps: RunbookStep[];
   editing: boolean;
-  onUpdate: (i: number, v: string) => void;
+  onUpdate: (i: number, v: Partial<RunbookStep>) => void;
   onAdd: () => void;
   onRemove: (i: number) => void;
   icon: string;
 }) {
   return (
-    <div>
+    <div style={{ marginBottom: '15px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '13px' }}>
           {icon} {title}
@@ -406,39 +455,62 @@ function StepsSection({
           <button onClick={onAdd} style={addBtnStyle}>+ Añadir paso</button>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {steps.map((step, i) => (
-          <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <span style={{ 
-              width: '24px', 
-              height: '24px', 
-              borderRadius: '50%', 
-              background: 'var(--line)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '11px',
-              color: 'var(--text-dim)'
-            }}>{i + 1}</span>
-            {editing ? (
-              <>
-                <input 
-                  value={step} 
-                  onChange={e => onUpdate(i, e.target.value)}
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button onClick={() => onRemove(i)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
-              </>
-            ) : (
-              <div style={{ flex: 1, color: 'var(--text)', fontSize: '12px' }}>
-                {step || "(vacío)"}
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600 }}>#{i + 1}</span>
+              {editing ? (
+                <>
+                  <input 
+                    value={step.text} 
+                    onChange={e => onUpdate(i, { text: e.target.value })}
+                    placeholder="Descripción de la acción..."
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button onClick={() => onRemove(i)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                </>
+              ) : (
+                <div style={{ flex: 1, color: 'var(--text)', fontSize: '12px', fontWeight: 500 }}>
+                  {step.text || "(vacío)"}
+                </div>
+              )}
+            </div>
+            
+            {/* Command Area */}
+            {(editing || step.command) && (
+              <div style={{ paddingLeft: '24px' }}>
+                {editing ? (
+                  <input 
+                    value={step.command || ""}
+                    onChange={e => onUpdate(i, { command: e.target.value })}
+                    placeholder="Comando opcional (ej: rm -rf /tmp/malware)..."
+                    style={{ ...inputStyle, fontSize: '11px', fontFamily: 'var(--mono)', background: 'rgba(0,255,136,0.05)', borderColor: 'rgba(0,255,136,0.2)' }}
+                  />
+                ) : (
+                  <div style={{ 
+                    padding: '8px 12px', 
+                    background: '#000', 
+                    border: '1px solid rgba(0,255,136,0.2)', 
+                    borderRadius: '4px', 
+                    fontFamily: 'var(--mono)', 
+                    fontSize: '11px', 
+                    color: 'var(--signal)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <code>{step.command}</code>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '9px', cursor: 'pointer' }} onClick={() => navigator.clipboard.writeText(step.command || "")}>COPY</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         ))}
         {steps.length === 0 && (
-          <div style={{ color: 'var(--text-faint)', fontSize: '11px', padding: '10px' }}>
-            No hay pasos definidos
+          <div style={{ color: 'var(--text-faint)', fontSize: '11px', padding: '10px', textAlign: 'center' }}>
+            No hay pasos definidos en esta fase
           </div>
         )}
       </div>

@@ -29,9 +29,12 @@ export type AnalysisOut = {
 export type UserOut = {
   id: number;
   username: string;
-  email?: string | null;
+  email: string;
+  full_name?: string;
+  is_active: boolean;
+  is_superuser: boolean;
   role: string;
-  created_at: string;
+  rank: string;
 };
 
 export type AgentOut = {
@@ -40,6 +43,8 @@ export type AgentOut = {
   ip: string | null;
   os: string | null;
   status: string;
+  version?: string;
+  last_keep_alive?: string;
   type: string;
   agent: string;
   group: any;
@@ -101,12 +106,33 @@ export function analyzeAlert(alertId: number) {
 }
 
 // Dashboard
-export function getDashboardSummary() {
-  return http<any>("/api/dashboard");
+export function getDashboardSummary(hours = 24) {
+  return http<any>(`/api/dashboard?hours=${hours}`);
 }
 
 export function getOpenTicketsCount() {
   return http<{open: number}>("/api/tickets/count/open");
+}
+
+export async function uploadEvidence(ticketId: number, file: File): Promise<EvidenceOut> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const token = localStorage.getItem("token");
+  const resp = await fetch(`${API_BASE}/api/tickets/${ticketId}/evidence`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`
+    },
+    body: formData
+  });
+  if (!resp.ok) throw new Error("Failed to upload evidence");
+  return resp.json();
+}
+
+export function getEvidenceDownloadUrl(evidenceId: number): string {
+  const token = localStorage.getItem("token");
+  return `${API_BASE}/api/evidence/${evidenceId}/download?token=${token}`;
 }
 
 export function syncWazuhAlerts(hours = 1) {
@@ -186,6 +212,10 @@ export function getAgentPorts(agentId: string) {
 export function getAgentVulnerabilities(agentId: string) {
   return http<any[]>(`/api/agents/${agentId}/vulnerabilities`);
 }
+
+export function scanAgent(agentId: string) {
+  return http<any>(`/api/agents/${agentId}/scan`, { method: "POST" });
+}
 // Tickets (Incident Management)
 export type TicketOut = {
   id: number;
@@ -196,6 +226,8 @@ export type TicketOut = {
   category: string | null;
   source_ip: string | null;
   affected_asset: string | null;
+  affected_user: string | null;
+  mitre_technique: string | null;
   wazuh_alert_id: string | null;
   assigned_to_id: number | null;
   reporter_id: number | null;
@@ -208,7 +240,17 @@ export type TicketOut = {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  evidence: EvidenceOut[];
 };
+
+export interface EvidenceOut {
+  id: number;
+  ticket_id: number;
+  filename: string;
+  file_size: number;
+  content_type: string | null;
+  created_at: string;
+}
 
 export function listTickets(status?: string, severity?: string, limit = 50, offset = 0) {
   let url = `/api/tickets?limit=${limit}&offset=${offset}`;
@@ -264,6 +306,10 @@ export function getCowrieStats(hours = 24) {
   return http<any>(`/api/wazuh/cowrie-stats?hours=${hours}`);
 }
 
+export function getCowrieSessions(limit = 100, hours = 24) {
+  return http<any[]>(`/api/wazuh/cowrie-sessions?limit=${limit}&hours=${hours}`);
+}
+
 export function getAlertVolume(hours = 24, interval = "1h") {
   return http<any[]>(`/api/wazuh/alert-volume?hours=${hours}&interval=${interval}`);
 }
@@ -274,6 +320,10 @@ export function getRecentAlerts(limit = 100, hours = 24) {
 
 export function getAlertLevels(hours = 24) {
   return http<any>(`/api/wazuh/alert-levels?hours=${hours}`);
+}
+
+export function getWazuhServices() {
+  return http<any>("/api/wazuh/services");
 }
 
 // VirusTotal

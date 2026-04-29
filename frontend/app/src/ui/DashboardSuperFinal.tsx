@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
-import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, AlertOut, AgentOut } from "../lib/api";
+import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, getMitreCoverage, getWazuhServices, AlertOut, AgentOut } from "../lib/api";
 import { translations } from "./translations";
 
 function useContainerWidth() {
@@ -19,7 +19,7 @@ function useContainerWidth() {
   return { ref, width };
 }
 
-function AreaChart({ points, color, gradientId }: { points: number[], color: string, gradientId: string }) {
+function AreaChart({ points, color, gradientId, labels }: { points: number[], color: string, gradientId: string, labels?: string[] }) {
   if (!points || points.length < 2) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
   );
@@ -32,19 +32,28 @@ function AreaChart({ points, color, gradientId }: { points: number[], color: str
   const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradientId})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      {pts.slice(-1).map(p => (
-        <circle key="last" cx={p.x} cy={p.y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-      ))}
-    </svg>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', flex: 1, display: 'block' }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${gradientId})`} />
+        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        {pts.slice(-1).map(p => (
+          <circle key="last" cx={p.x} cy={p.y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+        ))}
+      </svg>
+      {labels && labels.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 2px 0' }}>
+          {labels.map((l, i) => (
+            <span key={i} style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{l}</span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -67,7 +76,7 @@ function SevBar({ label, count, total, color }: { label: string, count: number, 
   );
 }
 
-const DEFAULT_ACTIVE = ["kpi-1", "kpi-2", "kpi-3", "kpi-4", "siem-flow", "chart-vol", "chart-levels", "top-attack"];
+const DEFAULT_ACTIVE = ["kpi-1", "kpi-2", "kpi-3", "kpi-4", "siem-flow", "chart-vol", "chart-levels", "top-attack", "mitre-tech", "stack-health"];
 
 const DEFAULT_LAYOUT: any = {
   lg: [
@@ -75,10 +84,12 @@ const DEFAULT_LAYOUT: any = {
     { i: "kpi-2", x: 2, y: 0, w: 2, h: 2 },
     { i: "kpi-3", x: 4, y: 0, w: 2, h: 2 },
     { i: "kpi-4", x: 6, y: 0, w: 2, h: 2 },
-    { i: "siem-flow", x: 0, y: 2, w: 8, h: 26 },
-    { i: "chart-vol", x: 8, y: 2, w: 4, h: 8 },
-    { i: "chart-levels", x: 8, y: 10, w: 4, h: 8 },
-    { i: "top-attack", x: 8, y: 18, w: 4, h: 10 },
+    { i: "siem-flow", x: 0, y: 2, w: 9, h: 26 },
+    { i: "chart-vol", x: 9, y: 2, w: 3, h: 8 },
+    { i: "chart-levels", x: 9, y: 10, w: 3, h: 8 },
+    { i: "top-attack", x: 9, y: 18, w: 3, h: 10 },
+    { i: "mitre-tech", x: 0, y: 28, w: 6, h: 10 },
+    { i: "stack-health", x: 6, y: 28, w: 6, h: 10 },
   ]
 };
 
@@ -116,54 +127,66 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const [alerts, setAlerts] = useState<any[]>([]);
   const [topAttackers, setTopAttackers] = useState<any[]>([]);
   const [volumePoints, setVolumePoints] = useState<number[]>([]);
+  const [volumeLabels, setVolumeLabels] = useState<string[]>([]);
   const [agents, setAgents] = useState<AgentOut[]>([]);
+  const [mitreData, setMitreData] = useState<any[]>([]);
+  const [wazuhServices, setWazuhServices] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{created: number, skipped: number} | null>(null);
+  const [timeRange, setTimeRange] = useState<number>(24); // 1, 24, 168
+
+  const fetchData = async () => {
+    try {
+      const dash = await getDashboardSummary(timeRange);
+      setSummary(dash);
+      
+      try {
+        const alts = await getRecentAlerts(100, timeRange);
+        setAlerts(alts || []);
+      } catch(e) { setAlerts([]); }
+      
+      try {
+        const top = await getTopAttackers(10, timeRange);
+        setTopAttackers(top || []);
+      } catch(e) { setTopAttackers([]); }
+      
+      try {
+        const vol = await getAlertVolume(timeRange, timeRange <= 1 ? "5m" : "1h");
+        setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
+        setVolumeLabels((vol || []).map((p: any, i: number) => {
+          if (i === 0 || i === vol.length - 1 || i === Math.floor(vol.length / 2)) {
+            const date = new Date(p.time);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+          return "";
+        }).filter(l => l !== ""));
+      } catch(e) { setVolumePoints([]); setVolumeLabels([]); }
+      
+      try {
+        const ags = await listAgents();
+        setAgents(ags || []);
+      } catch(e) { setAgents([]); }
+
+      try {
+        const mitre = await getMitreCoverage(timeRange);
+        setMitreData(mitre || []);
+      } catch(e) { setMitreData([]); }
+
+      try {
+        const services = await getWazuhServices();
+        setWazuhServices(services);
+      } catch(e) { setWazuhServices(null); }
+
+    } catch (e) {
+      console.error("fetchData error:", e);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Usar solo dashboard que no depende de Wazuh
-        const dash = await getDashboardSummary();
-        setSummary(dash);
-        
-        // Intentar obtener alertas de Wazuh (puede fallar si no está disponible)
-        try {
-          const alts = await getRecentAlerts(100);
-          setAlerts(alts || []);
-        } catch(e) {
-          console.warn("Wazuh alerts unavailable:", e);
-          setAlerts([]);
-        }
-        
-        try {
-          const top = await getTopAttackers(10);
-          setTopAttackers(top || []);
-        } catch(e) {
-          setTopAttackers([]);
-        }
-        
-        try {
-          const vol = await getAlertVolume(24);
-          setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
-        } catch(e) {
-          setVolumePoints([]);
-        }
-        
-        try {
-          const ags = await listAgents();
-          setAgents(ags || []);
-        } catch(e) {
-          setAgents([]);
-        }
-      } catch (e) {
-        console.error("fetchData error:", e);
-      }
-    };
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timeRange]);
 
   const handleSyncWazuh = async () => {
     setSyncing(true);
@@ -171,9 +194,33 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     try {
       const result = await syncWazuhAlerts(1);
       setSyncResult(result);
-      fetchData(); // Refresh after sync
+      fetchData(); 
     } catch (err) {
       console.error("Sync error:", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleCreateTicketFromAlert = async (alertData: any) => {
+    try {
+      setSyncing(true);
+      const title = `Wazuh Alert: ${alertData.description || alertData.rule_id}`;
+      const { createTicket } = await import("../lib/api");
+      await createTicket({
+        title: title.slice(0, 200),
+        description: `Source: ${alertData.source_ip || 'N/A'}\nAgent: ${alertData.agent_name || 'N/A'}\nRule: ${alertData.rule_id}\n\n${alertData.description || ''}`,
+        severity: alertData.severity || "medium",
+        category: "wazuh-alert",
+        source_ip: alertData.source_ip || null,
+        affected_asset: alertData.agent_name || alertData.agent_id || "Manager",
+        wazuh_alert_id: String(alertData.id),
+      });
+      window.alert("Ticket de incidencia creado correctamente");
+      fetchData();
+    } catch (e) {
+      console.error("Error creating ticket:", e);
+      window.alert("Error al crear el ticket");
     } finally {
       setSyncing(false);
     }
@@ -185,25 +232,35 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
 
   const WIDGET_REGISTRY = useMemo(() => ({
     "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "📊", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.alerts}</span>
+      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
+        <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.total_alerts_24h || 0}</span>
         <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>{t('siem').toUpperCase()}</span>
       </button>
     )},
-    "kpi-2": { name: t('events'), w: 2, h: 2, icon: "⚡", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#ef4444', textShadow: '0 0 10px rgba(239,68,68,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.events}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(239,68,68,0.8)', letterSpacing: '1px' }}>{t('events').toUpperCase()}</span>
+    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "🔥", render: () => (
+      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
+        <span style={{ fontSize: '24px', fontWeight: 900, color: '#ef4444', textShadow: '0 0 10px rgba(239,68,68,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.critical_alerts || 0}</span>
+        <span style={{ fontSize: '9px', color: 'rgba(239,68,68,0.8)', letterSpacing: '1px' }}>{t('critical').toUpperCase()}</span>
       </button>
     )},
-    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.unique_agents || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>{t('agents').toUpperCase()}</span>
-      </button>
-    )},
+    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => {
+      const active = agents.filter(a => a.status === 'active').length;
+      const total = agents.length;
+      return (
+        <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{active}</span>
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>/ {total}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span style={{ fontSize: '9px', color: '#06b6d4', letterSpacing: '1px' }}>{t('active').toUpperCase()}</span>
+            {total > active && <span style={{ fontSize: '9px', color: '#ef4444', letterSpacing: '1px' }}>{t('disconnected').toUpperCase()}</span>}
+          </div>
+        </button>
+      )
+    }},
     "kpi-4": { name: t('top_attackers'), w: 2, h: 2, icon: "🎯", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
+      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
         <span style={{ fontSize: '24px', fontWeight: 900, color: '#f59e0b', textShadow: '0 0 10px rgba(245,158,11,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.unique_attackers || 0}</span>
         <span style={{ fontSize: '9px', color: 'rgba(245,158,11,0.8)', letterSpacing: '1px' }}>{t('ips').toUpperCase()}</span>
       </button>
@@ -234,8 +291,8 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>►</button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 1fr', gap: '0 8px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            {['SEV',t('time'),t('agents'),t('description')].map((h, idx) => (
+          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {['SEV',t('time'),t('ip'),t('agents'),t('description'), t('actions')].map((h, idx) => (
               <span key={idx} style={{ fontSize: '11px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.3)', fontWeight: 'bold' }}>{h.toUpperCase()}</span>
             ))}
           </div>
@@ -246,13 +303,15 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             {currentAlerts.map((al, i) => {
               const sev = (al.severity || 'info').toLowerCase();
               const color = SEV_COLOR[sev] || '#38bdf8';
+              const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
               return (
                 <div key={al.id || i} style={{
-                  display: 'grid', gridTemplateColumns: '65px 85px 110px 1fr',
+                  display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px',
                   gap: '0 8px', padding: '10px 12px',
                   borderBottom: '1px solid rgba(255,255,255,0.03)',
                   alignItems: 'center', fontSize: '12px',
-                  transition: 'background 0.15s'
+                  transition: 'background 0.15s',
+                  position: 'relative'
                 }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -265,12 +324,31 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                   <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
                     {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
+                  <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600 }}>
+                    {al.source_ip || '—'}
+                  </span>
                   <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--mono)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {al.agent_name || al.agent_id || '—'}
                   </span>
-                  <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
-                    {al.description || `Rule ${al.rule_id}`}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
+                      {al.description || `Rule ${al.rule_id}`}
+                    </span>
+                    {isSshBrute && (
+                      <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}>⚠️ Check for "Accepted Password" follow-up</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button 
+                      onClick={() => handleCreateTicketFromAlert(al)}
+                      disabled={syncing}
+                      style={{ background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', padding: '2px 4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                      +INC
+                    </button>
+                    <button style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '9px', padding: '2px 4px', cursor: 'pointer' }}>BLOCK</button>
+                    <button style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)', color: '#06b6d4', fontSize: '9px', padding: '2px 4px', cursor: 'pointer' }}>WAZUH</button>
+                  </div>
                 </div>
               );
             })}
@@ -287,7 +365,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           <div className="panel__head" style={{ cursor: 'move' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 5px var(--signal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              <span className="panel__title">{t('volume')} · 24H</span>
+              <span className="panel__title">{t('volume')} · {timeRange}H</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
               <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--signal)', fontFamily: 'var(--mono)', lineHeight: 1 }}>{lastVal}</span>
@@ -296,12 +374,12 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             </div>
           </div>
           <div style={{ padding: '8px 12px 4px', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>-24h</span>
+            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>-{timeRange}h</span>
             <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('max')}: {maxVal}</span>
             <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('now')}</span>
           </div>
           <div style={{ flex: 1, padding: '0 12px 12px', minHeight: 0 }}>
-            <AreaChart points={volumePoints} color="#00ff88" gradientId="vol-grad" />
+            <AreaChart points={volumePoints} labels={volumeLabels} color="#00ff88" gradientId="vol-grad" />
           </div>
         </section>
       );
@@ -328,39 +406,60 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "top-attack": { name: "Top Attackers", w: 4, h: 5, icon: "🎯", render: () => {
-      const maxCount = Math.max(...(topAttackers.map((a: any) => a.count || 0)), 1);
-      const RANK_COLOR = ['#ef4444', '#f97316', '#eab308'];
+    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "🛡️", render: () => {
+      const maxCount = Math.max(...(mitreData.map((m: any) => m.count || 0)), 1);
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head" style={{ cursor: 'move' }}>
-            <span className="panel__title">{t('top_attackers').toUpperCase()}</span>
-            <span style={{ fontSize: '9px', color: 'var(--danger)', fontFamily: 'var(--mono)', padding: '1px 6px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              {topAttackers?.length || 0} {t('ips')}
-            </span>
+             <span className="panel__title">{t('mitre_tech').toUpperCase()}</span>
+             <span style={{ fontSize: '9px', color: 'var(--signal)', fontFamily: 'var(--mono)' }}>{mitreData.length} técnicas</span>
           </div>
-          <div className="panel__body" style={{ padding: '4px 0', overflowY: 'auto', flex: 1 }}>
-            {topAttackers.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_data').toUpperCase()}</div>
+          <div className="panel__body" style={{ padding: '8px 0', overflowY: 'auto', flex: 1 }}>
+            {mitreData.length === 0 && (
+              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px' }}>{t('no_data').toUpperCase()}</div>
             )}
-            {topAttackers.slice(0, 8).map((a: any, i: number) => {
-              const barPct = (a.count / maxCount) * 100;
-              const rankColor = RANK_COLOR[i] || 'rgba(255,255,255,0.25)';
+            {mitreData.slice(0, 10).map((m: any, i: number) => {
+              const barPct = (m.count / maxCount) * 100;
               return (
-                <div key={i} style={{ padding: '6px 14px', display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '9px', fontWeight: 700, color: rankColor, fontFamily: 'var(--mono)', width: '14px', textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'rgba(255,255,255,0.8)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.ip}</span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: rankColor }}>{a.count}</span>
+                <div key={i} style={{ padding: '6px 14px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--mono)' }}>{m.technique_id} - {m.technique}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--signal)', fontWeight: 'bold' }}>{m.count}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '22px' }}>
-                    <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '1px', overflow: 'hidden' }}>
-                      <div style={{ width: `${barPct}%`, height: '100%', background: rankColor, opacity: 0.6, transition: 'width 0.5s ease' }} />
-                    </div>
+                  <div style={{ height: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '1px' }}>
+                    <div style={{ width: `${barPct}%`, height: '100%', background: 'var(--signal)', opacity: 0.6 }} />
                   </div>
                 </div>
               );
             })}
+          </div>
+        </section>
+      );
+    }},
+    "stack-health": { name: "Health", w: 6, h: 5, icon: "💓", render: () => {
+      const services = [
+        { name: t('manager'), status: wazuhServices?.status || 'disconnected', icon: '🛡️' },
+        { name: t('indexer'), status: summary.status === 'operational' ? 'active' : 'disconnected', icon: '📊' },
+        { name: t('api'), status: 'active', icon: '🔌' }
+      ];
+      return (
+        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div className="panel__head" style={{ cursor: 'move' }}>
+             <span className="panel__title">{t('stack_health').toUpperCase()}</span>
+          </div>
+          <div className="panel__body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+            {services.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <span style={{ fontSize: '18px' }}>{s.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'rgba(255,255,255,0.7)' }}>{s.name}</div>
+                  <div style={{ fontSize: '9px', color: s.status === 'active' || s.status === 'running' ? 'var(--signal)' : 'var(--danger)', textTransform: 'uppercase' }}>
+                    ● {s.status}
+                  </div>
+                </div>
+                {s.status === 'active' && <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)' }}>{t('latency')}: 24ms</div>}
+              </div>
+            ))}
           </div>
         </section>
       );
@@ -393,7 +492,33 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   };
 
   return (
-    <div className="view" ref={ref} style={{ flex: 1, padding: '8px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="view" ref={ref} style={{ flex: 1, padding: '4px 8px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '4px 12px 8px' }}>
+        {[
+          { label: t('last_hour'), val: 1 },
+          { label: t('last_24h'), val: 24 },
+          { label: t('last_7d'), val: 168 }
+        ].map(r => (
+          <button 
+            key={r.val}
+            onClick={() => setTimeRange(r.val)}
+            style={{
+              background: timeRange === r.val ? 'var(--signal)' : 'rgba(0,0,0,0.3)',
+              color: timeRange === r.val ? '#000' : 'var(--text-dim)',
+              border: '1px solid var(--line)',
+              padding: '4px 12px',
+              fontSize: '10px',
+              fontFamily: 'var(--mono)',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
+              clipPath: 'polygon(5px 0%, 100% 0%, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0% 100%, 0% 5px)'
+            }}
+          >
+            {r.label.toUpperCase()}
+          </button>
+        ))}
+      </div>
       <ResponsiveGridLayout
         className="layout"
         layouts={layouts}
@@ -405,7 +530,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         isDraggable={!lockState}
         isResizable={!lockState}
         onLayoutChange={onLayoutChange}
-        margin={[12, 12]}
+        margin={[12, 8]}
       >
         {activeWidgets.map(id => {
           const widget = WIDGET_REGISTRY[id];

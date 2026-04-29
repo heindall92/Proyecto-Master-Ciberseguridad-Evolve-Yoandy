@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
-export default function ThreatIntelView() {
+export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"ip" | "hash" | "domain">("ip");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS">("DETALLES");
+  const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS" | "DNS" | "COMUNIDAD">("DETALLES");
   const [apiKey, setApiKey] = useState("");
   const [showConfig, setShowConfig] = useState(false);
 
@@ -24,7 +24,17 @@ export default function ThreatIntelView() {
     loadWatchlist();
     const savedKey = localStorage.getItem("vt_api_key");
     if (savedKey) setApiKey(savedKey);
-  }, []);
+    
+    if (initialIp) {
+      setQuery(initialIp);
+      setType("ip");
+      // Trigger search after state updates
+      setTimeout(() => {
+        const btn = document.getElementById("threat-search-btn");
+        if (btn) btn.click();
+      }, 100);
+    }
+  }, [initialIp]);
 
   const handleSaveApiKey = () => {
     localStorage.setItem("vt_api_key", apiKey);
@@ -179,7 +189,7 @@ export default function ThreatIntelView() {
               placeholder={type === 'ip' ? "Ej: 8.8.8.8" : type === 'hash' ? "SHA256..." : "Ej: example.com"}
               style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', outline: 'none' }}
             />
-            <button onClick={handleSearch} disabled={loading} style={{ padding: '8px 14px', background: loading ? 'var(--line)' : 'var(--signal)', border: 'none', color: loading ? 'var(--text)' : '#000', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>
+            <button id="threat-search-btn" onClick={handleSearch} disabled={loading} style={{ padding: '8px 14px', background: loading ? 'var(--line)' : 'var(--signal)', border: 'none', color: loading ? 'var(--text)' : '#000', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>
               {loading ? "ESCANEANDO..." : "ANALIZAR IOC"}
             </button>
           </div>
@@ -252,8 +262,8 @@ export default function ThreatIntelView() {
               </div>
 
               {/* Tabs */}
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0 }}>
-                {(["DETALLES", "VENDORS", "WHOIS"] as const).map(tab => (
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0, overflowX: 'auto' }}>
+                {(["DETALLES", "VENDORS", "WHOIS", "DNS", "COMUNIDAD"] as const).map(tab => (
                   <button 
                     key={tab} 
                     onClick={() => setActiveTab(tab)}
@@ -266,10 +276,11 @@ export default function ThreatIntelView() {
                       cursor: 'pointer',
                       fontSize: '11px',
                       fontWeight: 600,
-                      letterSpacing: '1px'
+                      letterSpacing: '1px',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    {tab}
+                    {tab === "DNS" ? "DNS HISTORY" : tab}
                   </button>
                 ))}
               </div>
@@ -358,6 +369,60 @@ export default function ThreatIntelView() {
                         <pre style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--line)', padding: '15px', borderRadius: '4px', overflowX: 'auto', fontSize: '11px', color: 'var(--text-faint)', whiteSpace: 'pre-wrap' }}>
                             {result.whois || "No hay registro WHOIS disponible."}
                         </pre>
+                    </section>
+                )}
+
+                {activeTab === "DNS" && (
+                    <section>
+                        <h4 style={{ color: 'var(--cyan)', borderLeft: '3px solid var(--cyan)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>HISTÓRICO DE RESOLUCIONES DNS</h4>
+                        {!result.resolutions || result.resolutions.length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-faint)', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>No hay registros históricos disponibles.</div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                <thead>
+                                    <tr style={{ color: 'var(--text-dim)', textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+                                        <th style={{ padding: '8px' }}>HOST / DOMINIO</th>
+                                        <th style={{ padding: '8px' }}>DIRECCIÓN IP</th>
+                                        <th style={{ padding: '8px' }}>FECHA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {result.resolutions.map((r: any, i: number) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                                            <td style={{ padding: '8px', color: 'var(--signal)' }}>{r.host || "-"}</td>
+                                            <td style={{ padding: '8px', color: 'var(--cyan)' }}>{r.ip || "-"}</td>
+                                            <td style={{ padding: '8px', color: 'var(--text-dim)' }}>{r.date}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </section>
+                )}
+
+                {activeTab === "COMUNIDAD" && (
+                    <section>
+                        <h4 style={{ color: 'var(--amber)', borderLeft: '3px solid var(--amber)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>COMENTARIOS DE LA COMUNIDAD (CROWD INTEL)</h4>
+                        {!result.comments || result.comments.length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-faint)', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>Sin comentarios de la comunidad.</div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                {result.comments.map((c: any, i: number) => (
+                                    <div key={i} style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}>👤 {c.user}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{c.date}</span>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#fff', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.text}</div>
+                                        <div style={{ marginTop: '10px', display: 'flex', gap: '10px', fontSize: '9px', color: 'var(--text-dim)' }}>
+                                            <span>👍 {c.votes?.positive || 0}</span>
+                                            <span>👎 {c.votes?.negative || 0}</span>
+                                            <span>🚩 {c.votes?.abuse || 0}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </section>
                 )}
 

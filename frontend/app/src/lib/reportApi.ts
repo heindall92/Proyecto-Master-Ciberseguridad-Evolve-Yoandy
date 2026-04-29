@@ -274,37 +274,35 @@ async function generateExecutiveSummary(alerts: AlertOut[], fallback: string): P
 }
 
 export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
-  let events: EventOut[] = [];
-  let alerts: AlertOut[] = [];
-  let source: "api" | "fallback" = "api";
-
+  // Ahora llamamos directamente al endpoint del backend que ya procesa OpenSearch y Ollama
   try {
-    [events, alerts] = await Promise.all([http<EventOut[]>("/events?limit=100&offset=0"), http<AlertOut[]>("/alerts?limit=100&offset=0")]);
-  } catch {
-    source = "fallback";
-    events = fallbackEvents();
-    alerts = fallbackAlerts(events);
+    return await http<ExecutiveReportData>("/api/reports/executive");
+  } catch (e) {
+    console.error("Error fetching real executive report, falling back to local simulation:", e);
+    
+    // Fallback local en caso de error de red o backend no disponible
+    const events = fallbackEvents();
+    const alerts = fallbackAlerts(events);
+    const bySeverity = countBySeverity(alerts);
+    const topThreats = buildTopThreats(alerts, events);
+    const riskScore = calculateRiskScore(bySeverity);
+    const iso27001 = buildIsoAssessment(bySeverity, alerts.length);
+    const recommendations = buildRecommendations(bySeverity, topThreats);
+    const summary = fallbackSummary(riskScore, bySeverity.critical, topThreats);
+
+    return {
+      source: "fallback",
+      generatedAt: new Date().toISOString(),
+      riskScore,
+      executiveSummary: summary,
+      metrics: {
+        totalAlerts: alerts.length,
+        criticalAlerts: bySeverity.critical,
+        bySeverity,
+      },
+      topThreats,
+      iso27001,
+      recommendations,
+    };
   }
-
-  const bySeverity = countBySeverity(alerts);
-  const topThreats = buildTopThreats(alerts, events);
-  const riskScore = calculateRiskScore(bySeverity);
-  const iso27001 = buildIsoAssessment(bySeverity, alerts.length);
-  const recommendations = buildRecommendations(bySeverity, topThreats);
-  const summary = await generateExecutiveSummary(alerts, fallbackSummary(riskScore, bySeverity.critical, topThreats));
-
-  return {
-    source,
-    generatedAt: new Date().toISOString(),
-    riskScore,
-    executiveSummary: summary,
-    metrics: {
-      totalAlerts: alerts.length,
-      criticalAlerts: bySeverity.critical,
-      bySeverity,
-    },
-    topThreats,
-    iso27001,
-    recommendations,
-  };
 }

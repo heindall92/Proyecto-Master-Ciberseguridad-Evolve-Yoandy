@@ -80,6 +80,9 @@ async def check_ip(ip: str, api_key: str) -> dict[str, Any]:
                     for vendor, res in d.get("last_analysis_results", {}).items()
                     if res.get("category") in ("malicious", "suspicious") and (res.get("result") or res.get("category"))
                 },
+                # Extra: Comments and Resolutions
+                "comments": await _get_comments("ip_addresses", ip, api_key),
+                "resolutions": await _get_resolutions("ip_addresses", ip, api_key),
             }
     except Exception as e:
         logger.warning("VT IP check failed for %s: %s", ip, e)
@@ -116,6 +119,7 @@ async def check_hash(file_hash: str, api_key: str) -> dict[str, Any]:
                 "last_submission_date": _ts(d.get("last_submission_date")),
                 "last_analysis_date": _ts(d.get("last_analysis_date")),
                 "reputation": d.get("reputation", 0),
+                "comments": await _get_comments("files", file_hash, api_key),
             }
     except Exception as e:
         logger.warning("VT hash check failed for %s: %s", file_hash, e)
@@ -149,7 +153,40 @@ async def check_domain(domain: str, api_key: str) -> dict[str, Any]:
                 "vendor_results": _vendor_list(d.get("last_analysis_results", {})),
                 "last_analysis_date": _ts(d.get("last_analysis_date")),
                 "whois": d.get("whois", ""),
+                "comments": await _get_comments("domains", domain, api_key),
+                "resolutions": await _get_resolutions("domains", domain, api_key),
             }
     except Exception as e:
         logger.warning("VT domain check failed for %s: %s", domain, e)
         return {"found": False, "domain": domain, "error": str(e)}
+
+async def _get_comments(endpoint_type: str, ioc: str, api_key: str) -> list:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get(f"{VT_BASE}/{endpoint_type}/{ioc}/comments?limit=10", headers=_headers(api_key))
+            if r.status_code != 200: return []
+            comments = r.json().get("data", [])
+            return [
+                {
+                    "text": c.get("attributes", {}).get("text", ""),
+                    "date": _ts(c.get("attributes", {}).get("date", 0)),
+                    "votes": c.get("attributes", {}).get("votes", {}),
+                    "user": c.get("relationships", {}).get("author", {}).get("data", {}).get("id", "Unknown")
+                } for c in comments
+            ]
+    except: return []
+
+async def _get_resolutions(endpoint_type: str, ioc: str, api_key: str) -> list:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get(f"{VT_BASE}/{endpoint_type}/{ioc}/resolutions?limit=10", headers=_headers(api_key))
+            if r.status_code != 200: return []
+            res = r.json().get("data", [])
+            return [
+                {
+                    "host": r.get("attributes", {}).get("host_name", ""),
+                    "ip": r.get("attributes", {}).get("ip_address", ""),
+                    "date": _ts(r.get("attributes", {}).get("date", 0))
+                } for r in res
+            ]
+    except: return []

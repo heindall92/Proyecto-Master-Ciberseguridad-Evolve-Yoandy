@@ -6,10 +6,13 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from fastapi.responses import FileResponse
+import shutil
+import os
 
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,13 +63,27 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def on_startup():
+    from app.models import Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database initialized")
+    asyncio.create_all_tasks = getattr(asyncio, "create_task", None) # compatibility
+    asyncio.create_task(_auto_sync_loop())
+
 from app import opensearch_client as osc
 from app.wazuh_client import wazuh
 from app.ollama_client import analyze_alert
+from app.lsa_monitor import router as lsa_router
+
+app.include_router(lsa_router)
 from app import virustotal_client as vt
+from app.ollama_client import generate_executive_summary
 
 from app.lsa_monitor import router as lsa_router
 
@@ -98,9 +115,11 @@ async def _auto_sync_loop():
                             description=alert.get("description", ""),
                             severity=severity,
                             category="wazuh-detected",
-                            source_ip=alert.get("source_ip") or None,
-                            affected_asset=alert.get("agent_name") or None,
-                            wazuh_alert_id=str(alert_id),
+                        source_ip=alert.get("source_ip") or alert.get("srcip"),
+                        affected_asset=alert.get("agent_name") or "Manager",
+                        affected_user=alert.get("data", {}).get("dstuser") or alert.get("data", {}).get("win", {}).get("eventdata", {}).get("targetUserName"),
+                        mitre_technique=alert.get("data", {}).get("mitre", {}).get("technique", [None])[0] or alert.get("data", {}).get("mitre", {}).get("id", [None])[0],
+                        wazuh_alert_id=str(alert_id),
                             reporter_id=admin.id,
                             status="open"
                         )
@@ -120,7 +139,7 @@ async def startup():
     async with SessionLocal() as db:
         q = select(User).where(User.username == "admin")
         if not (await db.execute(q)).scalar_one_or_none():
-            db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin"))
+            db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin", rank="L3 Blue Team"))
             await db.commit()
     asyncio.create_task(_auto_sync_loop())
 
@@ -136,12 +155,14 @@ def _ticket_out(t: Ticket) -> TicketOut:
         id=t.id, title=t.title, description=t.description, severity=t.severity,
         status=t.status, category=t.category, source_ip=t.source_ip,
         affected_asset=t.affected_asset, wazuh_alert_id=t.wazuh_alert_id,
+        affected_user=t.affected_user, mitre_technique=t.mitre_technique,
         assigned_to_id=t.assigned_to_id, reporter_id=t.reporter_id,
         assignee_username=t.assignee.username if t.assignee else None,
         reporter_username=t.reporter.username if t.reporter else None,
         ai_summary=t.ai_summary, ai_recommendation=t.ai_recommendation,
         analysis_notes=t.analysis_notes, resolution_notes=t.resolution_notes,
-        created_at=t.created_at, updated_at=t.updated_at, resolved_at=t.resolved_at
+        created_at=t.created_at, updated_at=t.updated_at, resolved_at=t.resolved_at,
+        evidence=[EvidenceOut(id=e.id, ticket_id=e.ticket_id, filename=e.filename, file_size=e.file_size, content_type=e.content_type, created_at=e.created_at) for e in t.evidence]
     )
 
 # ── Events & Alerts ──────────────────────────────────────────────────────────
@@ -269,14 +290,15 @@ async def create_user(u: UserCreate, db: AsyncSession = Depends(get_db), _=Depen
     username = InputValidator.validate_username(u.username)
     email = InputValidator.validate_email(u.email) if u.email else None
     password = InputValidator.validate_password(u.password)
-    role = u.role.lower() if u.role else "analyst"
+    role = u.role or "analista"
+    rank = u.rank or "L1 Analyst"
     
     # Additional role validation
     valid_roles = ["admin", "analyst", "viewer"]
     if role not in valid_roles:
         raise HTTPException(400, f"Role must be one of: {', '.join(valid_roles)}")
     
-    new_user = User(username=username, email=email, password_hash=get_password_hash(password), role=role)
+    new_user = User(username=username, email=email, password_hash=get_password_hash(password), role=role, rank=rank)
     db.add(new_user)
     try:
         await db.commit(); await db.refresh(new_user); return new_user
@@ -290,6 +312,7 @@ async def update_user(user_id: int, u: UserUpdate, db: AsyncSession = Depends(ge
     if u.username: user.username = u.username.lower()
     if u.email: user.email = u.email.lower()
     if u.role: user.role = u.role.lower()
+    if u.rank: user.rank = u.rank
     if u.password: user.password_hash = get_password_hash(u.password)
     try:
         await db.commit(); await db.refresh(user); return user
@@ -347,16 +370,20 @@ async def get_agent_vulnerabilities(agent_id: str, _=Depends(get_current_user)):
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/dashboard")
-async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def get_dashboard(hours: int = 24, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     alerts_total = (await db.execute(select(func.count(Alert.id)))).scalar() or 0
     events_total = (await db.execute(select(func.count(Event.id)))).scalar() or 0
     tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["open", "in_progress", "escalated"])))).scalar() or 0
     wazuh_stats = {}
+    status = "operational"
     try:
-        wazuh_stats = await osc.get_dashboard_stats(24)
+        wazuh_stats = await osc.get_dashboard_stats(hours)
+        if not wazuh_stats:
+            status = "degraded"
     except Exception as e:
         logger.warning(f"Dashboard: Wazuh stats unavailable: {e}")
-    return {"metrics": {"alerts": alerts_total, "events": events_total, "tickets_open": tickets_open, "total_alerts_24h": 0, **wazuh_stats}, "status": "operational"}
+        status = "down"
+    return {"metrics": {"alerts": alerts_total, "events": events_total, "tickets_open": tickets_open, "total_alerts_24h": 0, **wazuh_stats}, "status": status}
 
 @app.get("/api/tickets/count/open")
 async def get_open_tickets_count(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
@@ -364,13 +391,35 @@ async def get_open_tickets_count(db: AsyncSession = Depends(get_db), _=Depends(g
     tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["open", "in_progress", "escalated"])))).scalar() or 0
     return {"open": tickets_open}
 
+# ── Evidence Storage ──────────────────────────────────────────────────────────
+UPLOAD_DIR = "uploads/evidence"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/api/tickets/{ticket_id}/evidence", response_model=EvidenceOut)
+async def upload_evidence(ticket_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket: raise HTTPException(404, "Ticket not found")
+    file_id = str(int(time.time()))
+    safe_filename = f"{file_id}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    ev = Evidence(ticket_id=ticket_id, filename=file.filename, file_path=file_path, file_size=os.path.getsize(file_path), content_type=file.content_type)
+    db.add(ev); await db.commit(); await db.refresh(ev); return ev
+
+@app.get("/api/evidence/{evidence_id}/download")
+async def download_evidence(evidence_id: int, db: AsyncSession = Depends(get_db)):
+    ev = await db.get(Evidence, evidence_id)
+    if not ev: raise HTTPException(404, "Evidence not found")
+    return FileResponse(ev.file_path, filename=ev.filename, media_type=ev.content_type)
+
 # ── Tickets (Incident Management) ─────────────────────────────────────────────
 
 from sqlalchemy.orm import selectinload
 
 @app.get("/api/tickets", response_model=list[TicketOut])
 async def list_tickets(status: str | None = None, severity: str | None = None, page: Page = Depends(), db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).order_by(desc(Ticket.created_at))
+    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).order_by(desc(Ticket.created_at))
     if status: q = q.where(Ticket.status == status)
     if severity: q = q.where(Ticket.severity == severity)
     q = q.limit(page.limit).offset(page.offset)
@@ -379,26 +428,38 @@ async def list_tickets(status: str | None = None, severity: str | None = None, p
 
 @app.post("/api/tickets", response_model=TicketOut)
 async def create_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    t = Ticket(title=payload.title, description=payload.description, severity=payload.severity, category=payload.category, source_ip=payload.source_ip, affected_asset=payload.affected_asset, wazuh_alert_id=payload.wazuh_alert_id, assigned_to_id=payload.assigned_to_id, reporter_id=current.id)
+    t = Ticket(
+        title=payload.title, 
+        description=payload.description, 
+        severity=payload.severity, 
+        category=payload.category, 
+        source_ip=payload.source_ip, 
+        affected_asset=payload.affected_asset, 
+        affected_user=payload.affected_user,
+        mitre_technique=payload.mitre_technique,
+        wazuh_alert_id=payload.wazuh_alert_id, 
+        assigned_to_id=payload.assigned_to_id, 
+        reporter_id=current.id
+    )
     db.add(t); await db.commit()
-    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == t.id))).scalar_one()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == t.id))).scalar_one()
     return _ticket_out(t2)
 
 @app.get("/api/tickets/{ticket_id}", response_model=TicketOut)
 async def get_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    t = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one_or_none()
+    t = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t: raise HTTPException(404, "Ticket not found")
     return _ticket_out(t)
 
 @app.put("/api/tickets/{ticket_id}", response_model=TicketOut)
 async def update_ticket(ticket_id: int, payload: TicketUpdate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    t = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one_or_none()
+    t = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t: raise HTTPException(404, "Ticket not found")
     for field, val in payload.model_dump(exclude_none=True).items():
         setattr(t, field, val)
     t.updated_at = datetime.now(tz=timezone.utc)
     await db.commit()
-    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one()
     return _ticket_out(t2)
 
 @app.delete("/api/tickets/{ticket_id}")
@@ -415,7 +476,7 @@ async def assign_ticket(ticket_id: int, payload: TicketAssign, db: AsyncSession 
     t.status = "in_progress" if t.status == "open" else t.status
     t.updated_at = datetime.now(tz=timezone.utc)
     await db.commit()
-    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one()
     return _ticket_out(t2)
 
 @app.post("/api/tickets/{ticket_id}/resolve", response_model=TicketOut)
@@ -425,7 +486,7 @@ async def resolve_ticket(ticket_id: int, payload: TicketResolve, db: AsyncSessio
     t.status = payload.status; t.resolution_notes = payload.resolution_notes
     t.resolved_at = datetime.now(tz=timezone.utc); t.updated_at = datetime.now(tz=timezone.utc)
     await db.commit()
-    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one()
     return _ticket_out(t2)
 
 @app.post("/api/tickets/{ticket_id}/analyze", response_model=TicketOut)
@@ -434,7 +495,7 @@ async def analyze_ticket(ticket_id: int, payload: TicketAnalysis, db: AsyncSessi
     if not t: raise HTTPException(404, "Ticket not found")
     t.analysis_notes = payload.analysis_notes; t.updated_at = datetime.now(tz=timezone.utc)
     await db.commit()
-    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter)).where(Ticket.id == ticket_id))).scalar_one()
+    t2 = (await db.execute(select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.id == ticket_id))).scalar_one()
     return _ticket_out(t2)
 
 @app.delete("/api/tickets/{ticket_id}")
@@ -493,6 +554,10 @@ async def cowrie_timeline(hours: int = 24, interval: str = "1h", _=Depends(get_c
 async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_stats(hours)
 
+@app.get("/api/wazuh/cowrie-sessions")
+async def cowrie_sessions(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
+    return await osc.get_cowrie_sessions(limit, hours)
+
 @app.get("/api/wazuh/alert-volume")
 async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_current_user)):
     return await osc.get_alert_volume(hours, interval)
@@ -539,6 +604,79 @@ async def auto_create_ticket_from_alert(
     logger.info(f"Auto-created ticket #{t.id} from {alert_data.get('source', 'unknown')}: {title}")
     return _ticket_out(t2)
 
+@app.get("/api/reports/executive")
+async def get_executive_report(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    """Genera un reporte ejecutivo real basado en telemetria actual y analisis IA."""
+    try:
+        # 1. Fetch real metrics from OpenSearch
+        stats = await osc.get_dashboard_stats(24)
+        attackers = await osc.get_top_attackers(5, 24)
+        mitre = await osc.get_mitre_coverage(168)
+        
+        # 2. Fetch ticket stats
+        res = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == "open"))
+        open_tickets = res.scalar() or 0
+        
+        # 3. Calculate Risk Score
+        total = stats.get("total_alerts_24h", 0)
+        critical = stats.get("critical_alerts", 0)
+        high = stats.get("high_alerts", 0)
+        
+        risk_score = 0
+        if total > 0:
+            risk_score = min(100, int((critical * 10 + high * 4 + 10) / (1 + total / 100)))
+        else:
+            risk_score = 5 # Baseline seguro
+            
+        # 4. Generate AI Summary (Real Analysis)
+        context = {
+            "total_alerts": total,
+            "critical_alerts": critical,
+            "high_alerts": high,
+            "top_attackers": attackers[:3],
+            "open_tickets": open_tickets,
+            "mitre_techniques": [m["technique"] for m in mitre[:5]]
+        }
+        summary = await generate_executive_summary(context)
+        
+        # 5. Build Final Report Object
+        return {
+            "source": "api",
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "riskScore": risk_score,
+            "executiveSummary": summary,
+            "metrics": {
+                "totalAlerts": total,
+                "criticalAlerts": critical,
+                "bySeverity": {
+                    "critical": critical,
+                    "high": high,
+                    "medium": max(0, total - critical - high),
+                    "low": 0
+                }
+            },
+            "topThreats": [
+                {"attackType": a["attack_type"], "severity": "high" if a["count"] > 10 else "medium", "count": a["count"]}
+                for a in attackers
+            ],
+            "iso27001": {
+                "overall": 88 if critical == 0 else 72,
+                "controls": [
+                    {"control": "A.5.7 Threat Intelligence", "status": "covered" if total > 50 else "partial", "note": "Integracion activa con VirusTotal y analisis de comportamiento."},
+                    {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Monitorizacion 24/7 habilitada mediante Wazuh SIEM."},
+                    {"control": "A.5.24 Incident Management", "status": "partial" if open_tickets > 5 else "covered", "note": f"Gestion de incidentes activa con {open_tickets} tickets abiertos."}
+                ]
+            },
+            "recommendations": [
+                "Priorizar la resolucion de alertas criticas para reducir el Risk Score.",
+                "Implementar politicas de endurecimiento (LSA Protection) en hosts con ataques recurrentes.",
+                "Auditar cuentas con multiples fallos de autenticacion detectados por el SIEM."
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(500, f"Report generation failed: {str(e)}")
+
 @app.get("/api/wazuh/sync-alerts", response_model=dict)
 async def sync_wazuh_alerts(hours: int = 1, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     """
@@ -572,8 +710,11 @@ async def sync_wazuh_alerts(hours: int = 1, db: AsyncSession = Depends(get_db), 
         if severity in ["high", "critical"]:
             title = f"Wazuh Alert #{alert_id}: {alert.get('rule', 'Unknown')}"
             description = alert.get("description", "")
-            source_ip = alert.get("srcip")
-            affected_asset = alert.get("agent_name")
+            source_ip = alert.get("srcip") or alert.get("source_ip")
+            affected_asset = alert.get("agent_name") or "Manager"
+            affected_user = alert.get("data", {}).get("dstuser") or alert.get("data", {}).get("win", {}).get("eventdata", {}).get("targetUserName")
+            mitre_info = alert.get("data", {}).get("mitre", {})
+            mitre_tech = mitre_info.get("technique", [None])[0] or mitre_info.get("id", [None])[0]
             
             ticket = Ticket(
                 title=title[:200],
@@ -582,6 +723,8 @@ async def sync_wazuh_alerts(hours: int = 1, db: AsyncSession = Depends(get_db), 
                 category="wazuh-detected",
                 source_ip=source_ip,
                 affected_asset=affected_asset,
+                affected_user=affected_user,
+                mitre_technique=mitre_tech,
                 wazuh_alert_id=str(alert_id),
                 reporter_id=current.id,
                 status="open"
@@ -604,6 +747,64 @@ async def wazuh_services(_=Depends(get_current_user)):
         return {"error": "Cannot reach Wazuh Manager API"}
     except Exception as e:
         return {"error": str(e)}
+
+# ── Assets & Inventory (Wazuh Agents) ─────────────────────────────────────────
+
+@app.get("/api/agents")
+async def list_agents(_=Depends(get_current_user)):
+    """Lista todos los agentes registrados en Wazuh."""
+    try:
+        r = await wazuh.request("GET", "/agents?select=id,name,ip,os,status,version,lastKeepAlive")
+        if r.status_code == 200:
+            items = r.json().get("data", {}).get("affected_items", [])
+            # Map Wazuh fields to our frontend schema
+            return [
+                {
+                    "id": a.get("id"),
+                    "name": a.get("name"),
+                    "ip": a.get("ip"),
+                    "os": f"{a.get('os', {}).get('name', 'N/A')} {a.get('os', {}).get('version', '')}",
+                    "status": a.get("status"),
+                    "version": a.get("version"),
+                    "last_keep_alive": a.get("lastKeepAlive"),
+                    "type": "agent"
+                } for a in items
+            ]
+        return []
+    except Exception as e:
+        logger.error(f"Error listing agents: {e}")
+        return []
+
+@app.get("/api/agents/{agent_id}/packages")
+async def get_agent_packages(agent_id: str, _=Depends(get_current_user)):
+    r = await wazuh.request("GET", f"/syscollector/{agent_id}/packages?limit=100")
+    if r.status_code == 200:
+        return r.json().get("data", {}).get("affected_items", [])
+    return []
+
+@app.get("/api/agents/{agent_id}/ports")
+async def get_agent_ports(agent_id: str, _=Depends(get_current_user)):
+    r = await wazuh.request("GET", f"/syscollector/{agent_id}/ports?limit=100")
+    if r.status_code == 200:
+        return r.json().get("data", {}).get("affected_items", [])
+    return []
+
+@app.get("/api/agents/{agent_id}/vulnerabilities")
+async def get_agent_vulnerabilities(agent_id: str, _=Depends(get_current_user)):
+    r = await wazuh.request("GET", f"/vulnerability/{agent_id}?limit=100")
+    if r.status_code == 200:
+        return r.json().get("data", {}).get("affected_items", [])
+    return []
+
+@app.post("/api/agents/{agent_id}/scan")
+async def trigger_agent_scan(agent_id: str, _=Depends(get_current_user)):
+    """Lanza un escaneo de vulnerabilidades/integridad en el agente."""
+    # Nota: La API de Wazuh varía según el módulo (syscheck o vulnerability)
+    # Aquí lanzamos syscheck como ejemplo de escaneo forzado
+    r = await wazuh.request("PUT", f"/syscheck/{agent_id}/scan")
+    if r.status_code == 200:
+        return {"ok": True, "message": "Scan requested successfully"}
+    raise HTTPException(r.status_code, r.json().get("message", "Scan failed"))
 
 # ── VirusTotal ────────────────────────────────────────────────────────────────
 

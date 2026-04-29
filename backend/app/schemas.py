@@ -65,6 +65,7 @@ class AnalysisOut(BaseModel):
 class UserBase(BaseModel):
     username: str
     role: str = "analista"
+    rank: str = "L1 Analyst"
     email: str | None = None
 
 class UserCreate(UserBase):
@@ -74,6 +75,7 @@ class UserUpdate(BaseModel):
     username: str | None = None
     email: str | None = None
     role: str | None = None
+    rank: str | None = None
     password: str | None = None
 
 class UserIn(UserBase):
@@ -129,6 +131,8 @@ class TicketCreate(BaseModel):
     category: str | None = None
     source_ip: str | None = None
     affected_asset: str | None = None
+    affected_user: str | None = None
+    mitre_technique: str | None = None
     wazuh_alert_id: str | None = None
     assigned_to_id: int | None = None
 
@@ -140,6 +144,8 @@ class TicketUpdate(BaseModel):
     category: str | None = None
     source_ip: str | None = None
     affected_asset: str | None = None
+    affected_user: str | None = None
+    mitre_technique: str | None = None
     assigned_to_id: int | None = None
     analysis_notes: str | None = None
     resolution_notes: str | None = None
@@ -163,6 +169,8 @@ class TicketOut(BaseModel):
     category: str | None
     source_ip: str | None
     affected_asset: str | None
+    affected_user: str | None = None
+    mitre_technique: str | None = None
     wazuh_alert_id: str | None
     assigned_to_id: int | None
     reporter_id: int | None
@@ -175,6 +183,15 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
+    evidence: list[EvidenceOut] = []
+
+class EvidenceOut(BaseModel):
+    id: int
+    ticket_id: int
+    filename: str
+    file_size: int
+    content_type: str | None
+    created_at: datetime
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -185,9 +202,11 @@ class RunbookIn(BaseModel):
     name: str
     category: str
     description: str
-    containment_steps: list[str] = []
-    eradication_steps: list[str] = []
-    recovery_steps: list[str] = []
+    identification_steps: list[Any] = []
+    containment_steps: list[Any] = []
+    eradication_steps: list[Any] = []
+    recovery_steps: list[Any] = []
+    post_mortem_steps: list[Any] = []
     severity_applicable: str = "all"
 
 
@@ -196,9 +215,11 @@ class RunbookOut(BaseModel):
     name: str
     category: str
     description: str
-    containment_steps: list[str]
-    eradication_steps: list[str]
-    recovery_steps: list[str]
+    identification_steps: list[Any]
+    containment_steps: list[Any]
+    eradication_steps: list[Any]
+    recovery_steps: list[Any]
+    post_mortem_steps: list[Any]
     severity_applicable: str
     is_active: bool
     created_by_id: int | None = None
