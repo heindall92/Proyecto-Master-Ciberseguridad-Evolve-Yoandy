@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
 import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, AlertOut, AgentOut } from "../lib/api";
+import { translations } from "./translations";
 
 function useContainerWidth() {
   const [width, setWidth] = useState(1200);
