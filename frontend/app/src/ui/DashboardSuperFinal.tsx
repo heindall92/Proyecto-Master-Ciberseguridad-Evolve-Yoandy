@@ -148,9 +148,9 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           } else {
             // Mock data if empty
             setAlerts([
-              { id: 'mock-1', timestamp: new Date().toISOString(), agent: { name: 'win-desktop-01' }, rule: { description: 'Multiple failed login attempts', level: 8 }, _source: { srcip: '192.168.1.45' } },
-              { id: 'mock-2', timestamp: new Date(Date.now() - 3600000).toISOString(), agent: { name: 'ubuntu-web-prod' }, rule: { description: 'SSH Brute Force detected', level: 10 }, _source: { srcip: '114.114.114.114' } },
-              { id: 'mock-3', timestamp: new Date(Date.now() - 7200000).toISOString(), agent: { name: 'ubuntu-web-prod' }, rule: { description: 'Suspicious command execution', level: 12 }, _source: { srcip: '127.0.0.1' } }
+              { id: 'mock-1', timestamp: new Date().toISOString(), agent_name: 'win-desktop-01', description: 'Multiple failed login attempts', severity: 'high', rule_id: '100001', srcip: '192.168.1.45' },
+              { id: 'mock-2', timestamp: new Date(Date.now() - 3600000).toISOString(), agent_name: 'ubuntu-web-prod', description: 'SSH Brute Force detected', severity: 'critical', rule_id: '5712', srcip: '114.114.114.114' },
+              { id: 'mock-3', timestamp: new Date(Date.now() - 7200000).toISOString(), agent_name: 'ubuntu-web-prod', description: 'Suspicious command execution', severity: 'medium', rule_id: '100052', srcip: '127.0.0.1' }
             ]);
             setSummary(prev => ({ ...prev, metrics: { ...prev?.metrics, critical_alerts: 3, total_alerts_24h: 128 } }));
           }
