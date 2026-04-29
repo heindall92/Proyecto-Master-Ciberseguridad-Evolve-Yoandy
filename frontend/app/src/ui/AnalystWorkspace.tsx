@@ -37,10 +37,10 @@ interface TicketCard {
 }
 
 const getColumns = (t: any): { id: KanbanStatus; label: string; color: string }[] => [
-  { id: 'open', label: t('workspace_sub').toUpperCase().includes('KANBAN') ? 'TRIAGE (NEW)' : 'TRIAGE', color: '#4D9FFF' },
-  { id: 'in_progress', label: 'INVESTIGATION', color: '#FF9F1C' },
-  { id: 'escalated', label: 'MITIGATION & RESPONSE', color: '#FF4D4D' },
-  { id: 'resolved', label: 'RESOLVED', color: '#4DFFA6' },
+  { id: 'open', label: t('triage').toUpperCase(), color: '#4D9FFF' },
+  { id: 'in_progress', label: t('investigation').toUpperCase(), color: '#FF9F1C' },
+  { id: 'escalated', label: t('mitigation').toUpperCase(), color: '#FF4D4D' },
+  { id: 'resolved', label: t('resolved').toUpperCase(), color: '#4DFFA6' },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -335,10 +335,10 @@ export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600, color: '#fff', letterSpacing: '0.5px' }}>
-            Incident Response Board
+            {t('incident_response_board')}
           </h1>
           <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '5px', display: 'block' }}>
-            Manage analyst workloads, playbook actions, and active threat mitigations.
+            {t('manage_workloads')}
           </span>
         </div>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
@@ -356,7 +356,7 @@ export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }
               cursor: 'pointer',
             }}
           >
-            <option value="all">All Priorities</option>
+            <option value="all">{t('all_priorities')}</option>
             {SEVERITY_OPTIONS.map(s => (
               <option key={s} value={s}>{s.toUpperCase()}</option>
             ))}
@@ -374,8 +374,8 @@ export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }
               cursor: 'pointer',
             }}
           >
-            <option value="all">All Analysts</option>
-            <option value="unassigned">Unassigned</option>
+            <option value="all">{t('all_analysts')}</option>
+            <option value="unassigned">{t('unassigned')}</option>
             {users.map(u => (
               <option key={u.id} value={u.username}>{u.username.toUpperCase()}</option>
             ))}
@@ -396,7 +396,7 @@ export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }
               gap: '6px',
             }}
           >
-            + New Incident
+            + {t('new_incident')}
           </button>
         </div>
       </div>
@@ -405,13 +405,13 @@ export default function AnalystWorkspace({ lang = "es" }: { lang?: "es" | "en" }
       {stats && (
         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF0055', fontWeight: 600 }}>{stats.metrics?.tickets_open || 0}</span> Open Tickets
+            <span style={{ color: '#FF0055', fontWeight: 600 }}>{stats.metrics?.tickets_open || 0}</span> {t('open_tickets')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF4D4D', fontWeight: 600 }}>{getTicketsByStatus('escalated').length}</span> Escalated
+            <span style={{ color: '#FF9F1C', fontWeight: 600 }}>{getTicketsByStatus('escalated').length}</span> {t('escalated_tickets')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#4DFFA6', fontWeight: 600 }}>{getTicketsByStatus('resolved').length}</span> Resolved
+            <span style={{ color: '#4DFFA6', fontWeight: 600 }}>{getTicketsByStatus('resolved').length}</span> {t('resolved_tickets')}
           </div>
         </div>
       )}

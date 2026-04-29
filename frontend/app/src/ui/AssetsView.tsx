@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { listAgents, getAgentPackages, getAgentPorts, getAgentVulnerabilities, AgentOut } from "../lib/api";
+import { translations } from "./translations";
 
-export default function AssetsView() {
+export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
+  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [agents, setAgents] = useState<AgentOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<AgentOut | null>(null);
@@ -29,7 +31,7 @@ export default function AssetsView() {
     }
   };
 
-  if (loading) return <div className="panel" style={{ padding: '20px', color: 'var(--signal)' }}>CONECTANDO CON INVENTARIO DE ACTIVOS...</div>;
+  if (loading) return <div className="panel" style={{ padding: '20px', color: 'var(--signal)' }}>{t('connecting_to_inventory').toUpperCase()}</div>;
 
   return (
     <div className="view" style={{ display: 'grid', gridTemplateColumns: selectedAgent ? '1fr 1.5fr' : '1fr', gap: '16px', height: '100%' }}>
@@ -37,16 +39,16 @@ export default function AssetsView() {
       {/* Agents List */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="panel__head">
-          <span className="panel__title">Inventario de Endpoints · Wazuh</span>
+          <span className="panel__title">{t('inventory')} · Wazuh</span>
         </div>
         <div className="panel__body" style={{ padding: 0, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
-                <th style={{ padding: '10px', textAlign: 'left' }}>Nombre</th>
-                <th style={{ padding: '10px', textAlign: 'left' }}>IP</th>
-                <th style={{ padding: '10px', textAlign: 'left' }}>S.O.</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>{t('state')}</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>{t('name')}</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>{t('ip')}</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>{t('os')}</th>
               </tr>
             </thead>
             <tbody>
@@ -72,7 +74,7 @@ export default function AssetsView() {
               {agents.length === 0 && (
                 <tr>
                   <td colSpan={4} style={{ padding: '30px', textAlign: 'center', opacity: 0.5, color: 'var(--text-dim)', letterSpacing: '2px' }}>
-                    0 AGENTES ENCONTRADOS · VERIFIQUE LA CONEXIÓN WAZUH
+                    {t('no_agents_found')} · {t('check_wazuh_connection')}
                   </td>
                 </tr>
               )}
@@ -86,19 +88,19 @@ export default function AssetsView() {
       {selectedAgent && (
         <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head">
-            <span className="panel__title">Detalle Técnico: {selectedAgent.name}</span>
-            <button className="action-btn" onClick={() => setSelectedAgent(null)}>CERRAR</button>
+            <span className="panel__title">{t('technical_detail')}: {selectedAgent.name}</span>
+            <button className="action-btn" onClick={() => setSelectedAgent(null)}>{t('close').toUpperCase()}</button>
           </div>
           
           <div className="panel__body" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
              
              {/* Tabs Header */}
              <div style={{ display: 'flex', gap: '2px', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.05)', borderTop: '2px solid var(--signal)', fontSize: '10px', fontWeight: 600 }}>SISTEMA Y RED</div>
+                <div style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.05)', borderTop: '2px solid var(--signal)', fontSize: '10px', fontWeight: 600 }}>{t('system_and_network').toUpperCase()}</div>
              </div>
 
              {detailsLoading ? (
-               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--signal)' }}>SINCRONIZANDO DATOS DE AGENTE...</div>
+               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--signal)' }}>{t('sync').replace('🔄', '').trim().toUpperCase()}...</div>
              ) : (
                <>
                  {/* Networking Section */}
@@ -114,9 +116,9 @@ export default function AssetsView() {
                        </div>
                     </div>
                     <div className="panel" style={{ padding: '15px' }}>
-                       <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>ESTADO DE VULNERABILIDADES</div>
+                       <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px' }}>{t('vulnerabilities').toUpperCase()}</div>
                        <div style={{ fontSize: '18px', fontWeight: 800, color: details.vulns.length > 0 ? 'var(--danger)' : 'var(--signal)' }}>
-                          {details.vulns.length} DETECTADAS
+                          {details.vulns.length} {t('detected').toUpperCase()}
                        </div>
                     </div>
                  </div>

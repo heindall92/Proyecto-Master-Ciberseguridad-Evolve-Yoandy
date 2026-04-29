@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getRecentAlerts, getMitreCoverage, getTopAttackers, createTicket } from "../lib/api";
+import { translations } from "./translations";
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
 const SEV_COLOR: Record<string, string> = {
@@ -50,7 +51,8 @@ const CHIPS = [
   { id: "low",      label: "LOW"  },
 ];
 
-export default function SiemView() {
+export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
+  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [alerts, setAlerts]           = useState<any[]>([]);
   const [mitre, setMitre]             = useState<any[]>([]);
   const [topAttackers, setTopAttackers] = useState<any[]>([]);
@@ -182,7 +184,7 @@ export default function SiemView() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Filtrar por IP, agente, regla..."
+            placeholder={t('filter_placeholder')}
             style={{
               width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid var(--line)",
               color: "#fff", padding: "5px 8px 5px 28px", borderRadius: 4, fontSize: 11,
@@ -195,14 +197,14 @@ export default function SiemView() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 20, alignItems: "center" }}>
           {systemCount > 0 && (
             <span style={{ fontSize: 10, color: "var(--amber)", opacity: 0.7 }}>
-              {systemCount} errores de sistema ocultos
+              {systemCount} {t('hidden_errors')}
             </span>
           )}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <span style={{ fontSize: 18, fontWeight: 700, color: visible.length > 0 ? "#ff3b3b" : "#3cf", lineHeight: 1, fontFamily: "var(--mono)" }}>
               {visible.length}
             </span>
-            <span style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "1px" }}>EVENTOS</span>
+            <span style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "1px" }}>{t('events').toUpperCase()}</span>
           </div>
         </div>
       </div>
@@ -220,8 +222,8 @@ export default function SiemView() {
             borderBottom: "1px solid var(--line-faint)",
             background: "rgba(0,0,0,0.2)",
           }}>
-            {["SEV", "HORA", "AGENTE", "DESCRIPCIÓN", ""].map(h => (
-              <span key={h} style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px", fontWeight: 700 }}>{h}</span>
+            {["SEV", t('time'), t('agents'), t('description'), ""].map((h, idx) => (
+              <span key={idx} style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px", fontWeight: 700 }}>{h.toUpperCase()}</span>
             ))}
           </div>
 
@@ -232,7 +234,7 @@ export default function SiemView() {
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M12 2 L3 7 L12 12 L21 7 Z"/><path d="M3 12 L12 17 L21 12"/><path d="M3 17 L12 22 L21 17"/>
                 </svg>
-                <span style={{ fontSize: 11, letterSpacing: "2px" }}>SIN EVENTOS</span>
+                <span style={{ fontSize: 11, letterSpacing: "2px" }}>{t('no_alerts').toUpperCase()}</span>
               </div>
             ) : (
               visible.map((al, i) => {

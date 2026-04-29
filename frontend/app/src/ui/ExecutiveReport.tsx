@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid2";
 import { fetchExecutiveReportData, type ExecutiveReportData } from "../lib/reportApi";
+import { translations } from "./translations";
 
 function severityColor(value: string): "success" | "warning" | "error" | "default" {
   const sev = value.toLowerCase();
@@ -25,7 +26,8 @@ function gaugeColor(score: number): string {
   return "#00ff41";
 }
 
-export default function ExecutiveReport() {
+export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
+  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [data, setData] = useState<ExecutiveReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export default function ExecutiveReport() {
             textShadow: "0 0 10px var(--signal-glow)",
           }}
         >
-          Executive Report Generator
+          {t('exec_report').toUpperCase()}
         </Typography>
         <Stack direction="row" spacing={1}>
           <Button
@@ -96,7 +98,7 @@ export default function ExecutiveReport() {
               "&:hover": { borderColor: "var(--signal)", backgroundColor: "rgba(60,255,158,0.1)" },
             }}
           >
-            {loading ? "Cargando..." : "Refrescar"}
+            {loading ? t('loading') : t('refresh')}
           </Button>
           <Button
             variant="outlined"
@@ -110,7 +112,7 @@ export default function ExecutiveReport() {
               "&:hover": { borderColor: "var(--signal)", backgroundColor: "rgba(60,255,158,0.1)" },
             }}
           >
-            Exportar PDF
+            {t('export_pdf')}
           </Button>
         </Stack>
       </Stack>
@@ -124,7 +126,7 @@ export default function ExecutiveReport() {
       {!data && loading && (
         <Stack alignItems="center" sx={{ py: 10 }}>
           <CircularProgress sx={{ color: "var(--signal)", mb: 2 }} />
-          <Typography sx={{ fontFamily: "var(--mono)", letterSpacing: "1px" }}>Generando reporte ejecutivo...</Typography>
+          <Typography sx={{ fontFamily: "var(--mono)", letterSpacing: "1px" }}>{t('generating_report')}</Typography>
         </Stack>
       )}
 
@@ -133,11 +135,11 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 4 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Riesgo Global</Typography>
+                <Typography className="panel__title">{t('global_risk')}</Typography>
               </Box>
               <Box className="panel__body">
                 <Typography variant="body2" sx={{ mb: 2, color: "var(--text-dim)", letterSpacing: "1px", textTransform: "uppercase" }}>
-                  Score de riesgo global
+                  {t('risk_score_desc')}
                 </Typography>
                 <Box sx={{ position: "relative", display: "inline-flex", mx: "auto", width: "100%", justifyContent: "center" }}>
                   <CircularProgress variant="determinate" value={100} size={160} thickness={4} sx={{ color: "var(--line)", position: "absolute" }} />
@@ -149,7 +151,7 @@ export default function ExecutiveReport() {
                   </Box>
                 </Box>
                 <Typography sx={{ mt: 2, color: "var(--text-dim)", textAlign: "center", letterSpacing: "0.6px" }}>
-                  Fuente: {data.source === "api" ? "Backend en linea" : "Fallback simulado"}
+                  {t('source')}: {data.source === "api" ? t('online_backend') : t('simulated_fallback')}
                 </Typography>
               </Box>
             </Box>
@@ -158,7 +160,7 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 8 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Resumen Ejecutivo (Ollama)</Typography>
+                <Typography className="panel__title">{t('executive_summary')} (Ollama)</Typography>
               </Box>
               <Box className="panel__body">
                 <Typography sx={{ lineHeight: 1.7, color: "var(--text)" }}>{data.executiveSummary}</Typography>
@@ -169,12 +171,12 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 6 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Metricas Clave</Typography>
+                <Typography className="panel__title">{t('key_metrics')}</Typography>
               </Box>
               <Box className="panel__body">
                 <Stack spacing={1}>
-                  <Typography>Total alertas: {data.metrics.totalAlerts}</Typography>
-                  <Typography>Criticas: {data.metrics.criticalAlerts}</Typography>
+                  <Typography>{t('total_alerts')}: {data.metrics.totalAlerts}</Typography>
+                  <Typography>{t('critical')}: {data.metrics.criticalAlerts}</Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                     <Chip label={`LOW ${data.metrics.bySeverity.low}`} size="small" sx={{ borderColor: "var(--signal-dim)", color: "var(--signal-dim)" }} variant="outlined" />
                     <Chip label={`MEDIUM ${data.metrics.bySeverity.medium}`} size="small" sx={{ borderColor: "var(--amber)", color: "var(--amber)" }} variant="outlined" />
@@ -189,7 +191,7 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 6 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Top Amenazas</Typography>
+                <Typography className="panel__title">{t('top_threats')}</Typography>
               </Box>
               <Box className="panel__body">
                 <Stack spacing={1}>
@@ -210,10 +212,10 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 6 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Cumplimiento ISO/IEC 27001:2022</Typography>
+                <Typography className="panel__title">{t('iso_compliance')}</Typography>
               </Box>
               <Box className="panel__body">
-                <Typography sx={{ mb: 1.5 }}>Nivel estimado: {data.iso27001.overall}%</Typography>
+                <Typography sx={{ mb: 1.5 }}>{t('estimated_level')}: {data.iso27001.overall}%</Typography>
                 <Stack spacing={1}>
                   {data.iso27001.controls.map((control) => (
                     <Box key={control.control}>
@@ -237,7 +239,7 @@ export default function ExecutiveReport() {
           <Grid size={{ xs: 12, md: 6 }}>
             <Box className="panel" sx={{ position: "relative" }}>
               <Box className="panel__head">
-                <Typography className="panel__title">Recomendaciones Priorizadas</Typography>
+                <Typography className="panel__title">{t('prioritized_recommendations')}</Typography>
               </Box>
               <Box className="panel__body">
                 <Stack spacing={1}>

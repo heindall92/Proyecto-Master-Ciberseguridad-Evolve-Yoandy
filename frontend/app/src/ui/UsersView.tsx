@@ -5,8 +5,10 @@ import {
   Edit as EditIcon,
 } from "@mui/icons-material";
 import { listUsers, deleteUser, createUser, updateUser, UserOut } from "../lib/api";
+import { translations } from "./translations";
 
-export default function UsersView() {
+export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
+  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [users, setUsers] = useState<UserOut[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,7 +37,7 @@ export default function UsersView() {
   }, []);
 
   const onDelete = async (id: number) => {
-    if (!confirm("¿CONFIRMAR ELIMINACIÓN DE OPERADOR?")) return;
+    if (!confirm(t('confirm_delete'))) return;
     try {
       await deleteUser(id);
       fetchUsers();
@@ -64,11 +66,11 @@ export default function UsersView() {
 
   const onSave = async () => {
     if (!username) {
-      alert("EL NOMBRE DE USUARIO ES REQUERIDO");
+      alert(t('username_required'));
       return;
     }
     if (!editingUserId && !password) {
-      alert("LA LLAVE DE ACCESO ES OBLIGATORIA PARA NUEVOS OPERADORES");
+      alert(t('password_required'));
       return;
     }
 
@@ -80,10 +82,10 @@ export default function UsersView() {
 
       if (editingUserId) {
         await updateUser(editingUserId, payload);
-        alert("OPERADOR ACTUALIZADO");
+        alert(t('user_updated'));
       } else {
         await createUser(payload);
-        alert("NUEVO OPERADOR REGISTRADO");
+        alert(t('user_created'));
       }
       setModalOpen(false);
       fetchUsers();
@@ -95,21 +97,21 @@ export default function UsersView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--ff-mono)', color: 'var(--signal)', fontSize: '18px', letterSpacing: '2px' }}>CONTROL DE ACCESOS</h2>
+        <h2 style={{ fontFamily: 'var(--ff-mono)', color: 'var(--signal)', fontSize: '18px', letterSpacing: '2px' }}>{t('access_control')}</h2>
         <button 
           className="action-btn"
           onClick={openCreateModal}
           style={{ padding: '8px 15px', display: 'flex', alignItems: 'center', cursor: 'pointer', fontFamily: 'var(--ff-mono)', fontSize: '11px', fontWeight: 'bold' }}
         >
           <AddIcon sx={{ fontSize: 14, mr: 1 }} />
-          NUEVO OPERADOR
+          {t('add_user')}
         </button>
       </div>
 
       <div className="panel">
         <div className="panel__head">
-           <span className="panel__title">PERSONAL AUTORIZADO</span>
-           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>SISTEMA DE ROLES ACTIVE</span>
+           <span className="panel__title">{t('authorized_personnel')}</span>
+           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{t('role_system_active')}</span>
         </div>
         <div className="panel__body" style={{ padding: '0', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>

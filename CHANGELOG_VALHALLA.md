@@ -1,5 +1,16 @@
 # Changelog - Valhalla SOC Dashboard
 
+## [1.2.0] - 2026-04-29
+### Added
+- **Full Localization (i18n)**: Completed the localization of all modules, including Dashboard widgets, Asset Inventory, User Management, SIEM View, and Executive Reports.
+- **Session Context Translation**: Translated sidebar session labels (Operator, Session header) to ensure a 100% consistent language experience.
+- **Workspace Polish**: Localized all Kanban column headers, filter options, and the "New Incident" creation flow.
+- **Asset Detail Localization**: Translated technical detail tabs, software inventory headers, and vulnerability status indicators.
+
+### Changed
+- **Header Dynamics**: The "Incident Response Board" and its functional description now dynamically update based on the selected language.
+- **Persistence Layer**: Optimized `localStorage` handling for the `lang` state to prevent UI flickering during transitions.
+
 ## [1.1.0] - 2026-04-29
 ### Added
 - **Internationalization (i18n)**: Implemented English and Spanish support across the entire dashboard.

@@ -184,28 +184,28 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const currentAlerts = alerts.slice(siemPageState * pageSize, (siemPageState + 1) * pageSize);
 
   const WIDGET_REGISTRY = useMemo(() => ({
-    "kpi-1": { name: "Alertas 24h", w: 2, h: 2, icon: "📊", render: () => (
+    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "📊", render: () => (
       <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
         <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.alerts}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>ALERTAS</span>
+        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>{t('siem').toUpperCase()}</span>
       </button>
     )},
-    "kpi-2": { name: "Eventos", w: 2, h: 2, icon: "⚡", render: () => (
+    "kpi-2": { name: t('events'), w: 2, h: 2, icon: "⚡", render: () => (
       <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
         <span style={{ fontSize: '24px', fontWeight: 900, color: '#ef4444', textShadow: '0 0 10px rgba(239,68,68,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.events}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(239,68,68,0.8)', letterSpacing: '1px' }}>EVENTOS</span>
+        <span style={{ fontSize: '9px', color: 'rgba(239,68,68,0.8)', letterSpacing: '1px' }}>{t('events').toUpperCase()}</span>
       </button>
     )},
-    "kpi-3": { name: "Agentes", w: 2, h: 2, icon: "🖥️", render: () => (
+    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => (
       <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
         <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.unique_agents || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>AGENTES</span>
+        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>{t('agents').toUpperCase()}</span>
       </button>
     )},
-    "kpi-4": { name: "Atacantes", w: 2, h: 2, icon: "🎯", render: () => (
+    "kpi-4": { name: t('top_attackers'), w: 2, h: 2, icon: "🎯", render: () => (
       <button className="navbtn" style={{ background: 'transparent', padding: '8px 12px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
         <span style={{ fontSize: '24px', fontWeight: 900, color: '#f59e0b', textShadow: '0 0 10px rgba(245,158,11,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.unique_attackers || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(245,158,11,0.8)', letterSpacing: '1px' }}>IPS</span>
+        <span style={{ fontSize: '9px', color: 'rgba(245,158,11,0.8)', letterSpacing: '1px' }}>{t('ips').toUpperCase()}</span>
       </button>
     )},
     "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "🌊", render: () => {
@@ -235,13 +235,13 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 1fr', gap: '0 8px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            {['SEV','HORA','AGENTE','DESCRIPCIÓN'].map(h => (
-              <span key={h} style={{ fontSize: '11px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.3)', fontWeight: 'bold' }}>{h}</span>
+            {['SEV',t('time'),t('agents'),t('description')].map((h, idx) => (
+              <span key={idx} style={{ fontSize: '11px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.3)', fontWeight: 'bold' }}>{h.toUpperCase()}</span>
             ))}
           </div>
           <div className="panel__body" style={{ padding: 0, overflowY: 'auto', flex: 1 }}>
             {currentAlerts.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>SIN ALERTAS</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_alerts').toUpperCase()}</div>
             )}
             {currentAlerts.map((al, i) => {
               const sev = (al.severity || 'info').toLowerCase();
@@ -287,18 +287,18 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           <div className="panel__head" style={{ cursor: 'move' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 5px var(--signal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              <span className="panel__title">VOLUMEN · 24H</span>
+              <span className="panel__title">{t('volume')} · 24H</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
               <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--signal)', fontFamily: 'var(--mono)', lineHeight: 1 }}>{lastVal}</span>
-              <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.3)', letterSpacing: '1px' }}>EPS</span>
+              <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.3)', letterSpacing: '1px' }}>{t('eps')}</span>
               {trend !== 0 && <span style={{ fontSize: '9px', color: trend > 0 ? '#ef4444' : '#22c55e' }}>{trend > 0 ? '▲' : '▼'}</span>}
             </div>
           </div>
           <div style={{ padding: '8px 12px 4px', display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>-24h</span>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>MÁXIMO: {maxVal}</span>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>AHORA</span>
+            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('max')}: {maxVal}</span>
+            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('now')}</span>
           </div>
           <div style={{ flex: 1, padding: '0 12px 12px', minHeight: 0 }}>
             <AreaChart points={volumePoints} color="#00ff88" gradientId="vol-grad" />
@@ -316,14 +316,14 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head" style={{ cursor: 'move' }}>
-            <span className="panel__title">DISTRIBUCIÓN · SEV</span>
-            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{total === 1 ? 0 : total} alertas</span>
+            <span className="panel__title">{t('distribution')} · SEV</span>
+            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{total === 1 ? 0 : total} {t('siem').toLowerCase()}</span>
           </div>
           <div className="panel__body" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', flex: 1 }}>
-            <SevBar label="CRÍTICO" count={counts.critical} total={total === 1 ? 0 : total} color="#ef4444" />
-            <SevBar label="ALTO" count={counts.high} total={total === 1 ? 0 : total} color="#f97316" />
-            <SevBar label="MEDIO" count={counts.medium} total={total === 1 ? 0 : total} color="#eab308" />
-            <SevBar label="BAJO" count={counts.low} total={total === 1 ? 0 : total} color="#22c55e" />
+            <SevBar label={t('critical').toUpperCase()} count={counts.critical} total={total === 1 ? 0 : total} color="#ef4444" />
+            <SevBar label={t('high').toUpperCase()} count={counts.high} total={total === 1 ? 0 : total} color="#f97316" />
+            <SevBar label={t('medium').toUpperCase()} count={counts.medium} total={total === 1 ? 0 : total} color="#eab308" />
+            <SevBar label={t('low').toUpperCase()} count={counts.low} total={total === 1 ? 0 : total} color="#22c55e" />
           </div>
         </section>
       );
@@ -334,14 +334,14 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head" style={{ cursor: 'move' }}>
-            <span className="panel__title">TOP ATACANTES</span>
+            <span className="panel__title">{t('top_attackers').toUpperCase()}</span>
             <span style={{ fontSize: '9px', color: 'var(--danger)', fontFamily: 'var(--mono)', padding: '1px 6px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              {topAttackers?.length || 0} IPs
+              {topAttackers?.length || 0} {t('ips')}
             </span>
           </div>
           <div className="panel__body" style={{ padding: '4px 0', overflowY: 'auto', flex: 1 }}>
             {topAttackers.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_data').toUpperCase()}</div>
             )}
             {topAttackers.slice(0, 8).map((a: any, i: number) => {
               const barPct = (a.count / maxCount) * 100;
@@ -421,7 +421,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       {catalogState && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setCatalogState(false)}>
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', padding: '24px', maxWidth: '500px', width: '90%', boxShadow: '0 0 30px rgba(0,255,136,0.2)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px', color: 'var(--signal)', fontFamily: 'var(--mono)', letterSpacing: '2px', borderBottom: '1px solid var(--line)', paddingBottom: '8px', textAlign: 'center' }}>⬡ AGREGAR WIDGET ⬡</h3>
+            <h3 style={{ margin: '0 0 16px', color: 'var(--signal)', fontFamily: 'var(--mono)', letterSpacing: '2px', borderBottom: '1px solid var(--line)', paddingBottom: '8px', textAlign: 'center' }}>⬡ {t('add_widget_title')} ⬡</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', maxHeight: '300px', overflowY: 'auto' }}>
               {Object.entries(WIDGET_REGISTRY).filter(([k]) => !activeWidgets.includes(k)).map(([k, w]: [string, any]) => (
                 <button key={k} onClick={() => addWidget(k)} style={{ padding: '14px', background: 'rgba(0,255,136,0.05)', border: '1px solid var(--line-strong)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
@@ -450,7 +450,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               marginBottom: '10px',
               clipPath: 'polygon(10px 0%, 65% 0%, 72% 25%, 100% 25%, 100% calc(100% - 10px), calc(100% - 15px) 100%, 15px 100%, 0% calc(100% - 15px), 0% 10px)'
             }}>
-            ✕ CANCELAR
+             ✕ {t('close')}
           </button>
           </div>
         </div>

@@ -467,23 +467,23 @@ export default function App() {
           <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
             ROOT@VALHALLA:~#<br/>
             SID: 0x7A4F · L3<br/>
-            OPERATOR: {user.username.toUpperCase()}
+            {t('operator')}: {user.username.toUpperCase()}
           </div>
         </aside>
 
         <main className="main" style={{ gridColumn: '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
-          {view === 'assets' && <AssetsView />}
-          {view === 'users' && <UsersView />}
-          {/* {view === 'incidents' && <IncidentsView />} */}
-          {view === 'siem' && <SiemView />}
-          {view === 'threat' && <ThreatIntelView />}
-          {view === 'cowrie' && <CowrieView />}
-          {view === 'threatmap' && <ThreatMapView />}
-          {view === 'runbooks' && <RunbooksView />}
-          {view === 'lsamonitor' && <LSAMonitorView />}
+          {view === 'assets' && <AssetsView lang={lang} />}
+          {view === 'users' && <UsersView lang={lang} />}
+          {/* {view === 'incidents' && <IncidentsView lang={lang} />} */}
+          {view === 'siem' && <SiemView lang={lang} />}
+          {view === 'threat' && <ThreatIntelView lang={lang} />}
+          {view === 'cowrie' && <CowrieView lang={lang} />}
+          {view === 'threatmap' && <ThreatMapView lang={lang} />}
+          {view === 'runbooks' && <RunbooksView lang={lang} />}
+          {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
           {view === 'workspace' && <AnalystWorkspace lang={lang} />}
-          {view === 'executive-report' && <ExecutiveReport />}
+          {view === 'executive-report' && <ExecutiveReport lang={lang} />}
           {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report'].includes(view) && (
             <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <div style={{ color: 'var(--signal)', letterSpacing: '2px' }}>CONSTRUCCIÓN EN PROCESO // MODULE: {view.toUpperCase()}</div>
