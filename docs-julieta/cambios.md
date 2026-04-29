@@ -93,6 +93,48 @@
 - No quedan marcadores `<<<<<<<`, `=======`, `>>>>>>>` en los 3 archivos.
 - `react-router-dom` confirmado en `package.json` y `package-lock.json`.
 
+## 2026-04-29 (alineación visual con AppCore)
+
+### Cambio
+- Se analiza `frontend/app/src/ui/AppCore.tsx` y se adapta `frontend/app/src/ui/ExecutiveReport.tsx` para usar el mismo lenguaje visual de la aplicación principal.
+
+### Hallazgos del análisis
+- Tema MUI activo: `createTheme({ palette: { mode: "dark" } })` en `main.tsx` y `AppCore.tsx`.
+- Diseño base real proviene de `HUD.css`:
+  - Variables `--bg-void`, `--bg-panel`, `--signal`, `--text`, `--mono`, `--sans`.
+  - Contenedores tipo panel (`.panel`, `.panel__head`, `.panel__title`, `.panel__body`).
+  - Glow y líneas con `var(--signal-glow)` y `var(--line)`.
+
+### Resultado aplicado en Executive Report
+- Se reemplaza estilo hardcodeado por tokens visuales del HUD (`var(...)`).
+- Se reestructura cada card como panel HUD para coincidir con `AppCore`.
+- Se ajusta tipografía a `var(--mono)` / `var(--sans)` y botones con bordes y hover del esquema principal.
+- Se mantienen componentes MUI (`Button`, `Chip`, `CircularProgress`, `Typography`, `Grid2`) con estilos alineados.
+
+## 2026-04-29 (fix scroll Executive Report)
+
+### Cambio
+- Se corrige el contenedor principal de `frontend/app/src/ui/ExecutiveReport.tsx` para permitir desplazamiento vertical.
+
+### Ajuste aplicado
+- En el `Box` raíz:
+  - Se mantiene `minHeight: "100vh"` (sin `height` fijo).
+  - Se agrega `overflow: "auto"` para habilitar scroll cuando el contenido excede la vista.
+
+## 2026-04-29 (fix scroll independiente del body)
+
+### Cambio
+- Se corrige `frontend/app/src/ui/ExecutiveReport.tsx` para que tenga un contenedor scrolleable propio, independiente de `body { overflow: hidden; }`.
+
+### Ajuste aplicado
+- En el contenedor raíz del componente:
+  - `height: "100vh"`
+  - `overflowY: "auto"`
+  - `overflowX: "hidden"`
+
+### Motivo
+- Garantizar scroll funcional en `/executive-report` incluso cuando el layout global bloquea el scroll del `body`.
+
 ## 2026-04-21 (implementación Executive Report)
 
 ### Cambio
