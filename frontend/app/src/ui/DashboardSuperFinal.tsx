@@ -123,37 +123,12 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       try {
         // Usar solo dashboard que no depende de Wazuh
         const dash = await getDashboardSummary();
-        if (dash.metrics && dash.metrics.alerts === 0) {
-           // Si no hay datos reales, inyectamos mocks para que el Dashboard no se vea vacío
-           setSummary({
-             ...dash,
-             metrics: {
-               alerts: 145,
-               events: 10540,
-               tickets_open: dash.metrics.tickets_open || 0,
-               total_alerts_24h: 345,
-               critical_alerts: 12,
-               unique_agents: dash.metrics.unique_agents || 4
-             }
-           });
-        } else {
-           setSummary(dash);
-        }
+        setSummary(dash);
         
         // Intentar obtener alertas de Wazuh (puede fallar si no está disponible)
         try {
           const alts = await getRecentAlerts(100);
-          if (alts && alts.length > 0) {
-            setAlerts(alts);
-          } else {
-            // Mock data if empty
-            setAlerts([
-              { id: 'mock-1', timestamp: new Date().toISOString(), agent_name: 'win-desktop-01', description: 'Multiple failed login attempts', severity: 'high', rule_id: '100001', srcip: '192.168.1.45' },
-              { id: 'mock-2', timestamp: new Date(Date.now() - 3600000).toISOString(), agent_name: 'ubuntu-web-prod', description: 'SSH Brute Force detected', severity: 'critical', rule_id: '5712', srcip: '114.114.114.114' },
-              { id: 'mock-3', timestamp: new Date(Date.now() - 7200000).toISOString(), agent_name: 'ubuntu-web-prod', description: 'Suspicious command execution', severity: 'medium', rule_id: '100052', srcip: '127.0.0.1' }
-            ]);
-            setSummary(prev => ({ ...prev, metrics: { ...prev?.metrics, critical_alerts: 3, total_alerts_24h: 128 } }));
-          }
+          setAlerts(alts || []);
         } catch(e) {
           console.warn("Wazuh alerts unavailable:", e);
           setAlerts([]);
@@ -161,16 +136,14 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         
         try {
           const top = await getTopAttackers(10);
-          if (top && top.length > 0) setTopAttackers(top);
-          else setTopAttackers([{ key: '114.114.114.114', doc_count: 450 }, { key: '185.220.101.4', doc_count: 312 }, { key: '45.144.225.53', doc_count: 128 }]);
+          setTopAttackers(top || []);
         } catch(e) {
           setTopAttackers([]);
         }
         
         try {
           const vol = await getAlertVolume(24);
-          if (vol && vol.length > 0) setVolumePoints(vol.map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
-          else setVolumePoints([12, 15, 8, 24, 45, 60, 20, 10, 5, 0, 0, 14, 55, 120, 80, 45, 30, 22, 10, 5, 12, 18, 20, 15]);
+          setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
         } catch(e) {
           setVolumePoints([]);
         }

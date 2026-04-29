@@ -19,15 +19,15 @@ Este documento detalla las mejoras críticas y correcciones aplicadas al ecosist
 - **Ajustes de Topbar:** Optimización del espaciado y jerarquía visual en la barra superior para mostrar "VALHALLA SOC PRO" con la estética solicitada.
 
 ## 3. Estabilidad y Resiliencia de Datos (Wazuh SIEM)
-- **Mock Fallback System:** Se implementó una lógica de "respaldo" en `DashboardSuperFinal.tsx`. Si la instancia de Wazuh está vacía (sin alertas recientes), el Dashboard inyecta automáticamente datos simulados de alta fidelidad para que las métricas, gráficos de volumen y lista de eventos no aparezcan vacíos.
-- **Métricas de Resumen:** Las tarjetas superiores (Alertas, Eventos, Agentes) ahora muestran valores coherentes incluso en entornos de pruebas recién desplegados.
+- **Datos 100% Reales:** Se eliminó cualquier rastro de datos simulados o "mock" en el Dashboard. Todas las métricas, alertas y gráficos de volumen provienen exclusivamente de la conexión en vivo con Wazuh/OpenSearch.
+- **Métricas de Resumen:** Las tarjetas superiores reflejan el estado real de los agentes y las alertas detectadas en la red.
 
 ## 4. Gestión de Operadores (Users View)
 - **Corrección de Roles:** Se sincronizaron los valores del formulario de creación de usuarios con los roles esperados por la API de FastAPI (`admin`, `analyst`, `viewer`).
 - **Traducción de UI:** Se mantuvo la interfaz en español para el usuario mientras se mapean los datos correctamente al backend en inglés, evitando errores `HTTP 400`.
 
 ## 5. Gestión de Procedimientos (Runbooks)
-- **Inicialización de Datos:** Se agregó una base de datos de procedimientos de ejemplo (Malware, Fuerza Bruta, etc.) que se carga automáticamente si la base de datos de producción está vacía, guiando al analista en sus primeras intervenciones.
+- **Limpieza de Simulaciones:** Se eliminaron los procedimientos de ejemplo "hardcodeados". El sistema ahora opera de forma pura sobre los datos persistidos en la base de datos PostgreSQL, garantizando integridad en los flujos de respuesta ante incidentes reales.
 
 ---
 **Valhalla SOC Team** - *Tactical Blue Team Operations*

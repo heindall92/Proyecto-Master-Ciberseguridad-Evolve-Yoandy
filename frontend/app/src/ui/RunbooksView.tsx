@@ -16,30 +16,6 @@ interface Runbook {
 const CATEGORIES = ["intrusion", "malware", "phishing", "ransomware", "ddos", "data_breach", "insider_threat", "other"];
 const SEVERITIES = ["low", "medium", "high", "critical", "all"];
 
-const MOCK_RUNBOOKS: Runbook[] = [
-  {
-    id: 1001,
-    name: "Respuesta ante Fuerza Bruta SSH",
-    category: "intrusion",
-    description: "Pasos a seguir cuando se detectan múltiples intentos fallidos de inicio de sesión SSH.",
-    containment_steps: ["Bloquear IP origen en Firewall perimetral", "Aislar activo comprometido temporalmente si hay acceso exitoso"],
-    eradication_steps: ["Forzar rotación de contraseñas de cuentas afectadas", "Revisar logs de auditoría por accesos exitosos anómalos"],
-    recovery_steps: ["Restaurar acceso tras validación con el usuario", "Implementar MFA y endurecer configuración de SSH"],
-    severity_applicable: "high",
-    is_active: true
-  },
-  {
-    id: 1002,
-    name: "Detección de Malware Genérico",
-    category: "malware",
-    description: "Respuesta estándar ante detecciones de antivirus o firmas de malware.",
-    containment_steps: ["Desconectar host afectado de la red corporativa", "Deshabilitar cuenta de usuario si se sospecha compromiso"],
-    eradication_steps: ["Ejecutar escaneo completo con AV/EDR", "Eliminar archivos maliciosos y limpiar llaves de registro"],
-    recovery_steps: ["Verificar estado de salud del agente EDR", "Reconectar a la red tras limpieza confirmada"],
-    severity_applicable: "medium",
-    is_active: true
-  }
-];
 
 export default function RunbooksView() {
   const [runbooks, setRunbooks] = useState<Runbook[]>([]);
@@ -52,11 +28,7 @@ export default function RunbooksView() {
     setLoading(true);
     try {
       const data = await listRunbooks();
-      if (!data || data.length === 0) {
-        setRunbooks(MOCK_RUNBOOKS);
-      } else {
-        setRunbooks(data);
-      }
+      setRunbooks(data || []);
     } catch (e) {
       console.error("Load runbooks error:", e);
     } finally {
