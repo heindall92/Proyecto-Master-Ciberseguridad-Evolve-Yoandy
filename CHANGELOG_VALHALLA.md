@@ -1,5 +1,19 @@
-# Informe de Modificaciones - Valhalla SOC Dashboard
-**Fecha:** 29 de Abril, 2026
+# Changelog - Valhalla SOC Dashboard
+
+## [1.1.0] - 2026-04-29
+### Added
+- **Internationalization (i18n)**: Implemented English and Spanish support across the entire dashboard.
+- **Language Selector**: Added a language toggle button in the User Settings menu and the Login screen.
+- **Audio Notifications**: Integrated a real-time notification system that plays a tactical sound when new high-severity incidents are detected.
+- **Visual Alerts**: The notification bell now blinks and shows a persistent badge when unread incidents are pending in the Workspace.
+- **SIEM Optimization**: Increased the font size and row spacing in the SIEM Overview card for better readability on tactical displays.
+
+### Changed
+- **Sync Logic**: The SIEM sync button now automatically refreshes the dashboard summary and alerts list.
+- **Workspace Integration**: SIEM alerts are now better linked to the Workspace module, allowing for immediate analysis and assignment.
+- **Translations**: Created a central `translations.ts` dictionary for easier maintenance of multilingual strings.
+
+## [1.0.1] - 2026-04-29
 **Estado:** Producción / Hardened
 
 Este documento detalla las mejoras críticas y correcciones aplicadas al ecosistema Valhalla SOC para asegurar su funcionalidad, conectividad y estética profesional.
