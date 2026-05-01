@@ -470,23 +470,46 @@ async def list_runbooks(db: AsyncSession = Depends(get_db), _=Depends(get_curren
 
 # VIRUSTOTAL
 @app.get("/api/virustotal/check-key")
-async def vt_check_key(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    # Buscamos la API Key en settings
-    s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-    if not s: raise HTTPException(404, "API Key no configurada")
-    key = decrypt_secret(s.value)
+async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    # Check header first (for testing from frontend)
+    key = request.headers.get("X-VT-API-Key")
+    if not key:
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+        if not s: raise HTTPException(404, "API Key no configurada")
+        key = decrypt_secret(s.value)
+    
     # Ping simple a Google DNS para validar key
     res = await vt.check_ip("8.8.8.8", key)
-    if "error" in res and "401" in res["error"]:
+    if "error" in res and ("401" in res["error"] or "Forbidden" in res["error"]):
         raise HTTPException(401, "API Key inválida")
     return {"status": "ok", "message": "API Key válida"}
 
 @app.get("/api/virustotal/ip/{ip}")
-async def vt_scan_ip(ip: str, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-    if not s: raise HTTPException(404, "API Key no configurada")
-    key = decrypt_secret(s.value)
+async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    key = request.headers.get("X-VT-API-Key")
+    if not key:
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+        if not s: raise HTTPException(404, "API Key no configurada")
+        key = decrypt_secret(s.value)
     return await vt.check_ip(ip, key)
+
+@app.get("/api/virustotal/hash/{file_hash}")
+async def vt_scan_hash(file_hash: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    key = request.headers.get("X-VT-API-Key")
+    if not key:
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+        if not s: raise HTTPException(404, "API Key no configurada")
+        key = decrypt_secret(s.value)
+    return await vt.check_hash(file_hash, key)
+
+@app.get("/api/virustotal/domain/{domain}")
+async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    key = request.headers.get("X-VT-API-Key")
+    if not key:
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+        if not s: raise HTTPException(404, "API Key no configurada")
+        key = decrypt_secret(s.value)
+    return await vt.check_domain(domain, key)
 
 # HEALTH INTEGRATIONS
 @app.get("/api/health/integrations")

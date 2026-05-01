@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
-import { getAudioContext, playNotificationSound, playResolvedSound } from "./audio";
+import { getAudioContext, playNotificationSound, playResolvedSound, playChatSound, playMentionSound } from "./audio";
 
 import {
   login,
@@ -12,6 +12,7 @@ import {
   getOpenTicketsCount,
   listTickets,
   assignTicket,
+  listUsers,
   UserOut,
   TicketOut,
 } from "../lib/api";
@@ -110,6 +111,43 @@ export default function App() {
   const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
+
+  // ── Chat interno enterprise ──
+  interface ChatAttachment { name: string; type: string; size: number; data: string; }
+  interface ChatMessage {
+    id: string; userId: number; username: string; rank: string;
+    text: string; timestamp: string; chatId: string;
+    mentions: string[]; attachment?: ChatAttachment;
+  }
+
+  const CHAT_KEY_PFX = 'valhalla.chat.v2.';
+  const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
+  const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
+
+  const loadChatMsgs = (chatId: string): ChatMessage[] => {
+    try { return JSON.parse(localStorage.getItem(CHAT_KEY_PFX + chatId) || '[]'); } catch { return []; }
+  };
+  const saveChatMsgs = (chatId: string, msgs: ChatMessage[]) =>
+    localStorage.setItem(CHAT_KEY_PFX + chatId, JSON.stringify(msgs.slice(-200)));
+
+  const [chatOpen, setChatOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string>('global');
+  const [chatMsgsByChat, setChatMsgsByChat] = useState<Record<string, ChatMessage[]>>({
+    global: loadChatMsgs('global')
+  });
+  const [dmUserIds, setDmUserIds] = useState<number[]>([]);
+  const [teamUsers, setTeamUsers] = useState<UserOut[]>([]);
+  const [unreadByChat, setUnreadByChat] = useState<Record<string, number>>({});
+  const [chatInput, setChatInput] = useState('');
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [showMentionDrop, setShowMentionDrop] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatChannelRef = useRef<BroadcastChannel | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
 
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
@@ -324,8 +362,173 @@ export default function App() {
     }
   };
 
+  // Load team users & DM list
+  useEffect(() => {
+    if (!user) return;
+    listUsers().then(setTeamUsers).catch(() => {});
+    try { setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')); } catch {}
+  }, [user?.id]);
+
+  // BroadcastChannel — multi-chat routing
+  useEffect(() => {
+    const ch = new BroadcastChannel('valhalla-team-chat-v2');
+    chatChannelRef.current = ch;
+    ch.onmessage = (e: MessageEvent<ChatMessage>) => {
+      const msg = e.data;
+      setChatMsgsByChat(prev => {
+        const list = prev[msg.chatId] || [];
+        const next = [...list, msg].slice(-200);
+        saveChatMsgs(msg.chatId, next);
+        return { ...prev, [msg.chatId]: next };
+      });
+
+      const myId = user?.id ?? -1;
+      const myUsername = user?.username ?? '';
+      const isMentionOfMe = Array.isArray(msg.mentions) && msg.mentions.includes(myUsername);
+      // DM está dirigido a mí si mi ID está en el chatId (ej: "dm:3-7" y soy usuario 3 o 7)
+      const isDmToMe = msg.chatId.startsWith('dm:') &&
+        msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
+      const isGlobal = msg.chatId === 'global';
+      // Solo notificar si el mensaje va dirigido a este usuario
+      const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
+
+      if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
+        setUnreadByChat(prev => ({ ...prev, [msg.chatId]: (prev[msg.chatId] || 0) + 1 }));
+        if (isMentionOfMe) playMentionSound();
+        else playChatSound();
+      }
+      if (msg.chatId.startsWith('dm:') && msg.userId !== user?.id) {
+        const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
+        const otherId = parts.find(id => id !== user?.id);
+        if (otherId) {
+          setDmUserIds(prev => {
+            if (prev.includes(otherId)) return prev;
+            const next = [...prev, otherId];
+            localStorage.setItem(DM_LIST_KEY(user!.id), JSON.stringify(next));
+            return next;
+          });
+          setChatMsgsByChat(prev => ({ ...prev, [msg.chatId]: prev[msg.chatId] || loadChatMsgs(msg.chatId) }));
+        }
+      }
+    };
+    return () => ch.close();
+  }, [chatOpen, activeChatId, user?.id, user?.username]);
+
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    }
+  }, [chatOpen, activeChatId, chatMsgsByChat[activeChatId]?.length]);
+
+  const handleChatInput = (value: string) => {
+    setChatInput(value);
+    const atIdx = value.lastIndexOf('@');
+    if (atIdx !== -1 && !value.slice(atIdx + 1).includes(' ')) {
+      setMentionFilter(value.slice(atIdx + 1).toLowerCase());
+      setShowMentionDrop(true);
+    } else {
+      setShowMentionDrop(false);
+    }
+  };
+
+  const insertMention = (username: string) => {
+    const atIdx = chatInput.lastIndexOf('@');
+    setChatInput(chatInput.slice(0, atIdx) + `@${username} `);
+    setShowMentionDrop(false);
+    chatInputRef.current?.focus();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['text/plain','application/pdf','image/png','image/jpeg','image/svg+xml',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'];
+    if (!allowed.includes(file.type) && !file.name.endsWith('.csv')) {
+      alert(lang === 'es' ? 'Tipo no permitido. Usa: texto, PDF, PNG, JPG, SVG, Excel o CSV' : 'File type not allowed');
+      e.target.value = ''; return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert(lang === 'es' ? 'Archivo demasiado grande (máx 2 MB)' : 'File too large (max 2 MB)');
+      e.target.value = ''; return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string });
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const openDm = (target: UserOut) => {
+    if (!user) return;
+    const dmId = makeDmId(user.id, target.id);
+    setChatMsgsByChat(prev => ({ ...prev, [dmId]: prev[dmId] || loadChatMsgs(dmId) }));
+    setDmUserIds(prev => {
+      if (prev.includes(target.id)) return prev;
+      const next = [...prev, target.id];
+      localStorage.setItem(DM_LIST_KEY(user.id), JSON.stringify(next));
+      return next;
+    });
+    setActiveChatId(dmId);
+    setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+  };
+
+  const clearActiveChat = () => {
+    setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: [] }));
+    localStorage.removeItem(CHAT_KEY_PFX + activeChatId);
+  };
+
+  const getDmPartner = (chatId: string) => {
+    if (!user) return null;
+    const parts = chatId.replace('dm:', '').split('-').map(Number);
+    const otherId = parts.find(id => id !== user.id) ?? parts[0];
+    return teamUsers.find(u => u.id === otherId) || null;
+  };
+
+  const renderMsgText = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(@\w+)/g);
+    return parts.map((p, i) =>
+      p.startsWith('@') ? <span key={i} className="mention">{p}</span> : p
+    );
+  };
+
+  const sendChatMessage = useCallback(() => {
+    if ((!chatInput.trim() && !pendingAttachment) || !user) return;
+    const mentions = Array.from(chatInput.matchAll(/@(\w+)/g)).map(m => m[1]);
+    const msg: ChatMessage = {
+      id: Date.now().toString(), userId: user.id,
+      username: user.username, rank: user.rank || 'ANALISTA',
+      text: chatInput.trim(), timestamp: new Date().toISOString(),
+      chatId: activeChatId, mentions,
+      ...(pendingAttachment ? { attachment: pendingAttachment } : {})
+    };
+    setChatMsgsByChat(prev => {
+      const list = prev[activeChatId] || [];
+      const next = [...list, msg].slice(-200);
+      saveChatMsgs(activeChatId, next);
+      return { ...prev, [activeChatId]: next };
+    });
+    chatChannelRef.current?.postMessage(msg);
+    setChatInput('');
+    setPendingAttachment(null);
+    setShowMentionDrop(false);
+  }, [chatInput, user, activeChatId, pendingAttachment]);
+
   if (loading) {
-    return <div style={{ color: 'var(--signal)', padding: '20px' }}>CARGANDO...</div>;
+    return (
+      <div className="loading-tactical">
+        <div className="loading-tactical__inner">
+          <div className="loading-tactical__icon">
+            <div className="loading-tactical__icon-inner">
+              <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: 'var(--signal)' }} />
+            </div>
+          </div>
+          <div className="loading-tactical__text">
+            INICIALIZANDO SISTEMA<span className="loading-tactical__dots" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
@@ -445,8 +648,45 @@ export default function App() {
                 <span style={{ color: 'var(--text-faint)' }}>{t('alerts_24h')}</span>
                 <span style={{ color: stats?.metrics?.total_alerts_24h > 0 ? 'var(--danger)' : 'var(--text-dim)', fontWeight: 600 }}>{stats?.metrics?.total_alerts_24h || 0}</span>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal)" strokeWidth="2" style={{ marginLeft: '8px' }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
+            <button
+              onClick={() => {
+                if (!chatOpen) {
+                  // Al ABRIR: limpiar solo el canal activo
+                  setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+                }
+                setChatOpen(v => !v);
+              }}
+              style={{
+                position: 'relative', display: 'flex', alignItems: 'center',
+                padding: '8px', cursor: 'pointer',
+                background: totalUnread > 0 ? 'rgba(255,62,62,0.08)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${totalUnread > 0 ? 'rgba(255,62,62,0.4)' : 'rgba(0,255,136,0.2)'}`,
+                borderRadius: '8px', marginRight: '4px', transition: 'all 0.2s'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke={totalUnread > 0 ? '#FF3E3E' : chatOpen ? 'var(--signal)' : 'var(--signal)'}
+                strokeWidth="2"
+                style={{ filter: totalUnread > 0 ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              {totalUnread > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-4px', right: '-4px',
+                  minWidth: '18px', height: '18px', padding: '0 4px',
+                  background: '#FF3E3E', color: '#fff',
+                  borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 0 10px rgba(255,62,62,0.5)',
+                  animation: 'pulse-red 2s infinite',
+                  zIndex: 10
+                }}>
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
+            </button>
             <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
               <style>{`
                 @keyframes pulse-red {
@@ -499,20 +739,24 @@ export default function App() {
 
         {userMenuOpen && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setUserMenuOpen(false)}>
-            <div style={{ position: 'absolute', top: 50, right: 10, background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '220px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '6px 0' }}>
-              <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{t('sync')}</button>
-              <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
-              <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
-              <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{lang === 'es' ? '🎨 TEMAS' : '🎨 THEMES'}</button>
-              <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cyan)', fontSize: '11px', fontWeight: 'bold' }}>⚙️ {t('profile_settings')}</button>
-              {user?.role === 'admin' && (
-                  <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{lang === 'es' ? '⚙️ AJUSTES GLOBALES' : '⚙️ GLOBAL SETTINGS'}</button>
-              )}
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
-              <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}: {lang.toUpperCase()}</button>
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
-              <button onClick={logout} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '11px', fontWeight: 'bold' }}>{t('exit')}</button>
+            <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 10, width: '230px' }} onClick={e => e.stopPropagation()}>
+              <div className="tactical-dropdown__header">
+                <div className="tactical-dropdown__header-name">{user.username.toUpperCase()}</div>
+                <div className="tactical-dropdown__header-rank">{user.rank?.toUpperCase() || 'ANALISTA'} · {user.role?.toUpperCase()}</div>
+              </div>
+              <div style={{ padding: '4px 0' }}>
+                <button onClick={() => window.location.reload()} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>{t('sync')}</button>
+                <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
+                <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
+                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>🎨 {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
+                <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}>👤 {t('profile_settings')}</button>
+                {user?.role === 'admin' && (
+                  <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>⚙ {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
+                )}
+                <div className="tactical-dropdown__divider" />
+                <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)', background: 'rgba(60,255,158,0.05)' }}>{t('language')}: {lang.toUpperCase()}</button>
+                <div className="tactical-dropdown__divider" />
+                <button onClick={logout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
               </div>
             </div>
           </div>
@@ -520,7 +764,7 @@ export default function App() {
 
         {notifMenuOpen && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setNotifMenuOpen(false)}>
-            <div style={{ position: 'absolute', top: 50, right: 60, background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '320px', maxHeight: '450px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 60, width: '320px', maxHeight: '450px', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)', display: 'flex', justifyContent: 'space-between' }}>
                 <span>{t('notifications')}</span>
                 <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
@@ -596,7 +840,7 @@ export default function App() {
         </aside>
         )}
 
-        <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', gridRow: tvMode ? '1 / -1' : 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div className="main-content" style={{ overflowY: 'auto', position: 'relative', flex: 1 }}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -637,24 +881,203 @@ export default function App() {
         </main>
 
         {/* Tweaks Panel */}
-        <div className={`tweaks ${tweaksOpen ? 'open' : ''}`} style={{ 
-          position: 'fixed', bottom: '40px', right: '40px', width: '270px', 
-          background: 'var(--bg-panel-deep)', border: '1px solid var(--signal)', padding: '20px',
-          display: tweaksOpen ? 'block' : 'none', zIndex: 1000, borderRadius: '12px'
-        }}>
-           <h4 style={{ color: 'var(--signal)', margin: '0 0 15px 0' }}>// AJUSTES</h4>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>ESQUEMA CROMÁTICO</label>
+        {tweaksOpen && (
+        <div className="tweaks-panel">
+           <h4 className="tweaks-panel__title">// TEMAS</h4>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>ESQUEMA CROMÁTICO</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                  {['green', 'cyan', 'amber', 'purple'].map(s => (
-                   <button key={s} onClick={() => setScheme(s)} style={{ padding: '6px', background: scheme === s ? 'var(--signal)' : 'none', color: scheme === s ? '#000' : 'var(--text)', border: '1px solid var(--line)', cursor: 'pointer', fontSize: '10px' }}>{s.toUpperCase()}</button>
+                   <button key={s} onClick={() => setScheme(s)} className="action-btn" style={{ color: scheme === s ? '#000' : 'var(--text)' }}>
+                     {scheme === s && <span style={{ position: 'absolute', inset: 0, background: 'var(--signal)', zIndex: -1 }} />}
+                     {s.toUpperCase()}
+                   </button>
                  ))}
               </div>
-              <button onClick={() => setScanlines(!scanlines)} style={{ padding: '8px', background: 'none', border: '1px solid var(--line)', color: 'var(--text)', cursor: 'pointer', fontSize: '10px' }}>SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
-              <button onClick={() => setTvMode(!tvMode)} style={{ padding: '8px', background: tvMode ? 'var(--signal)' : 'none', border: '1px solid var(--line)', color: tvMode ? '#000' : 'var(--text)', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>{t('tv_mode')}</button>
-              <button onClick={() => setTweaksOpen(false)} style={{ color: 'var(--danger)', padding: '8px', background: 'none', border: 'none', cursor: 'pointer' }}>CERRAR</button>
+              <button onClick={toggleTheme} className="action-btn">
+                {theme === 'dark' ? '☀ MODO CLARO' : '🌑 MODO OSCURO'}
+              </button>
+              <button onClick={() => setScanlines(!scanlines)} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
+              <button onClick={() => setTvMode(!tvMode)} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
+              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}>✕ CERRAR</button>
            </div>
         </div>
+        )}
+
+        {/* Chat Panel — Enterprise */}
+        <AnimatePresence>
+        {chatOpen && (
+          <motion.div
+            className="chat-panel"
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.96 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            {/* Header */}
+            <div className="chat-panel__head">
+              <span className="chat-panel__title">
+                {activeChatId === 'global'
+                  ? 'COMMS // EQUIPO'
+                  : `DM // ${getDmPartner(activeChatId)?.username?.toUpperCase() || '???'}`
+                }
+              </span>
+              <div className="chat-panel__head-actions">
+                <button className="chat-panel__action-btn" onClick={clearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}>🗑</button>
+                <button className="chat-panel__close" onClick={() => setChatOpen(false)}>✕</button>
+              </div>
+            </div>
+
+            {/* Body: sidebar + main */}
+            <div className="chat-body">
+              {/* Sidebar */}
+              <div className="chat-sidebar">
+                <div className="chat-sidebar__label">CANALES</div>
+                <button
+                  className={`chat-sidebar__item${activeChatId === 'global' ? ' active' : ''}`}
+                  onClick={() => { setActiveChatId('global'); setUnreadByChat(prev => ({ ...prev, global: 0 })); }}
+                >
+                  # EQUIPO
+                  {(unreadByChat.global || 0) > 0 && <span className="chat-sidebar__unread">{unreadByChat.global}</span>}
+                </button>
+
+                {dmUserIds.length > 0 && <div className="chat-sidebar__label">DMs</div>}
+                {dmUserIds.map(uid => {
+                  const dmId = makeDmId(user!.id, uid);
+                  const partner = teamUsers.find(u => u.id === uid);
+                  return (
+                    <button
+                      key={uid}
+                      className={`chat-sidebar__item${activeChatId === dmId ? ' active' : ''}`}
+                      onClick={() => {
+                        setChatMsgsByChat(prev => ({ ...prev, [dmId]: prev[dmId] || loadChatMsgs(dmId) }));
+                        setActiveChatId(dmId);
+                        setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+                      }}
+                    >
+                      @ {partner?.username?.toUpperCase() || `U${uid}`}
+                      {(unreadByChat[dmId] || 0) > 0 && <span className="chat-sidebar__unread">{unreadByChat[dmId]}</span>}
+                    </button>
+                  );
+                })}
+
+                <div className="chat-sidebar__label">NUEVO DM</div>
+                {teamUsers
+                  .filter(u => u.id !== user?.id && !dmUserIds.includes(u.id))
+                  .map(u => (
+                    <button key={u.id} className="chat-sidebar__item" onClick={() => openDm(u)} style={{ opacity: 0.55 }}>
+                      + {u.username.toUpperCase()}
+                    </button>
+                  ))
+                }
+              </div>
+
+              {/* Main chat area */}
+              <div className="chat-main">
+                <div className="chat-panel__messages">
+                  {(chatMsgsByChat[activeChatId] || []).length === 0 && (
+                    <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-faint)', fontSize: '10px', letterSpacing: '2px' }}>
+                      CANAL SEGURO ESTABLECIDO<br/>
+                      <span style={{ opacity: 0.6, fontSize: '9px' }}>SIN MENSAJES AÚN</span>
+                    </div>
+                  )}
+                  {(chatMsgsByChat[activeChatId] || []).map(msg => (
+                    <div key={msg.id} className="chat-msg">
+                      <div className="chat-msg__meta">
+                        <span className={`chat-msg__user${msg.userId === user?.id ? ' self' : ''}`}>{msg.username}</span>
+                        <span className="chat-msg__time">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {msg.text && <div className="chat-msg__text">{renderMsgText(msg.text)}</div>}
+                      {msg.attachment && (
+                        <div className="chat-msg__attachment">
+                          {msg.attachment.type.startsWith('image/') ? (
+                            <img
+                              src={msg.attachment.data}
+                              alt={msg.attachment.name}
+                              onClick={() => window.open(msg.attachment!.data)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          ) : (
+                            <>
+                              <span style={{ fontSize: '16px' }}>
+                                {msg.attachment.type === 'application/pdf' ? '📄' :
+                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '📊' :
+                                 msg.attachment.type === 'text/plain' ? '📝' : '📎'}
+                              </span>
+                              <a href={msg.attachment.data} download={msg.attachment.name} style={{ color: 'var(--signal)', textDecoration: 'none' }}>
+                                {msg.attachment.name}
+                              </a>
+                              <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>
+                                {(msg.attachment.size / 1024).toFixed(0)} KB
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Pending attachment preview */}
+                {pendingAttachment && (
+                  <div className="chat-attachment-preview">
+                    {pendingAttachment.type.startsWith('image/') ? (
+                      <img src={pendingAttachment.data} alt={pendingAttachment.name} />
+                    ) : (
+                      <span>📎 {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
+                    )}
+                    <button className="chat-attachment-preview__remove" onClick={() => setPendingAttachment(null)}>✕</button>
+                  </div>
+                )}
+
+                {/* @mention dropdown */}
+                {showMentionDrop && (
+                  <div className="mention-dropdown">
+                    {teamUsers
+                      .filter(u => u.username.toLowerCase().startsWith(mentionFilter) && u.id !== user?.id)
+                      .slice(0, 6)
+                      .map(u => (
+                        <button key={u.id} className="mention-item" onClick={() => insertMention(u.username)}>
+                          @{u.username.toUpperCase()} <span style={{ opacity: 0.5, fontSize: '9px' }}>{u.rank}</span>
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+
+                {/* Input row */}
+                <div className="chat-panel__input-row">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    accept=".txt,.pdf,.png,.jpg,.jpeg,.svg,.xlsx,.xls,.csv"
+                  />
+                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}>📎</button>
+                  <input
+                    ref={chatInputRef}
+                    className="chat-panel__input"
+                    placeholder={activeChatId === 'global'
+                      ? (lang === 'es' ? 'Mensaje al equipo... (@usuario)' : 'Team message... (@user)')
+                      : (lang === 'es' ? `DM a ${getDmPartner(activeChatId)?.username || ''}...` : `DM to ${getDmPartner(activeChatId)?.username || ''}...`)}
+                    value={chatInput}
+                    onChange={e => handleChatInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+                      if (e.key === 'Escape') setShowMentionDrop(false);
+                    }}
+                    maxLength={500}
+                    autoFocus
+                  />
+                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar">➤</button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        </AnimatePresence>
 
       </div>
     </ThemeProvider>

@@ -277,42 +277,55 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
 
   const WIDGET_REGISTRY = useMemo(() => ({
     "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "🚨", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--danger)' }} />
-        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('alerts_24h').toUpperCase()}</span>
-        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
+        <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
+        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('alerts_24h').toUpperCase()}</span>
+        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.total_alerts_24h || 0} color="var(--danger)" />
         </div>
+        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>LAST {timeRange}H</span>
       </div>
     )},
     "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "🔥", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: '#ff4757' }} />
-        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('critical').toUpperCase()}</span>
-        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
+        <div className="kpi-corner kpi-corner--br" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
+        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('critical').toUpperCase()}</span>
+        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.critical_alerts || 0} color="#ff4757" />
         </div>
+        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>SEVERITY · CRIT</span>
       </div>
     )},
     "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => {
       const active = agents.filter(a => a.status === 'active').length;
+      const total = agents.length;
       return (
-        <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--cyan)', background: 'rgba(74, 227, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--cyan)', background: 'rgba(74, 227, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
           <div className="kpi-card__glow" style={{ background: 'var(--cyan)' }} />
-          <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('agents').toUpperCase()}</span>
-          <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+          <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
+          <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
+          <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('agents').toUpperCase()}</span>
+          <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
             <CountUp value={active} color="var(--cyan)" />
           </div>
+          <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>{active}/{total} ACTIVOS</span>
         </div>
       );
     }},
     "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "🎫", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--amber)' }} />
-        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('tickets_open').toUpperCase()}</span>
-        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
+        <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
+        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('tickets_open').toUpperCase()}</span>
+        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.tickets_open || 0} color="var(--amber)" />
         </div>
+        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>EN PROGRESO</span>
       </div>
     )},
     "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "🌊", render: () => {
@@ -341,9 +354,9 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>►</button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '6px 12px 8px', borderBottom: '1px solid var(--line)', background: 'rgba(60,255,158,0.02)' }}>
             {['SEV',t('time'),t('ip'),t('agents'),t('description'), t('actions')].map((h, idx) => (
-              <span key={idx} style={{ fontSize: '11px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.3)', fontWeight: 'bold' }}>{h.toUpperCase()}</span>
+              <span key={idx} style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontWeight: 700, fontFamily: 'var(--mono)' }}>{h.toUpperCase()}</span>
             ))}
           </div>
           <div className="panel__body" style={{ padding: 0, overflowY: 'auto', flex: 1 }}>
@@ -550,8 +563,8 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   };
 
   return (
-    <div className="view" ref={ref} style={{ flex: 1, padding: '4px 8px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '4px 12px 8px' }}>
+    <div className="view" ref={ref} style={{ flex: 1, padding: '2px 8px 4px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '2px 12px 4px' }}>
         {[
           { label: t('last_hour'), val: 1 },
           { label: t('last_24h'), val: 24 },
@@ -602,39 +615,46 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         })}
       </ResponsiveGridLayout>
       {catalogState && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setCatalogState(false)}>
-          <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', padding: '24px', maxWidth: '500px', width: '90%', boxShadow: '0 0 30px rgba(0,255,136,0.2)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px', color: 'var(--signal)', fontFamily: 'var(--mono)', letterSpacing: '2px', borderBottom: '1px solid var(--line)', paddingBottom: '8px', textAlign: 'center' }}>⬡ {t('add_widget_title')} ⬡</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', maxHeight: '300px', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setCatalogState(false)}>
+          <div style={{
+            background: 'var(--bg-panel-deep)',
+            border: '1px solid var(--signal)',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 0 40px rgba(60,255,158,0.2), 0 16px 48px rgba(0,0,0,0.8)',
+            clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--line)' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 6px var(--signal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+              <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', letterSpacing: '2px', fontSize: '11px', fontWeight: 600 }}>{t('add_widget_title').toUpperCase()}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
               {Object.entries(WIDGET_REGISTRY).filter(([k]) => !activeWidgets.includes(k)).map(([k, w]: [string, any]) => (
-                <button key={k} onClick={() => addWidget(k)} style={{ padding: '14px', background: 'rgba(0,255,136,0.05)', border: '1px solid var(--line-strong)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ fontSize: '18px', marginRight: '8px' }}>{w.icon}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '1px' }}>{w.name}</span>
+                <button key={k} onClick={() => addWidget(k)} style={{
+                  padding: '12px 14px',
+                  background: 'rgba(60,255,158,0.04)',
+                  border: '1px solid var(--line)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s',
+                  fontFamily: 'var(--sans)'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(60,255,158,0.1)'; e.currentTarget.style.borderColor = 'var(--signal)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,255,158,0.04)'; e.currentTarget.style.borderColor = 'var(--line)'; }}
+                >
+                  <div style={{ fontSize: '14px', marginBottom: '4px' }}>{w.icon}</div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '1px', color: 'var(--text-bright)' }}>{w.name}</div>
                 </button>
               ))}
             </div>
-            <button onClick={() => setCatalogState(false)} style={{ 
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginTop: '16px',
-              width: '100%',
-              padding: '16px',
-              background: '#ff0000',
-              border: '2px solid #ff3333',
-              color: '#ffffff',
-              fontFamily: 'var(--sans)',
-              fontWeight: 700,
-              fontSize: '14px',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              marginBottom: '10px',
-              clipPath: 'polygon(10px 0%, 65% 0%, 72% 25%, 100% 25%, 100% calc(100% - 10px), calc(100% - 15px) 100%, 15px 100%, 0% calc(100% - 15px), 0% 10px)'
-            }}>
-             ✕ {t('close')}
-          </button>
+            {Object.entries(WIDGET_REGISTRY).filter(([k]) => !activeWidgets.includes(k)).length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px', letterSpacing: '2px' }}>TODOS LOS WIDGETS ACTIVOS</div>
+            )}
+            <button onClick={() => setCatalogState(false)} className="action-btn" style={{ marginTop: '16px', width: '100%', padding: '12px', color: 'var(--danger)' }}>
+              ✕ {t('close')}
+            </button>
           </div>
         </div>
       )}

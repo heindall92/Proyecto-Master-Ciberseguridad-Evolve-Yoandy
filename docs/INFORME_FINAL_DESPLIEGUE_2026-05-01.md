@@ -9,11 +9,11 @@ Se ha completado la fase de estabilización y despliegue del Valhalla SOC Dashbo
 
 ### Frontend (Dashboard)
 - **Corrección de Errores Críticos:** Se solucionó un error de compilación en `AssetsView.tsx` causado por claves duplicadas en los estilos CSS de las tablas.
+- **VirusTotal Integration:** Se corrigieron las rutas de API en `api.ts` que causaban errores 404 al intentar verificar la API Key (mismatch entre `/api/vt` y `/api/virustotal`).
 - **Optimización de Interfaz:** Refinamiento de los componentes tácticos para asegurar una visualización consistente en el modo oscuro.
-- **Internacionalización:** Validación final de las traducciones en el Analyst Workspace y paneles de control.
-- **Persistencia de Estado:** Mejora en la gestión de menús laterales para asegurar que se mantengan ocultos al inicio según la preferencia del sistema.
 
 ### Backend (API & Seguridad)
+- **Corrección VirusTotal:** Se añadieron los endpoints faltantes para análisis de hashes y dominios en `main.py`, y se habilitó el soporte para el encabezado `X-VT-API-Key` permitiendo la verificación de claves sin necesidad de guardarlas previamente en la base de datos.
 - **Validación de Seguridad:** Se ejecutaron con éxito las pruebas en `tests/test_security.py`, cubriendo:
   - Health checks del sistema.
   - Procesos de Login (exitosos y fallidos).
