@@ -1,7 +1,7 @@
 import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models import User
 from app.settings import settings
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -25,12 +25,21 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar el token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         username: str = payload.get("sub")
@@ -43,6 +52,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     user = (await db.execute(q)).scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    request.state.user = user
     return user
 
 def require_role(role: str):

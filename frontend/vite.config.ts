@@ -19,6 +19,9 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    include: ["framer-motion"]
+  },
   preview: { host: true, port: 3000 },
 });
 

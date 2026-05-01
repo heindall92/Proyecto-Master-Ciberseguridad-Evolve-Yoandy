@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import logger from "../lib/logger";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
 import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, getMitreCoverage, getWazuhServices, AlertOut, AgentOut } from "../lib/api";
 import { translations } from "./translations";
+import { motion, AnimatePresence } from "framer-motion";
 
 function useContainerWidth() {
   const [width, setWidth] = useState(1200);
@@ -19,7 +21,27 @@ function useContainerWidth() {
   return { ref, width };
 }
 
+function CountUp({ value, color }: { value: number, color: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = display;
+    const end = value;
+    if (start === end) return;
+    const duration = 1000;
+    const stepTime = Math.abs(Math.floor(duration / (end - start || 1)));
+    const timer = setInterval(() => {
+      start += end > start ? 1 : -1;
+      setDisplay(start);
+      if (start === end) clearInterval(timer);
+    }, Math.max(stepTime, 10));
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return <span style={{ color, textShadow: `0 0 10px ${color}40` }}>{display.toLocaleString()}</span>;
+}
+
 function AreaChart({ points, color, gradientId, labels }: { points: number[], color: string, gradientId: string, labels?: string[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (!points || points.length < 2) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
   );
@@ -31,25 +53,48 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
   }));
   const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
+
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', flex: 1, display: 'block' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <svg 
+        viewBox={`0 0 ${W} ${H}`} 
+        preserveAspectRatio="none" 
+        style={{ width: '100%', flex: 1, display: 'block', cursor: 'crosshair' }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = ((e.clientX - rect.left) / rect.width) * (points.length - 1);
+          setHoverIdx(Math.round(x));
+        }}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.05" />
           </linearGradient>
         </defs>
-        <path d={areaPath} fill={`url(#${gradientId})`} />
-        <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        {pts.slice(-1).map(p => (
-          <circle key="last" cx={p.x} cy={p.y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-        ))}
+        <motion.path 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          d={areaPath} fill={`url(#${gradientId})`} 
+        />
+        <motion.path 
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" 
+        />
+        {hoverIdx !== null && pts[hoverIdx] && (
+          <g>
+            <line x1={pts[hoverIdx].x} y1="0" x2={pts[hoverIdx].x} y2={H} stroke="rgba(255,255,255,0.2)" strokeDasharray="2,2" />
+            <circle cx={pts[hoverIdx].x} cy={pts[hoverIdx].y} r="4" fill="#fff" style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+          </g>
+        )}
       </svg>
       {labels && labels.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 2px 0' }}>
           {labels.map((l, i) => (
-            <span key={i} style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{l}</span>
+            <span key={i} style={{ fontSize: '8px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{l}</span>
           ))}
         </div>
       )}
@@ -178,7 +223,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       } catch(e) { setWazuhServices(null); }
 
     } catch (e) {
-      console.error("fetchData error:", e);
+      logger.error("fetchData error:", e);
     }
   };
 
@@ -196,7 +241,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       setSyncResult(result);
       fetchData(); 
     } catch (err) {
-      console.error("Sync error:", err);
+      logger.error("Sync error:", err);
     } finally {
       setSyncing(false);
     }
@@ -219,7 +264,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       window.alert("Ticket de incidencia creado correctamente");
       fetchData();
     } catch (e) {
-      console.error("Error creating ticket:", e);
+      logger.error("Error creating ticket:", e);
       window.alert("Error al crear el ticket");
     } finally {
       setSyncing(false);
@@ -231,39 +276,44 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const currentAlerts = alerts.slice(siemPageState * pageSize, (siemPageState + 1) * pageSize);
 
   const WIDGET_REGISTRY = useMemo(() => ({
-    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "📊", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.total_alerts_24h || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(6,182,212,0.8)', letterSpacing: '1px' }}>{t('siem').toUpperCase()}</span>
-      </button>
+    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "🚨", render: () => (
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="kpi-card__glow" style={{ background: 'var(--danger)' }} />
+        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('alerts_24h').toUpperCase()}</span>
+        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+          <CountUp value={summary.metrics.total_alerts_24h || 0} color="var(--danger)" />
+        </div>
+      </div>
     )},
     "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "🔥", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#ef4444', textShadow: '0 0 10px rgba(239,68,68,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.critical_alerts || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(239,68,68,0.8)', letterSpacing: '1px' }}>{t('critical').toUpperCase()}</span>
-      </button>
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="kpi-card__glow" style={{ background: '#ff4757' }} />
+        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('critical').toUpperCase()}</span>
+        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+          <CountUp value={summary.metrics.critical_alerts || 0} color="#ff4757" />
+        </div>
+      </div>
     )},
     "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => {
       const active = agents.filter(a => a.status === 'active').length;
-      const total = agents.length;
       return (
-        <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-            <span style={{ fontSize: '24px', fontWeight: 900, color: '#06b6d4', textShadow: '0 0 10px rgba(6,182,212,0.5)', fontFamily: 'var(--mono)' }}>{active}</span>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>/ {total}</span>
+        <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--cyan)', background: 'rgba(74, 227, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div className="kpi-card__glow" style={{ background: 'var(--cyan)' }} />
+          <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('agents').toUpperCase()}</span>
+          <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+            <CountUp value={active} color="var(--cyan)" />
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <span style={{ fontSize: '9px', color: '#06b6d4', letterSpacing: '1px' }}>{t('active').toUpperCase()}</span>
-            {total > active && <span style={{ fontSize: '9px', color: '#ef4444', letterSpacing: '1px' }}>{t('disconnected').toUpperCase()}</span>}
-          </div>
-        </button>
-      )
+        </div>
+      );
     }},
-    "kpi-4": { name: t('top_attackers'), w: 2, h: 2, icon: "🎯", render: () => (
-      <button className="navbtn" style={{ background: 'transparent', padding: '4px 10px', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', alignItems: 'center', gap: '2px', minHeight: '50px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 900, color: '#f59e0b', textShadow: '0 0 10px rgba(245,158,11,0.5)', fontFamily: 'var(--mono)' }}>{summary.metrics.unique_attackers || 0}</span>
-        <span style={{ fontSize: '9px', color: 'rgba(245,158,11,0.8)', letterSpacing: '1px' }}>{t('ips').toUpperCase()}</span>
-      </button>
+    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "🎫", render: () => (
+      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div className="kpi-card__glow" style={{ background: 'var(--amber)' }} />
+        <span style={{ fontSize: '10px', opacity: 0.6, letterSpacing: '1px', marginBottom: '4px' }}>{t('tickets_open').toUpperCase()}</span>
+        <div style={{ fontSize: '32px', fontWeight: 800, fontFamily: 'var(--mono)' }}>
+          <CountUp value={summary.metrics.tickets_open || 0} color="var(--amber)" />
+        </div>
+      </div>
     )},
     "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "🌊", render: () => {
       const SEV_COLOR: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e', info: '#38bdf8' };
@@ -300,58 +350,66 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             {currentAlerts.length === 0 && (
               <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_alerts').toUpperCase()}</div>
             )}
-            {currentAlerts.map((al, i) => {
-              const sev = (al.severity || 'info').toLowerCase();
-              const color = SEV_COLOR[sev] || '#38bdf8';
-              const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
-              return (
-                <div key={al.id || i} style={{
-                  display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px',
-                  gap: '0 8px', padding: '10px 12px',
-                  borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  alignItems: 'center', fontSize: '12px',
-                  transition: 'background 0.15s',
-                  position: 'relative'
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span style={{
-                    fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
-                    color, padding: '2px 6px', background: `${color}15`,
-                    textAlign: 'center', display: 'inline-block', border: `1px solid ${color}30`
-                  }}>{sev.toUpperCase().slice(0, 4)}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
-                    {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                  <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600 }}>
-                    {al.source_ip || '—'}
-                  </span>
-                  <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--mono)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {al.agent_name || al.agent_id || '—'}
-                  </span>
-                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
-                      {al.description || `Rule ${al.rule_id}`}
+            <AnimatePresence initial={false}>
+              {currentAlerts.map((al, i) => {
+                const sev = (al.severity || 'info').toLowerCase();
+                const color = SEV_COLOR[sev] || '#38bdf8';
+                const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
+                return (
+                  <motion.div 
+                    key={al.id || i}
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.03 }}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px',
+                      gap: '0 8px', padding: '10px 12px',
+                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                      alignItems: 'center', fontSize: '12px',
+                      transition: 'background 0.15s',
+                      position: 'relative'
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{
+                      fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
+                      color, padding: '2px 6px', background: `${color}15`,
+                      textAlign: 'center', display: 'inline-block', border: `1px solid ${color}30`
+                    }}>{sev.toUpperCase().slice(0, 4)}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                      {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
-                    {isSshBrute && (
-                      <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}>⚠️ Check for "Accepted Password" follow-up</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button 
-                      onClick={() => handleCreateTicketFromAlert(al)}
-                      disabled={syncing}
-                      style={{ background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', padding: '2px 4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      +INC
-                    </button>
-                    <button style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '9px', padding: '2px 4px', cursor: 'pointer' }}>BLOCK</button>
-                    <button style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)', color: '#06b6d4', fontSize: '9px', padding: '2px 4px', cursor: 'pointer' }}>WAZUH</button>
-                  </div>
-                </div>
-              );
-            })}
+                    <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600 }}>
+                      {al.source_ip || '—'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--mono)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {al.agent_name || al.agent_id || '—'}
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
+                        {al.description || `Rule ${al.rule_id}`}
+                      </span>
+                      {isSshBrute && (
+                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}>⚠️ Check for "Accepted Password" follow-up</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button 
+                        onClick={() => handleCreateTicketFromAlert(al)}
+                        disabled={syncing}
+                        className="btn-mini"
+                        style={{ color: 'var(--signal)' }}
+                      >
+                        +INC
+                      </button>
+                      <button className="btn-mini" style={{ color: '#ef4444' }}>BLOCK</button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </section>
       );

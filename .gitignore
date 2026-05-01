@@ -1,61 +1,82 @@
-# Credenciales — NUNCA subir a Git
-.env
+# ═══════════════════════════════════════════════════════════════════════════════
+# Valhalla SOC — .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Claude Code internal files
+# ── Credenciales y secretos ───────────────────────────────────────────────────
+.env
+.env.*.local
+credenciales.txt
+
+# ── Claude / AI internal files ────────────────────────────────────────────────
 .claude/
 .remember/
 .playwright-mcp/
 
-# SSL certificates (sensitive)
+# ── SSL certificates (sensitive) ─────────────────────────────────────────────
 config/wazuh_indexer_ssl_certs/*.pem
 config/wazuh_indexer_ssl_certs/*.key
 
-# Docker volumes data
+# ── Docker volumes data ──────────────────────────────────────────────────────
 wazuh-*-data/
 
-# Python cache
+# ── Python cache ─────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
 
-# Node.js
+# ── Node.js ──────────────────────────────────────────────────────────────────
 frontend/node_modules/
 backend/node_modules/
 backend/package-lock.json
 frontend/.vite/
 *.node
 
-# Large binary/image files (root only)
+# ── Large binary/image files (root only) ─────────────────────────────────────
 imagen.png
 # Allow documentation screenshots
 !docs/img/*.png
 
-# Databases (runtime data)
-backend/*.db
-backend/*.db-shm
-backend/*.db-wal
+# ── Databases (runtime data) ─────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+backend/backups/
 
-# Logs
+# ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 
-# Windows temp
-Thumbs.db
-desktop.ini
+# ── Coverage & test artifacts ────────────────────────────────────────────────
+coverage/
+htmlcov/
+playwright-report/
+test-results/
 
-# Exclusiones extra
-MedHomologa-Pro/node_modules/
-MedHomologa-Pro/.next/
+# ── SBOM & security scan outputs ────────────────────────────────────────────
+sbom.json
+*.spdx.json
 
-# Build outputs
+# ── Build outputs ────────────────────────────────────────────────────────────
 frontend/app/dist/
 frontend/dist_electron/
 dist/
 dist_electron/
 
-# Archivos personales de automatizacion (local only)
-# Estos scripts son para uso personal del desarrollador principal
-# No deben subirse al repo compartido
+# ── Windows temp ─────────────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+
+# ── Exclusiones extra (proyectos locales) ────────────────────────────────────
+MedHomologa-Pro/node_modules/
+MedHomologa-Pro/.next/
+
+# ── Archivos personales de automatización (local only) ───────────────────────
 LIMPIEZA_SEGURA.bat
 verificar-requisitos.bat
 detener-todo.bat
 ORIENTACIONES.md
+
+# ── Uploads (runtime data, not versioned) ────────────────────────────────────
+backend/uploads/

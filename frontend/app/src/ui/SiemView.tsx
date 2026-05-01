@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import logger from "../lib/logger";
 import { getRecentAlerts, getMitreCoverage, getTopAttackers, createTicket } from "../lib/api";
 import { translations } from "./translations";
 
@@ -78,7 +79,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
       setMitre(m || []);
       setTopAttackers(t || []);
     } catch (err) {
-      console.error("SIEM fetch error:", err);
+      logger.error("SIEM fetch error:", err);
     } finally {
       setLoading(false);
     }

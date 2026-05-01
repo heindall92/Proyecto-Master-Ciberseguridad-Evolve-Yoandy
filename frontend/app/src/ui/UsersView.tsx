@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import logger from "../lib/logger";
 import {
   PersonAdd as AddIcon,
   Delete as DeleteIcon,
@@ -27,7 +28,7 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
       const data = await listUsers();
       setUsers(data);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
     } finally {
       setLoading(false);
     }

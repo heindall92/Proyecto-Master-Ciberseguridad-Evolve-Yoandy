@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { listAgents, getAgentPackages, getAgentPorts, getAgentVulnerabilities, scanAgent, AgentOut } from "../lib/api";
 import { translations } from "./translations";
 
@@ -32,7 +33,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
       ]);
       setDetails({ packages: pkgs, ports: ports, vulns: vulns });
     } catch (err) {
-      console.error("Error loading agent details", err);
+      logger.error("Error loading agent details", err);
     } finally {
       setDetailsLoading(false);
     }

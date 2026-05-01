@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
 export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
@@ -16,7 +17,7 @@ export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
       const data = await listIOCs();
       setWatchlist(data);
     } catch (e) {
-      console.error("Error loading watchlist:", e);
+      logger.error("Error loading watchlist:", e);
     }
   };
 
@@ -115,7 +116,7 @@ export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
       await updateIOC(id, { status: newStatus });
       loadWatchlist();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
     }
   };
 
@@ -125,7 +126,7 @@ export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
       await deleteIOC(id);
       loadWatchlist();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
     }
   };
 

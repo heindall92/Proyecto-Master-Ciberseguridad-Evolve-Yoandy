@@ -453,6 +453,29 @@ body[data-scheme="purple"] {
   --bg-panel:rgba(10,6,22,0.85);
 }
 
+body[data-theme="light"] {
+  --bg-void: #f0f4f8;
+  --bg-panel: rgba(255, 255, 255, 0.9);
+  --bg-panel-2: rgba(240, 245, 250, 0.85);
+  --bg-panel-deep: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.7);
+
+  --signal: #00a854;
+  --signal-dim: #00703c;
+  --signal-deep: #e6f7ef;
+  
+  --text: #1a2b3c;
+  --text-dim: #5c6c7d;
+  --text-faint: #9fb0c0;
+  --text-bright: #000000;
+
+  --line: rgba(0, 168, 84, 0.15);
+  --line-strong: rgba(0, 168, 84, 0.4);
+  --line-faint: rgba(0, 168, 84, 0.08);
+}
+
+
+
 /* ======== CYBER LOGIN PANEL ======== */
 .cyber-panel-wrap {
   width: 100%;
@@ -526,4 +549,68 @@ body[data-scheme="purple"] {
 .login-btn:hover {
   transform: translateX(4px);
   color: #fff;
+}
+/* ======== KPI CARDS PRO-MAX ======== */
+.kpi-card {
+  border-radius: var(--r-lg);
+  backdrop-filter: blur(8px);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+  cursor: default;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 15px rgba(60,255,158,0.05);
+}
+.kpi-card__glow {
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  opacity: 0.03;
+  filter: blur(40px);
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+/* ======== BUTTONS MINI ======== */
+.btn-mini {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.btn-mini:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.3);
+  transform: scale(1.05);
+}
+.btn-mini:active {
+  transform: scale(0.95);
+}
+.btn-mini:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ======== GLITCH ANIMATION ======== */
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+.glitch-hover:hover {
+  animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
+  color: var(--cyan) !important;
 }

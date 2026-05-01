@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { listRunbooks, createRunbook, updateRunbook, deleteRunbook } from "../lib/api";
 
 interface RunbookStep {
@@ -37,7 +38,7 @@ export default function RunbooksView() {
       const data = await listRunbooks();
       setRunbooks(data || []);
     } catch (e) {
-      console.error("Load runbooks error:", e);
+      logger.error("Load runbooks error:", e);
     } finally {
       setLoading(false);
     }

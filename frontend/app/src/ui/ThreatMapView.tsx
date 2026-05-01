@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { getThreatMap } from "../lib/api";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 interface AttackPoint {
@@ -31,7 +32,7 @@ export default function ThreatMapView() {
       setCountries(data.countries || []);
       setTotal(data.total_attacks || 0);
     } catch (e) {
-      console.error("Threat map error:", e);
+      logger.error("Threat map error:", e);
     } finally {
       setLoading(false);
     }
@@ -52,9 +53,20 @@ export default function ThreatMapView() {
         .attack-line {
           stroke-dasharray: 10, 10;
           animation: dash 20s linear infinite;
+          opacity: 0.4;
         }
         @keyframes dash {
           to { stroke-dashoffset: -1000; }
+        }
+        .pulse {
+          animation: mapPulse 2s ease-out infinite;
+        }
+        @keyframes mapPulse {
+          0% { r: 4; opacity: 1; stroke-width: 1; }
+          100% { r: 20; opacity: 0; stroke-width: 0.5; }
+        }
+        .leaflet-container {
+          background: #000 !important;
         }
         .leaflet-popup-content-wrapper {
           background: rgba(10, 20, 15, 0.95) !important;
@@ -99,11 +111,15 @@ export default function ThreatMapView() {
               const color = attack.is_honeypot ? "#FF00FF" : (isSpain ? "var(--signal)" : "var(--danger)");
               
               return (
-                <div key={i}>
+                <React.Fragment key={i}>
+                  <Polyline 
+                    positions={[[attack.lat, attack.lon], SOC_COORDS]} 
+                    pathOptions={{ color, weight: 1, className: 'attack-line' }} 
+                  />
                   <CircleMarker 
                     center={[attack.lat, attack.lon]} 
                     radius={radius} 
-                    pathOptions={{ color: color, fillColor: color, fillOpacity: 0.6, weight: 1 }}
+                    pathOptions={{ color, fillColor: color, fillOpacity: 0.6, weight: 1 }}
                   >
                     <Popup>
                       <div style={{ fontFamily: "var(--mono)", fontSize: "11px", minWidth: '180px' }}>
@@ -114,22 +130,15 @@ export default function ThreatMapView() {
                         <span style={{ color: 'var(--text-dim)' }}>IP:</span> {attack.ip}<br />
                         <span style={{ color: 'var(--text-dim)' }}>ASN:</span> {attack.as || attack.isp}<br />
                         <span style={{ color: 'var(--text-dim)' }}>VOL:</span> {attack.count} events<br />
-                        
-                        <div style={{ marginTop: '10px', display: 'flex', gap: '5px' }}>
-                           <button onClick={() => window.open(`https://www.virustotal.com/gui/ip-address/${attack.ip}`)} style={{ flex: 1, padding: '4px', fontSize: '9px', background: 'rgba(255,255,255,0.1)', border: '1px solid #fff', color: '#fff', cursor: 'pointer' }}>VIRUSTOTAL</button>
-                           <button style={{ flex: 1, padding: '4px', fontSize: '9px', background: 'var(--signal)', border: 'none', color: '#000', cursor: 'pointer', fontWeight: 'bold' }}>+ TICKET</button>
-                        </div>
                       </div>
                     </Popup>
                   </CircleMarker>
-                  
-                  {/* Outer glow circle */}
                   <CircleMarker 
                     center={[attack.lat, attack.lon]} 
-                    radius={radius * 1.5} 
-                    pathOptions={{ color: color, fill: false, weight: 1, opacity: 0.3 }}
+                    radius={radius * 2} 
+                    pathOptions={{ color, fillColor: 'none', weight: 1, className: 'pulse' }} 
                   />
-                </div>
+                </React.Fragment>
               );
             })}
           </MapContainer>

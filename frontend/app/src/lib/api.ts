@@ -65,19 +65,23 @@ const fallbackApiBase =
 const API_BASE = envApiBase || fallbackApiBase;
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> || {}),
   };
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  // Add CSRF token if available
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
+    credentials: "include",
   });
 
   if (res.status === 401 && !path.includes("/auth/login")) {
@@ -118,12 +122,18 @@ export async function uploadEvidence(ticketId: number, file: File): Promise<Evid
   const formData = new FormData();
   formData.append("file", file);
   
-  const token = localStorage.getItem("token");
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
+  }
+
   const resp = await fetch(`${API_BASE}/api/tickets/${ticketId}/evidence`, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`
-    },
+    credentials: "include",
+    headers,
     body: formData
   });
   if (!resp.ok) throw new Error("Failed to upload evidence");
@@ -131,8 +141,7 @@ export async function uploadEvidence(ticketId: number, file: File): Promise<Evid
 }
 
 export function getEvidenceDownloadUrl(evidenceId: number): string {
-  const token = localStorage.getItem("token");
-  return `${API_BASE}/api/evidence/${evidenceId}/download?token=${token}`;
+  return `${API_BASE}/api/evidence/${evidenceId}/download`;
 }
 
 export function syncWazuhAlerts(hours = 1) {
@@ -157,7 +166,7 @@ export async function login(username: string, password: string) {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
-  localStorage.setItem("token", res.access_token);
+  // Token is now set as an httpOnly cookie by the backend
   return res;
 }
 

@@ -1,4 +1,5 @@
 import type { AlertOut, AnalysisOut, EventOut } from "./api";
+import logger from "./logger";
 
 type SeverityKey = "low" | "medium" | "high" | "critical";
 
@@ -278,7 +279,7 @@ export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
   try {
     return await http<ExecutiveReportData>("/api/reports/executive");
   } catch (e) {
-    console.error("Error fetching real executive report, falling back to local simulation:", e);
+    logger.error("Error fetching real executive report, falling back to local simulation:", e);
     
     // Fallback local en caso de error de red o backend no disponible
     const events = fallbackEvents();

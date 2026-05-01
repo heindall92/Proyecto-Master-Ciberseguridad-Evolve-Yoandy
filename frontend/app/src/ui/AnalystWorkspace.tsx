@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import logger from '../lib/logger';
 import {
   listTickets,
   createTicket,
@@ -123,24 +124,24 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       // Llamadas independientes - si una falla, las demás continúan
       try {
         ticketsData = await listTickets();
-        console.log('[Workspace] Tickets loaded:', ticketsData.length);
+        logger.log('[Workspace] Tickets loaded:', ticketsData.length);
       } catch(e) {
-        console.error('[Workspace] Error loading tickets:', e);
+        logger.error('[Workspace] Error loading tickets:', e);
       }
 
       try {
         usersData = await listUsers();
-        console.log('[Workspace] Users loaded:', usersData.length);
+        logger.log('[Workspace] Users loaded:', usersData.length);
       } catch(e) {
-        console.error('[Workspace] Error loading users:', e);
+        logger.error('[Workspace] Error loading users:', e);
         usersData = [];
       }
 
       try {
         statsData = await getDashboardSummary();
-        console.log('[Workspace] Stats loaded:', statsData);
+        logger.log('[Workspace] Stats loaded:', statsData);
       } catch(e) {
-        console.error('[Workspace] Error loading stats:', e);
+        logger.error('[Workspace] Error loading stats:', e);
         statsData = null;
       }
 
@@ -148,7 +149,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
         const rbData = await listRunbooks();
         setRunbooks(rbData || []);
       } catch(e) {
-        console.error('[Workspace] Error loading runbooks:', e);
+        logger.error('[Workspace] Error loading runbooks:', e);
       }
 
       const mapped: TicketCard[] = ticketsData.map((t: TicketOut) => ({
@@ -176,7 +177,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       setUsers(usersData);
       setStats(statsData);
     } catch (err) {
-      console.error('Failed to fetch workspace data:', err);
+      logger.error('Failed to fetch workspace data:', err);
     } finally {
       setLoading(false);
     }
@@ -228,7 +229,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
         }
       }
     } catch (err) {
-      console.error('Failed to update ticket status:', err);
+      logger.error('Failed to update ticket status:', err);
       fetchData(); // Revert on error
     }
   };
@@ -273,7 +274,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       );
       setSelectedTicket(prev => prev ? { ...prev, analysis_notes: editNotes } : null);
     } catch (err) {
-      console.error('Failed to save notes:', err);
+      logger.error('Failed to save notes:', err);
     } finally {
       setSaving(false);
     }
@@ -290,7 +291,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       setSelectedTicket(updated);
       setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updated : t));
     } catch (err) {
-      console.error('Upload failed:', err);
+      logger.error('Upload failed:', err);
       alert('Error subiendo archivo');
     } finally {
       setSaving(false);
@@ -305,7 +306,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       await fetchData();
       setSelectedTicket(null);
     } catch (err) {
-      console.error('Failed to assign ticket:', err);
+      logger.error('Failed to assign ticket:', err);
     } finally {
       setSaving(false);
     }
@@ -331,7 +332,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
       setCreateForm({ title: '', description: '', severity: 'medium', category: '', source_ip: '', affected_asset: '', affected_user: '', mitre_technique: '', assigned_to_id: '' });
       await fetchData();
     } catch (err: any) {
-      console.error('Failed to create ticket:', err);
+      logger.error('Failed to create ticket:', err);
       alert('Error al crear incidente: ' + (err?.message || err?.toString() || 'Error desconocido'));
     } finally {
       setSaving(false);
@@ -520,7 +521,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
                         const r = await purgeResolvedTickets(30);
                         await fetchData();
                         alert(`${r.deleted} tickets eliminados`);
-                      } catch (e) { console.error(e); }
+                      } catch (e) { logger.error(e); }
                     }}
                     style={{ fontSize: '9px', background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.3)', color: '#FF4D4D', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
                   >
@@ -723,7 +724,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
                       await deleteTicket(selectedTicket.id);
                       setSelectedTicket(null);
                       await fetchData();
-                    } catch (e) { console.error(e); }
+                    } catch (e) { logger.error(e); }
                   }}
                   style={{ background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.4)', color: '#FF4D4D', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}
                 >

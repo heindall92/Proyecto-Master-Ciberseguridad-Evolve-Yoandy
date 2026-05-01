@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { getCowrieTimeline, getCowrieStats, getCowrieSessions } from "../lib/api";
 
 export default function CowrieView() {
@@ -18,7 +19,7 @@ export default function CowrieView() {
       setStats(s);
       setSessions(sess);
     } catch (err) {
-      console.error("Error fetching Cowrie data", err);
+      logger.error("Error fetching Cowrie data", err);
     } finally {
       setLoading(false);
     }

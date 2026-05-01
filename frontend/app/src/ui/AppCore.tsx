@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import logger from "../lib/logger";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
 import { getAudioContext, playNotificationSound, playResolvedSound } from "./audio";
@@ -18,7 +20,11 @@ import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
 import { translations } from "./translations";
-// import IncidentsView from "./IncidentsView";
+import IncidentsView from "./IncidentsView";
+import AuditLogView from "./AuditLogView";
+import SystemSettingsView from "./SystemSettingsView";
+import IntegrationsHealthView from "./IntegrationsHealthView";
+import MonitorsView from "./MonitorsView";
 import SiemView from "./SiemView";
 import ThreatIntelView from "./ThreatIntelView";
 import CowrieView from "./CowrieView";
@@ -103,6 +109,7 @@ export default function App() {
   const [tvMode, setTvMode] = useState(false);
   const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
   const [profilePic, setProfilePic] = useState<string | null>(localStorage.getItem('valhalla_profile_pic'));
+  const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
 
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
@@ -120,12 +127,22 @@ export default function App() {
       try {
         localStorage.setItem('valhalla_profile_pic', newPic);
       } catch (e) {
-        console.warn("Local storage limit reached. Image might not persist.");
+        logger.warn("Local storage limit reached. Image might not persist.");
       }
     } else {
       localStorage.removeItem('valhalla_profile_pic');
     }
   };
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    localStorage.setItem('valhalla_theme', newTheme);
+  };
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
@@ -204,7 +221,7 @@ export default function App() {
            setLoading(false);
            return;
          }
-         console.error("Token invalid, showing login:", err);
+         logger.error("Token invalid, showing login:", err);
          if (isMounted) {
            localStorage.removeItem("token");
            setToken(null);
@@ -225,13 +242,13 @@ export default function App() {
         .then((r) => { 
           setStats((prev: any) => ({...prev, metrics: {...(prev?.metrics || {}), tickets_open: r.open}})); 
         })
-        .catch((e) => { console.error('[Dashboard] Error:', e); });
+        .catch((e) => { logger.error('[Dashboard] Error:', e); });
       
       listTickets('open', undefined, 5)
         .then(setRecentOpenTickets)
-        .catch(console.error);
+        .catch((e) => logger.error('[Dashboard] Tickets error:', e));
 
-      getDashboardSummary().then(s => setStats(s)).catch(console.error);
+      getDashboardSummary().then(s => setStats(s)).catch((e) => logger.error('[Dashboard] Summary error:', e));
   }
 
   useEffect(() => {
@@ -249,7 +266,7 @@ export default function App() {
       fetchStats();
       playResolvedSound();
     } catch (err) {
-      console.error("Error assigning ticket", err);
+      logger.error("Error assigning ticket", err);
     }
   };
 
@@ -303,8 +320,8 @@ export default function App() {
                  </div>
                  <button type="submit" className="login-btn">{t('login_btn')}</button>
                  <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--sans)' }}>
-                    {t('default_creds')}: <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>admin</span> / <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>Valhalla2026!</span>
-                 </div>
+                     <a href="/MANUAL.md" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--signal)', textDecoration: 'none', fontWeight: 500 }}>{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
+                  </div>
                  <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
                     <button type="button" onClick={toggleLang} style={{ background: 'rgba(60,255,158,0.1)', border: '1px solid rgba(60,255,158,0.3)', color: 'var(--signal)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}>
                        {lang === 'es' ? 'CAMBIAR A INGLÉS' : 'CHANGE TO SPANISH'}
@@ -348,7 +365,7 @@ export default function App() {
                   <AlexanaLetter char="V" style={{ width: '22px', height: '22px', color: 'var(--signal)' }} />
                </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px' }}>
+            <div className="glitch-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', cursor: 'default' }}>
                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                  <AlexanaWord word="VALHALLA" height="18px" />
                  <AlexanaWord word="SOC" height="12px" color="var(--signal)" />
@@ -414,10 +431,16 @@ export default function App() {
               <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
               <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
               <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('tweaks')}</button>
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
               <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cyan)', fontSize: '11px', fontWeight: 'bold' }}>{t('profile_settings')}</button>
+              {user?.role === 'admin' && (
+                  <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{lang === 'es' ? '⚙️ AJUSTES GLOBALES' : '⚙️ GLOBAL SETTINGS'}</button>
+              )}
               <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
               <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}: {lang.toUpperCase()}</button>
+              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
+              <button onClick={() => { toggleTheme(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>
+                {theme === 'dark' ? '☀️ ' + (lang === 'es' ? 'MODO CLARO' : 'LIGHT MODE') : '🌙 ' + (lang === 'es' ? 'MODO OSCURO' : 'DARK MODE')}
+              </button>
               <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
               <button onClick={logout} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '11px', fontWeight: 'bold' }}>{t('exit')}</button>
               </div>
@@ -433,6 +456,11 @@ export default function App() {
                 <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
               </div>
               <div style={{ padding: '4px 0' }}>
+                <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '10px', color: 'var(--text-dim)' }}>
+                  <a href="/MANUAL.md" target="_blank" style={{ color: 'var(--signal)', textDecoration: 'none' }}>
+                    {lang === 'es' ? '¿Primera vez? Ver manual de acceso' : 'First time? View access manual'}
+                  </a>
+                </div>
                 {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => (
                   <div key={tk.id} style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -476,6 +504,10 @@ export default function App() {
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />
+          <NavBtn id="incidents" label={lang === 'es' ? 'Incidentes' : 'Incidents'} sub="Prioridad Alta" icon="i-incident" />
+          <NavBtn id="monitors" label={lang === 'es' ? 'Monitores' : 'Monitors'} sub="Config SIEM" icon="i-threat" />
+          <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />
+          <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />
           <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />
           <NavBtn id="threat" label={t('threat_intel')} sub={t('threat_intel_sub')} icon="i-threat" badge="IOCs" />
           <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
@@ -495,23 +527,43 @@ export default function App() {
         )}
 
         <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
-          {view === 'assets' && <AssetsView lang={lang} />}
-          {view === 'users' && <UsersView lang={lang} />}
-          {view === 'siem' && <SiemView lang={lang} />}
-          {view === 'threat' && <ThreatIntelView lang={lang} initialIp={intelIp} />}
-          {view === 'cowrie' && <CowrieView lang={lang} />}
-          {view === 'threatmap' && <ThreatMapView lang={lang} />}
-          {view === 'runbooks' && <RunbooksView lang={lang} />}
-          {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
-          {view === 'workspace' && <AnalystWorkspace lang={lang} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
-          {view === 'executive-report' && <ExecutiveReport lang={lang} />}
-          {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
-          {!['overview', 'assets', 'users', 'incidents', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
-            <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-               <div style={{ color: 'var(--signal)', letterSpacing: '2px' }}>CONSTRUCCIÓN EN PROCESO // MODULE: {view.toUpperCase()}</div>
-            </div>
-          )}
+          <div className="main-content" style={{ overflowY: 'auto', position: 'relative', flex: 1 }}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={view}
+                initial={{ opacity: 0, y: 10, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -10, filter: 'blur(10px)' }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                style={{ height: '100%' }}
+              >
+                {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
+                {view === 'assets' && <AssetsView lang={lang} />}
+                {view === 'users' && <UsersView lang={lang} />}
+                {view === 'incidents' && <IncidentsView />}
+                {view === 'audit' && <AuditLogView lang={lang} />}
+                {view === 'settings' && <SystemSettingsView lang={lang} />}
+                {view === 'health' && <IntegrationsHealthView lang={lang} />}
+                {view === 'monitors' && <MonitorsView lang={lang} />}
+                {view === 'siem' && <SiemView lang={lang} />}
+                {view === 'threat' && <ThreatIntelView lang={lang} initialIp={intelIp} />}
+                {view === 'cowrie' && <CowrieView lang={lang} />}
+                {view === 'threatmap' && <ThreatMapView lang={lang} />}
+                {view === 'runbooks' && <RunbooksView lang={lang} />}
+                {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
+                {view === 'workspace' && <AnalystWorkspace lang={lang} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
+                {view === 'executive-report' && <ExecutiveReport lang={lang} />}
+                {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
+                  <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
+                    <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
+                    <button onClick={() => setView('overview')} style={{ padding: '8px 20px', background: 'rgba(60,255,158,0.1)', border: '1px solid var(--signal)', color: 'var(--signal)', cursor: 'pointer', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>← VOLVER A OVERVIEW</button>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </main>
 
         {/* Tweaks Panel */}

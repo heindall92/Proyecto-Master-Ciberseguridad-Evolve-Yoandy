@@ -1,3 +1,5 @@
+import logger from '../lib/logger';
+
 let audioCtx: AudioContext | null = null;
 
 export function getAudioContext() {
@@ -28,7 +30,7 @@ export function playNotificationSound() {
     gainNode.gain.linearRampToValueAtTime(0, now + 0.25);
     oscillator.start(now);
     oscillator.stop(now + 0.25);
-  } catch (e) { console.log('Audio error:', e); }
+  } catch (e) { logger.log('Audio error:', e); }
 }
 
 export function playResolvedSound() {
@@ -48,5 +50,5 @@ export function playResolvedSound() {
     gainNode.gain.linearRampToValueAtTime(0, now + 0.4);
     oscillator.start(now);
     oscillator.stop(now + 0.4);
-  } catch (e) { console.log('Audio error:', e); }
+  } catch (e) { logger.log('Audio error:', e); }
 }
