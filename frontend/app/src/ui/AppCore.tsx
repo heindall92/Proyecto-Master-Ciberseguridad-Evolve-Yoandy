@@ -15,6 +15,9 @@ import {
   listUsers,
   UserOut,
   TicketOut,
+  getChatHistory,
+  postChatMessage,
+  getChatWsUrl
 } from "../lib/api";
 
 import AssetsView from "./AssetsView";
@@ -120,21 +123,12 @@ export default function App() {
     mentions: string[]; attachment?: ChatAttachment;
   }
 
-  const CHAT_KEY_PFX = 'valhalla.chat.v2.';
   const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
   const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
 
-  const loadChatMsgs = (chatId: string): ChatMessage[] => {
-    try { return JSON.parse(localStorage.getItem(CHAT_KEY_PFX + chatId) || '[]'); } catch { return []; }
-  };
-  const saveChatMsgs = (chatId: string, msgs: ChatMessage[]) =>
-    localStorage.setItem(CHAT_KEY_PFX + chatId, JSON.stringify(msgs.slice(-200)));
-
   const [chatOpen, setChatOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string>('global');
-  const [chatMsgsByChat, setChatMsgsByChat] = useState<Record<string, ChatMessage[]>>({
-    global: loadChatMsgs('global')
-  });
+  const [chatMsgsByChat, setChatMsgsByChat] = useState<Record<string, ChatMessage[]>>({});
   const [dmUserIds, setDmUserIds] = useState<number[]>([]);
   const [teamUsers, setTeamUsers] = useState<UserOut[]>([]);
   const [unreadByChat, setUnreadByChat] = useState<Record<string, number>>({});
@@ -147,7 +141,19 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
+
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
+
+  // Update Tab Title when unread (Safe hook placement)
+  useEffect(() => {
+    const originalTitle = "Valhalla SOC";
+    if (totalUnread > 0) {
+      document.title = `(●) ${totalUnread} ${originalTitle}`;
+    } else {
+      document.title = originalTitle;
+    }
+    return () => { document.title = originalTitle; };
+  }, [totalUnread]);
 
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
@@ -369,50 +375,81 @@ export default function App() {
     try { setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')); } catch {}
   }, [user?.id]);
 
-  // BroadcastChannel — multi-chat routing
+  // WebSocket / Sync logic (Real-time cross-browser)
   useEffect(() => {
-    const ch = new BroadcastChannel('valhalla-team-chat-v2');
-    chatChannelRef.current = ch;
-    ch.onmessage = (e: MessageEvent<ChatMessage>) => {
-      const msg = e.data;
-      setChatMsgsByChat(prev => {
-        const list = prev[msg.chatId] || [];
-        const next = [...list, msg].slice(-200);
-        saveChatMsgs(msg.chatId, next);
-        return { ...prev, [msg.chatId]: next };
-      });
+    if (!user) return;
 
-      const myId = user?.id ?? -1;
-      const myUsername = user?.username ?? '';
-      const isMentionOfMe = Array.isArray(msg.mentions) && msg.mentions.includes(myUsername);
-      // DM está dirigido a mí si mi ID está en el chatId (ej: "dm:3-7" y soy usuario 3 o 7)
-      const isDmToMe = msg.chatId.startsWith('dm:') &&
-        msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
-      const isGlobal = msg.chatId === 'global';
-      // Solo notificar si el mensaje va dirigido a este usuario
-      const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
+    // 1. Sync from Backend when switching chat
+    getChatHistory(activeChatId).then(history => {
+       if (history?.length > 0) {
+          setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: history }));
+       }
+    }).catch(() => {});
 
-      if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
-        setUnreadByChat(prev => ({ ...prev, [msg.chatId]: (prev[msg.chatId] || 0) + 1 }));
-        if (isMentionOfMe) playMentionSound();
-        else playChatSound();
-      }
-      if (msg.chatId.startsWith('dm:') && msg.userId !== user?.id) {
-        const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
-        const otherId = parts.find(id => id !== user?.id);
-        if (otherId) {
-          setDmUserIds(prev => {
-            if (prev.includes(otherId)) return prev;
-            const next = [...prev, otherId];
-            localStorage.setItem(DM_LIST_KEY(user!.id), JSON.stringify(next));
+    // 2. Real-time WebSocket
+    const wsUrl = getChatWsUrl();
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (e) => {
+      try {
+        const msg: ChatMessage = JSON.parse(e.data);
+        
+        // Update messages state (avoid duplicates)
+        setChatMsgsByChat(prev => {
+          const list = prev[msg.chatId] || [];
+          if (list.some(m => m.id === msg.id)) return prev;
+          const next = [...list, msg].slice(-200);
+          return { ...prev, [msg.chatId]: next };
+        });
+
+        const myId = user?.id ?? -1;
+        const myUsername = (user?.username || '').toLowerCase();
+        
+        const isFromMe = msg.userId === myId;
+        if (isFromMe) return;
+
+        const isMentionOfMe = Array.isArray(msg.mentions) && 
+          msg.mentions.some(m => m.toLowerCase() === myUsername);
+        
+        const isDmToMe = msg.chatId.startsWith('dm:') &&
+          msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
+        
+        const isGlobal = msg.chatId === 'global';
+        const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
+
+        if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
+          setUnreadByChat(prev => {
+            const next = { ...prev, [msg.chatId]: (prev[msg.chatId] || 0) + 1 };
+            localStorage.setItem('valhalla.unread', JSON.stringify(next));
             return next;
           });
-          setChatMsgsByChat(prev => ({ ...prev, [msg.chatId]: prev[msg.chatId] || loadChatMsgs(msg.chatId) }));
+          if (isMentionOfMe) playMentionSound();
+          else playChatSound();
         }
-      }
+
+        // Add to DM list if it's a new DM for me
+        if (msg.chatId.startsWith('dm:') && !isFromMe) {
+           const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
+           const otherId = parts.find(id => id !== myId);
+           if (otherId) {
+             setDmUserIds(prev => {
+               if (prev.includes(otherId)) return prev;
+               const next = [...prev, otherId];
+               localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify(next));
+               return next;
+             });
+           }
+        }
+      } catch (err) { console.error("WS Message Error", err); }
     };
-    return () => ch.close();
-  }, [chatOpen, activeChatId, user?.id, user?.username]);
+
+    const pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 30000);
+
+    return () => {
+      clearInterval(pingInterval);
+      ws.close();
+    };
+  }, [user?.id, activeChatId, chatOpen]);
 
   useEffect(() => {
     if (chatOpen) {
@@ -461,7 +498,6 @@ export default function App() {
   const openDm = (target: UserOut) => {
     if (!user) return;
     const dmId = makeDmId(user.id, target.id);
-    setChatMsgsByChat(prev => ({ ...prev, [dmId]: prev[dmId] || loadChatMsgs(dmId) }));
     setDmUserIds(prev => {
       if (prev.includes(target.id)) return prev;
       const next = [...prev, target.id];
@@ -474,7 +510,6 @@ export default function App() {
 
   const clearActiveChat = () => {
     setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: [] }));
-    localStorage.removeItem(CHAT_KEY_PFX + activeChatId);
   };
 
   const getDmPartner = (chatId: string) => {
@@ -505,10 +540,12 @@ export default function App() {
     setChatMsgsByChat(prev => {
       const list = prev[activeChatId] || [];
       const next = [...list, msg].slice(-200);
-      saveChatMsgs(activeChatId, next);
       return { ...prev, [activeChatId]: next };
     });
-    chatChannelRef.current?.postMessage(msg);
+    
+    // Save to DB and broadcast via Backend
+    postChatMessage(msg).catch(err => console.error("Chat Send Error", err));
+
     setChatInput('');
     setPendingAttachment(null);
     setShowMentionDrop(false);
@@ -592,6 +629,7 @@ export default function App() {
       </div>
     );
   }
+
 
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
     <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => setView(id)}>
@@ -690,9 +728,20 @@ export default function App() {
             <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
               <style>{`
                 @keyframes pulse-red {
-                  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
-                  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 62, 62, 0); }
-                  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); }
+                  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
+                  70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 62, 62, 0); }
+                  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); }
+                }
+
+                .unread-dot {
+                  width: 8px;
+                  height: 8px;
+                  background-color: #ff3e3e;
+                  border-radius: 50%;
+                  box-shadow: 0 0 10px #ff3e3e;
+                  animation: pulse-red 1.5s infinite;
+                  display: inline-block;
+                  margin-left: 8px;
                 }
               `}</style>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={recentOpenTickets.length > 0 && !notifSeen ? "#FF3E3E" : "var(--signal)"} strokeWidth="2" style={{ filter: recentOpenTickets.length > 0 && !notifSeen ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -938,7 +987,12 @@ export default function App() {
                   onClick={() => { setActiveChatId('global'); setUnreadByChat(prev => ({ ...prev, global: 0 })); }}
                 >
                   # EQUIPO
-                  {(unreadByChat.global || 0) > 0 && <span className="chat-sidebar__unread">{unreadByChat.global}</span>}
+                  {(unreadByChat.global || 0) > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span className="chat-sidebar__unread">{unreadByChat.global}</span>
+                      <span className="unread-dot" />
+                    </div>
+                  )}
                 </button>
 
                 {dmUserIds.length > 0 && <div className="chat-sidebar__label">DMs</div>}
@@ -950,13 +1004,18 @@ export default function App() {
                       key={uid}
                       className={`chat-sidebar__item${activeChatId === dmId ? ' active' : ''}`}
                       onClick={() => {
-                        setChatMsgsByChat(prev => ({ ...prev, [dmId]: prev[dmId] || loadChatMsgs(dmId) }));
+                        // Historial se cargará automáticamente vía useEffect
                         setActiveChatId(dmId);
                         setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
                       }}
                     >
                       @ {partner?.username?.toUpperCase() || `U${uid}`}
-                      {(unreadByChat[dmId] || 0) > 0 && <span className="chat-sidebar__unread">{unreadByChat[dmId]}</span>}
+                      {(unreadByChat[dmId] || 0) > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <span className="chat-sidebar__unread">{unreadByChat[dmId]}</span>
+                          <span className="unread-dot" />
+                        </div>
+                      )}
                     </button>
                   );
                 })}

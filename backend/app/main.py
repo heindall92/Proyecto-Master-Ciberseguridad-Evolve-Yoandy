@@ -8,9 +8,10 @@ import re as _re
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+import json
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,6 +155,37 @@ async def on_startup():
     
     asyncio.create_task(_auto_sync_loop())
     logger.info("Valhalla SOC API Started")
+
+# --- WEBSOCKET CHAT ---
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text() # Keep alive
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 # --- ENDPOINTS ---
 
@@ -532,12 +564,90 @@ async def health_integrations(_=Depends(get_current_user)):
         {"name": "Ollama AI", "status": "online", "latency": "450ms"}
     ]
 
-# GEOLOOKUP HELPER
-async def _geo_lookup(ip: str) -> dict | None:
-    if not ip or ip in ["127.0.0.1", "::1"]: return None
+# CHAT PERSISTENCE
+@app.get("/api/chat/{chat_id}")
+async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
+    rows = (await db.execute(q)).scalars().all()
+    # Return in chronological order
+    return sorted(rows, key=lambda x: x.timestamp)
+
+@app.post("/api/chat")
+async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    new_msg = ChatMessage(
+        id=msg.get("id"),
+        user_id=current.id,
+        username=current.username,
+        text=msg.get("text"),
+        chat_id=msg.get("chatId"),
+        mentions=msg.get("mentions", []),
+        attachment=msg.get("attachment")
+    )
+    db.add(new_msg)
+    await db.commit()
+    await db.refresh(new_msg)
+    
+    # Broadcast via WS
+    broadcast_data = {
+        "id": new_msg.id,
+        "userId": new_msg.user_id,
+        "username": new_msg.username,
+        "text": new_msg.text,
+        "timestamp": new_msg.timestamp.isoformat(),
+        "chatId": new_msg.chat_id,
+        "mentions": new_msg.mentions,
+        "attachment": new_msg.attachment
+    }
+    await manager.broadcast(json.dumps(broadcast_data))
+    return broadcast_data
+
+# IOC ENDPOINTS
+@app.get("/api/ioc")
+async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    q = select(IOC).order_by(desc(IOC.created_at))
+    if status: q = q.where(IOC.status == status)
+    if ioc_type: q = q.where(IOC.ioc_type == ioc_type)
+    return (await db.execute(q)).scalars().all()
+
+@app.post("/api/ioc")
+async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    existing = (await db.execute(select(IOC).where(IOC.value == req.get("value")))).scalar_one_or_none()
+    if existing: raise HTTPException(400, "IOC ya existe en la lista")
+    
+    ioc = IOC(
+        value=req.get("value"),
+        ioc_type=req.get("ioc_type"),
+        malicious_score=req.get("malicious_score", 0),
+        total_engines=req.get("total_engines", 0),
+        country=req.get("country"),
+        asn=str(req.get("asn")) if req.get("asn") else None,
+        as_owner=req.get("as_owner"),
+        tags=req.get("tags", []),
+        status=req.get("status", "watchlist"),
+        vt_report=req.get("vt_report")
+    )
+    db.add(ioc)
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=5.0) as c:
-            r = await c.get(f"http://ip-api.com/json/{ip}")
-            return r.json()
-    except: return None
+        await db.commit()
+        await db.refresh(ioc)
+    except IntegrityError:
+        raise HTTPException(400, "IOC ya existe")
+    return ioc
+
+@app.patch("/api/ioc/{id}")
+async def update_ioc_ep(id: int, req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    ioc = (await db.execute(select(IOC).where(IOC.id == id))).scalar_one_or_none()
+    if not ioc: raise HTTPException(404, "IOC no encontrado")
+    if "status" in req: ioc.status = req["status"]
+    if "analyst_notes" in req: ioc.analyst_notes = req["analyst_notes"]
+    if "related_ticket_id" in req: ioc.related_ticket_id = req["related_ticket_id"]
+    await db.commit()
+    return ioc
+
+@app.delete("/api/ioc/{id}")
+async def delete_ioc_ep(id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    ioc = (await db.execute(select(IOC).where(IOC.id == id))).scalar_one_or_none()
+    if not ioc: raise HTTPException(404, "IOC no encontrado")
+    await db.delete(ioc)
+    await db.commit()
+    return {"ok": True}

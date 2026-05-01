@@ -140,3 +140,32 @@ class Monitor(Base):
     severity_floor: Mapped[str] = mapped_column(String(16), default="medium")
     rule_id_pattern: Mapped[str | None] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    chat_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    mentions: Mapped[list] = mapped_column(JSON, default=list)
+    attachment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+class IOC(Base):
+    __tablename__ = "iocs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    ioc_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    malicious_score: Mapped[int] = mapped_column(Integer, default=0)
+    total_engines: Mapped[int] = mapped_column(Integer, default=0)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    asn: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    as_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="watchlist")
+    analyst_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    related_ticket_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
+    vt_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

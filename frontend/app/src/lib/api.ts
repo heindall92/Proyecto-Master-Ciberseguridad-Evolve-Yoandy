@@ -475,3 +475,18 @@ export interface ThreatMapData {
 export function getThreatMap(hours: number = 24) {
   return http<ThreatMapData>(`/api/threat-map?hours=${hours}`);
 }
+
+// CHAT PERSISTENCE & REAL-TIME
+export function getChatHistory(chatId: string, limit = 100) {
+  return http<any[]>(`/api/chat/${chatId}?limit=${limit}`);
+}
+
+export function postChatMessage(msg: any) {
+  return http<any>("/api/chat", { method: "POST", body: JSON.stringify(msg) });
+}
+
+export const getChatWsUrl = () => {
+  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = API_BASE.replace(/^https?:\/\//, "");
+  return `${wsProto}//${host}/ws/chat`;
+};

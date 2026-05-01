@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import logger from "../lib/logger";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
-export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
+export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"ip" | "hash" | "domain">("ip");
   const [result, setResult] = useState<any>(null);
@@ -103,10 +103,32 @@ export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
         status: "watchlist",
         vt_report: result
       });
-      alert("Añadido a Watchlist correctamente.");
+      alert(lang === 'es' ? "Añadido a Watchlist correctamente." : "Added to Watchlist successfully.");
       loadWatchlist();
     } catch (e) {
-      alert("Error al añadir (quizás ya existe).");
+      alert(lang === 'es' ? "Error al añadir (quizás ya existe)." : "Error adding (maybe already exists).");
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!result) return;
+    try {
+      await addIOC({
+        value: query,
+        ioc_type: type,
+        malicious_score: result.malicious || 0,
+        total_engines: result.total || 0,
+        country: result.country,
+        asn: result.asn,
+        as_owner: result.as_owner,
+        tags: [...(result.tags || []), "blocked-manually"],
+        status: "blocked",
+        vt_report: result
+      });
+      alert(lang === 'es' ? "Indicador BLOQUEADO en el sistema SOC." : "Indicator BLOCKED in SOC system.");
+      loadWatchlist();
+    } catch (e) {
+      alert(lang === 'es' ? "Error al bloquear (quizás ya existe)." : "Error blocking (maybe already exists).");
     }
   };
 
@@ -257,7 +279,7 @@ export default function ThreatIntelView({ initialIp }: { initialIp?: string }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ AÑADIR A WATCHLIST</button>
                     {result.malicious > 0 && (
-                        <button className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 BLOQUEAR EN FIREWALL</button>
+                        <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR EN FIREWALL' : 'BLOCK IN FIREWALL'}</button>
                     )}
                 </div>
               </div>

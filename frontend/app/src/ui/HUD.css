@@ -55,6 +55,61 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ======== GLOBAL FORM STYLES ======== */
+input, textarea, select {
+  accent-color: var(--signal);
+  caret-color: var(--signal);
+}
+
+select {
+  background-color: #050a08 !important; /* Extremely dark green-black */
+  color: var(--text-bright) !important;
+  border: 1.5px solid var(--line-strong) !important;
+  border-radius: var(--r-sm);
+  padding: 10px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233cff9e%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  transition: all 0.2s;
+}
+
+select option {
+  background-color: #0c1a14;
+  color: var(--text-bright);
+  padding: 12px;
+}
+
+/* Customizing the focused state of inputs and selects */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--signal) !important;
+  box-shadow: 0 0 15px var(--signal-glow), inset 0 0 5px rgba(60,255,158,0.1);
+}
+
+input, textarea {
+  background-color: #050a08 !important;
+  border: 1.5px solid var(--line) !important;
+  color: var(--text-bright) !important;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  transition: all 0.2s;
+}
+
+input:hover, textarea:hover, select:hover {
+  border-color: rgba(60,255,158,0.5) !important;
+}
+
+/* Webkit specific styling for select dropdowns */
+select::-webkit-listbox {
+  background-color: #0c1a14;
+  color: var(--text-bright);
+}
+
 /* ======== SCROLLBAR CYBERPUNK ======== */
 ::-webkit-scrollbar {
   width: 6px;

@@ -108,7 +108,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     placeholder="http://localhost:11434"
                                     value={settings.find(s => s.key === 'ollama_url')?.value || ''} 
                                     onChange={(e) => handleChange('ollama_url', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                                 {settings.find(s => s.key === 'ollama_url')?.value && !/^https?:\/\/.+/.test(settings.find(s => s.key === 'ollama_url')?.value || '') && (
                                     <span style={{ fontSize: '9px', color: 'var(--danger)' }}>URL inválida</span>
@@ -120,7 +119,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     type="text" 
                                     value={settings.find(s => s.key === 'ollama_model')?.value || ''} 
                                     onChange={(e) => handleChange('ollama_model', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -128,7 +126,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                 <select 
                                     value={settings.find(s => s.key === 'ollama_min_alert_level')?.value || 'high'}
                                     onChange={(e) => handleChange('ollama_min_alert_level', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }}
                                 >
                                     <option value="critical">Critical</option>
                                     <option value="high">High</option>
@@ -152,7 +149,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     maxLength={256}
                                     value={settings.find(s => s.key === 'vt_api_key')?.value === '********' ? '' : settings.find(s => s.key === 'vt_api_key')?.value} 
                                     onChange={(e) => handleChange('vt_api_key', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -163,7 +159,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     maxLength={256}
                                     value={settings.find(s => s.key === 'otx_api_key')?.value === '********' ? '' : settings.find(s => s.key === 'otx_api_key')?.value} 
                                     onChange={(e) => handleChange('otx_api_key', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                             </div>
                         </div>
@@ -181,7 +176,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     min="1" max="100"
                                     value={settings.find(s => s.key === 'max_upload_mb')?.value || '10'} 
                                     onChange={(e) => handleChange('max_upload_mb', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -191,7 +185,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                     min="1" max="365"
                                     value={settings.find(s => s.key === 'retention_days_cowrie')?.value || '30'} 
                                     onChange={(e) => handleChange('retention_days_cowrie', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }} 
                                 />
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -199,7 +192,6 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
                                 <select 
                                     value={settings.find(s => s.key === 'default_theme')?.value || 'dark'}
                                     onChange={(e) => handleChange('default_theme', e.target.value)}
-                                    style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '8px', fontFamily: 'var(--mono)' }}
                                 >
                                     <option value="dark">Dark (Tactical)</option>
                                     <option value="light">Light</option>
