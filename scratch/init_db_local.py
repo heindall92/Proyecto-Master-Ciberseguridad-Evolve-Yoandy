@@ -2,6 +2,10 @@ import asyncio
 import sys
 import os
 
+if sys.platform == 'win32':
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 sys.path.append(r"e:\000Yoandy\Proyecto SOC\Valhalla-SOC\backend")
 
 from app.db import engine

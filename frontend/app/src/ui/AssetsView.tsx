@@ -72,7 +72,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
         <div className="panel__body" style={{ padding: 0, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-dim)', textTransform: 'uppercase', position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-panel)' }}>
+              <tr style={{ color: 'var(--text-dim)', textTransform: 'uppercase', position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-panel)' }}>
                 <th style={{ padding: '12px 10px', textAlign: 'left' }}>{t('state')}</th>
                 <th style={{ padding: '12px 10px', textAlign: 'left' }}>{t('name')}</th>
                 <th style={{ padding: '12px 10px', textAlign: 'left' }}>{t('ip')}</th>
@@ -104,7 +104,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
                   </td>
                   <td style={{ padding: '12px 10px', fontFamily: 'var(--mono)' }}>{a.ip}</td>
                   <td style={{ padding: '12px 10px' }}>
-                    <div style={{ fontSize: '10px' }}>{a.os}</div>
+                    <div style={{ fontSize: '10px' }}>{typeof a.os === 'object' && a.os !== null ? (a.os as any).name : a.os}</div>
                     <div style={{ fontSize: '9px', color: 'var(--cyan)' }}>v{a.version}</div>
                   </td>
                   <td style={{ padding: '12px 10px', color: 'var(--text-faint)', fontSize: '10px' }}>

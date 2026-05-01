@@ -12,6 +12,7 @@ import {
   getDashboardSummary,
   syncWazuhAlerts,
   listRunbooks,
+  uploadEvidence,
   type TicketOut,
   type UserOut,
   type RunbookOut,
@@ -59,7 +60,17 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
 
-export default function AnalystWorkspace({ lang = "es", initialData, onClearInitialData }: { lang?: "es" | "en", initialData?: any, onClearInitialData?: () => void }) {
+export default function AnalystWorkspace({ 
+  lang = "es", 
+  initialData, 
+  onClearInitialData,
+  currentUser
+}: { 
+  lang?: "es" | "en", 
+  initialData?: any, 
+  onClearInitialData?: () => void,
+  currentUser: UserOut
+}) {
   const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
   const [tickets, setTickets] = useState<TicketCard[]>([]);
   const [users, setUsers] = useState<UserOut[]>([]);
@@ -123,8 +134,15 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
 
       // Llamadas independientes - si una falla, las demás continúan
       try {
-        ticketsData = await listTickets();
-        logger.log('[Workspace] Tickets loaded:', ticketsData.length);
+        const allTickets = await listTickets();
+        // Filtrado multi-sesión: 
+        // Los analistas solo ven sus propios tickets. Los admins ven todo.
+        if (currentUser.role === 'admin') {
+          ticketsData = allTickets;
+        } else {
+          ticketsData = allTickets.filter(t => t.assigned_to_id === currentUser.id);
+        }
+        logger.log('[Workspace] Tickets filtered for session:', ticketsData.length);
       } catch(e) {
         logger.error('[Workspace] Error loading tickets:', e);
       }
@@ -160,7 +178,8 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
         progress: t.status === 'resolved' ? 100 : t.status === 'in_progress' ? 50 : 0,
         actions: t.analysis_notes ? '1/3 Actions' : '0/3 Actions',
         tags: t.category ? [t.category] : [],
-        assignee_username: t.assignee_username,
+        assignee_username: t.assignee_username || (t as any).assignee?.username || null,
+        assigned_to_id: (t as any).assigned_to_id,
         ai_summary: t.ai_summary,
         ai_recommendation: t.ai_recommendation,
         analysis_notes: t.analysis_notes,
@@ -219,17 +238,17 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
 
     try {
       if (newStatus === 'resolved') {
-        await resolveTicket(ticketId, 'Resolved from workspace');
+        await resolveTicket(ticketId, 'Resolved via Kanban');
         playResolvedSound();
       } else {
         await updateTicket(ticketId, { status: newStatus });
         const wasResolved = tickets.find(t => t.id === ticketId)?.status === 'resolved';
-        if (wasResolved) {
-          playNotificationSound();
-        }
+        if (wasResolved) playNotificationSound();
       }
+      await fetchData(); // Refresh data to confirm sync with DB
     } catch (err) {
       logger.error('Failed to update ticket status:', err);
+      alert('Error al mover incidente: ' + (err instanceof Error ? err.message : String(err)));
       fetchData(); // Revert on error
     }
   };
@@ -285,7 +304,6 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
     const file = e.target.files[0];
     setSaving(true);
     try {
-      const { uploadEvidence } = await import('../lib/api');
       const newEv = await uploadEvidence(selectedTicket.id, file);
       const updated = { ...selectedTicket, evidence: [...(selectedTicket.evidence || []), newEv] };
       setSelectedTicket(updated);
@@ -325,7 +343,7 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
         affected_asset: createForm.affected_asset || null,
         affected_user: createForm.affected_user || null,
         mitre_technique: createForm.mitre_technique || null,
-        assigned_to_id: createForm.assigned_to_id ? Number(createForm.assigned_to_id) : null,
+        assigned_to_id: createForm.assigned_to_id && createForm.assigned_to_id !== "" ? Number(createForm.assigned_to_id) : null,
       };
       await createTicket(payload);
       setShowCreateModal(false);
@@ -595,7 +613,28 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
                           return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}>🕒 {hrs}h {mins}m</span>;
                         })()}
                       </div>
-                      <span style={{ textTransform: 'uppercase', color: PRIORITY_COLORS[ticket.severity] }}>{ticket.severity}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ textTransform: 'uppercase', color: PRIORITY_COLORS[ticket.severity], fontWeight: 600 }}>{ticket.severity}</span>
+                        {currentUser?.role === 'admin' && (
+                          <button
+                            title="Eliminar Incidente"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Estás seguro de que deseas eliminar el incidente #${ticket.id} permanentemente?`)) {
+                                  deleteTicket(ticket.id).then(() => fetchData());
+                                }
+                            }}
+                            style={{
+                                background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer',
+                                padding: '2px', display: 'flex', alignItems: 'center', opacity: 0.6, transition: 'opacity 0.2s'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.opacity = '1'}
+                            onMouseOut={e => e.currentTarget.style.opacity = '0.6'}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Title */}
@@ -643,34 +682,66 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
                         }} />
                       </div>
 
+                      {/* Quick Move Menu */}
+                      <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                        {getColumns(t).filter(c => c.id !== ticket.status).map(c => (
+                          <button
+                            key={c.id}
+                            title={`Mover a ${c.label}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDrop({ preventDefault: () => {}, dataTransfer: { dropEffect: 'move' } } as any, c.id);
+                                // Note: We simulate a drop call but we need a specific handler
+                                // For simplicity, let's use a direct call:
+                                updateTicket(ticket.id, { status: c.id }).then(() => fetchData());
+                            }}
+                            style={{
+                                width: '20px', height: '20px', borderRadius: '4px',
+                                border: `1px solid ${c.color}40`, background: 'rgba(0,0,0,0.2)',
+                                color: c.color, fontSize: '10px', cursor: 'pointer',
+                                display: 'grid', placeItems: 'center'
+                            }}
+                          >
+                          </button>
+                        ))}
+                      </div>
+
                       {/* Assignee */}
                       {ticket.assignee_username ? (
-                        <div title={`Assigned to ${ticket.assignee_username}`} style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          background: 'rgba(77,159,255,0.3)',
-                          display: 'grid',
-                          placeItems: 'center',
-                          fontSize: '10px',
-                          color: '#fff',
-                          border: '1px solid rgba(77,159,255,0.5)',
-                        }}>
-                          {ticket.assignee_username.charAt(0).toUpperCase()}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                           <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 600 }}>{ticket.assignee_username.toUpperCase()}</span>
+                           <div title={`Assigned to ${ticket.assignee_username}`} style={{
+                             width: '24px',
+                             height: '24px',
+                             borderRadius: '50%',
+                             background: 'rgba(77,159,255,0.3)',
+                             display: 'grid',
+                             placeItems: 'center',
+                             fontSize: '10px',
+                             color: '#fff',
+                             border: '1px solid rgba(77,159,255,0.5)',
+                           }}>
+                             {ticket.assignee_username.charAt(0).toUpperCase()}
+                           </div>
                         </div>
                       ) : (
                         <div title="Unassigned" style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          background: 'transparent',
-                          display: 'grid',
-                          placeItems: 'center',
-                          fontSize: '14px',
-                          color: 'rgba(255,255,255,0.2)',
-                          border: '1px dashed rgba(255,255,255,0.2)',
+                          display: 'flex', alignItems: 'center', gap: '6px'
                         }}>
-                          +
+                           <span style={{ fontSize: '10px', color: 'var(--danger)', fontWeight: 600 }}>UNASSIGNED</span>
+                           <div style={{
+                             width: '24px',
+                             height: '24px',
+                             borderRadius: '50%',
+                             background: 'transparent',
+                             display: 'grid',
+                             placeItems: 'center',
+                             fontSize: '14px',
+                             color: 'rgba(255,255,255,0.2)',
+                             border: '1px dashed rgba(255,255,255,0.2)',
+                           }}>
+                             +
+                           </div>
                         </div>
                       )}
                     </div>
@@ -716,10 +787,10 @@ export default function AnalystWorkspace({ lang = "es", initialData, onClearInit
               Incident #{selectedTicket.id}
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {selectedTicket.status === 'resolved' && (
+              {currentUser?.role === 'admin' && (
                 <button
                   onClick={async () => {
-                    if (!window.confirm('¿Eliminar este ticket resuelto permanentemente?')) return;
+                    if (!window.confirm('¿Eliminar este ticket permanentemente? Esta acción no se puede deshacer.')) return;
                     try {
                       await deleteTicket(selectedTicket.id);
                       setSelectedTicket(null);

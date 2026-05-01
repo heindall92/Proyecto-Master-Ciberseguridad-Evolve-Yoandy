@@ -108,7 +108,7 @@ export default function App() {
   const [workspaceData, setWorkspaceData] = useState<any>(null);
   const [tvMode, setTvMode] = useState(false);
   const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
-  const [profilePic, setProfilePic] = useState<string | null>(localStorage.getItem('valhalla_profile_pic'));
+  const [profilePic, setProfilePic] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
 
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
@@ -123,15 +123,6 @@ export default function App() {
 
   const updateProfilePic = (newPic: string | null) => {
     setProfilePic(newPic);
-    if (newPic) {
-      try {
-        localStorage.setItem('valhalla_profile_pic', newPic);
-      } catch (e) {
-        logger.warn("Local storage limit reached. Image might not persist.");
-      }
-    } else {
-      localStorage.removeItem('valhalla_profile_pic');
-    }
   };
 
   const toggleTheme = () => {
@@ -146,9 +137,10 @@ export default function App() {
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
-    if (ticketsNow > lastTicketCount) {
-      playNotificationSound();
-      setNotifSeen(false);
+    // Si hay más tickets de los que teníamos, o si es la primera carga y hay tickets críticos
+    if (ticketsNow > lastTicketCount || (lastTicketCount === 0 && ticketsNow > 0)) {
+      if (lastTicketCount > 0) playNotificationSound();
+      if (!notifSeen) setNotifSeen(false);
     }
     setLastTicketCount(ticketsNow);
   }, [stats?.metrics?.tickets_open]);
@@ -177,12 +169,16 @@ export default function App() {
       const res = await login(fd.get("u") as string, fd.get("p") as string);
       localStorage.setItem("token", res.access_token);
       setToken(res.access_token);
+      setUserMenuOpen(false);
+      setNotifMenuOpen(false);
+      setView("overview");
     } catch (err: any) {
       if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
         setIsOffline(true);
         alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
         setToken("offline-mode-token");
         setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
+        setView("overview");
         setLoading(false);
       } else {
         alert("ERROR: Credenciales inválidas.");
@@ -194,7 +190,31 @@ export default function App() {
     localStorage.removeItem("token");
     setToken(null);
     setUser(null);
+    setProfilePic(null);
+    setIsLocked(true);
   };
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          playNotificationSound(); // Play test sound
+          console.log("Audio unlocked and tested");
+        });
+      } else {
+        playNotificationSound();
+      }
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -212,6 +232,7 @@ export default function App() {
       .then(u => {
          if (isMounted) {
            setUser(u);
+           setProfilePic(u.avatar_url || null);
            setLoading(false);
          }
       })
@@ -244,8 +265,39 @@ export default function App() {
         })
         .catch((e) => { logger.error('[Dashboard] Error:', e); });
       
-      listTickets('open', undefined, 5)
-        .then(setRecentOpenTickets)
+      listTickets('open', undefined, 10)
+        .then(allOpen => {
+          console.log('[DEBUG] Notif raw tickets:', allOpen.map(t => ({id: t.id, aid: (t as any).assigned_to_id})));
+          // Filtrado inteligente según rol
+          let filtered = allOpen;
+          if (user?.role !== 'admin') {
+            // En la campana mostramos:
+            // 1. Lo que no tiene dueño (para que cualquiera lo tome)
+            // 2. Lo que me han asignado a MI (directamente por el admin)
+            filtered = allOpen.filter(tk => !tk.assigned_to_id || tk.assigned_to_id === user.id);
+          }
+          
+          // Lógica de alerta: Si hay tickets nuevos que me corresponden
+          const oldIds = new Set(recentOpenTickets.map(t => t.id));
+          const hasNew = filtered.some(t => !oldIds.has(t.id));
+          
+          if (hasNew) {
+            // Siempre poner el punto rojo si hay algo nuevo que no hemos visto
+            setNotifSeen(false);
+            
+            // Solo pitar si ya teníamos la lista cargada (evita pitar al loguearse)
+            if (recentOpenTickets.length > 0) {
+              playNotificationSound();
+              // Si hay algún ticket crítico nuevo, pitar una segunda vez para urgencia
+              const hasCritical = filtered.some(t => t.severity === 'critical' && !oldIds.has(t.id));
+              if (hasCritical) {
+                setTimeout(playNotificationSound, 800);
+              }
+            }
+          }
+          
+          setRecentOpenTickets(filtered);
+        })
         .catch((e) => logger.error('[Dashboard] Tickets error:', e));
 
       getDashboardSummary().then(s => setStats(s)).catch((e) => logger.error('[Dashboard] Summary error:', e));
@@ -265,6 +317,8 @@ export default function App() {
       await assignTicket(ticketId, user.id);
       fetchStats();
       playResolvedSound();
+      setNotifMenuOpen(false); // Cierra el menú al asignar
+      alert(lang === 'es' ? "Incidente asignado correctamente" : "Incident assigned successfully");
     } catch (err) {
       logger.error("Error assigning ticket", err);
     }
@@ -393,9 +447,29 @@ export default function App() {
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--signal)" strokeWidth="2" style={{ marginLeft: '8px' }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '0 8px', cursor: 'pointer', background: 'none', border: 'none', marginRight: '8px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={incidentCount > 0 && !notifSeen ? "#FFD700" : "var(--signal)"} strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              {incidentCount > 0 && !notifSeen && <span style={{ position: 'absolute', top: '-2px', right: '2px', width: '6px', height: '6px', background: 'var(--danger)', borderRadius: '50%', animation: 'blink 1s infinite' }}></span>}
+            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
+              <style>{`
+                @keyframes pulse-red {
+                  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
+                  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 62, 62, 0); }
+                  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); }
+                }
+              `}</style>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={recentOpenTickets.length > 0 && !notifSeen ? "#FF3E3E" : "var(--signal)"} strokeWidth="2" style={{ filter: recentOpenTickets.length > 0 && !notifSeen ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {recentOpenTickets.length > 0 && !notifSeen && (
+                <span style={{ 
+                  position: 'absolute', top: '-4px', right: '-4px', 
+                  minWidth: '18px', height: '18px', padding: '0 4px',
+                  background: '#FF3E3E', color: '#fff', 
+                  borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 0 10px rgba(255,62,62,0.5)',
+                  animation: 'pulse-red 2s infinite',
+                  zIndex: 10
+                }}>
+                  {incidentCount}
+                </span>
+              )}
             </button>
             <div style={{ width: '1px', height: '32px', background: 'var(--signal-dim)', margin: '0 4px' }}></div>
             <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'none', border: 'none', padding: '4px 8px' }}>
@@ -412,7 +486,7 @@ export default function App() {
                 position: 'relative'
               }}>
                 {profilePic ? (
-                  <img src={profilePic} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <span style={{ fontSize: '14px' }}>👤</span>
                 )}
@@ -424,23 +498,19 @@ export default function App() {
         )}
 
         {userMenuOpen && (
-          <div style={{ position: 'fixed', top: 50, right: 10, zIndex: 2147483647 }} onClick={() => setUserMenuOpen(false)}>
-            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '220px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setUserMenuOpen(false)}>
+            <div style={{ position: 'absolute', top: 50, right: 10, background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '220px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)' }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: '6px 0' }}>
               <button onClick={() => window.location.reload()} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{t('sync')}</button>
               <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('add_widget')}</button>
               <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{isLocked ? t('unlock') : t('lock')}</button>
-              <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{t('tweaks')}</button>
-              <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cyan)', fontSize: '11px', fontWeight: 'bold' }}>{t('profile_settings')}</button>
+              <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>{lang === 'es' ? '🎨 TEMAS' : '🎨 THEMES'}</button>
+              <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cyan)', fontSize: '11px', fontWeight: 'bold' }}>⚙️ {t('profile_settings')}</button>
               {user?.role === 'admin' && (
                   <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--amber)', fontSize: '11px', fontWeight: 'bold' }}>{lang === 'es' ? '⚙️ AJUSTES GLOBALES' : '⚙️ GLOBAL SETTINGS'}</button>
               )}
               <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
               <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'rgba(60,255,158,0.1)', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--signal)', fontSize: '11px', fontWeight: 'bold' }}>{t('language')}: {lang.toUpperCase()}</button>
-              <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
-              <button onClick={() => { toggleTheme(); setUserMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontSize: '11px' }}>
-                {theme === 'dark' ? '☀️ ' + (lang === 'es' ? 'MODO CLARO' : 'LIGHT MODE') : '🌙 ' + (lang === 'es' ? 'MODO OSCURO' : 'DARK MODE')}
-              </button>
               <div style={{ borderTop: '1px solid var(--line-faint)', margin: '4px 0' }}></div>
               <button onClick={logout} style={{ width: '100%', padding: '10px 14px', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '11px', fontWeight: 'bold' }}>{t('exit')}</button>
               </div>
@@ -449,8 +519,8 @@ export default function App() {
         )}
 
         {notifMenuOpen && (
-          <div style={{ position: 'fixed', top: 50, right: 60, zIndex: 2147483647 }} onClick={() => setNotifMenuOpen(false)}>
-            <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '320px', maxHeight: '450px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setNotifMenuOpen(false)}>
+            <div style={{ position: 'absolute', top: 50, right: 60, background: 'var(--bg-panel)', border: '1px solid var(--signal)', width: '320px', maxHeight: '450px', boxShadow: '0 4px 20px rgba(0,255,136,0.4)', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)', display: 'flex', justifyContent: 'space-between' }}>
                 <span>{t('notifications')}</span>
                 <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
@@ -503,19 +573,19 @@ export default function App() {
           <div className="sidenav__label">{t('modules')}</div>
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
-          <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />
+          {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
           <NavBtn id="incidents" label={lang === 'es' ? 'Incidentes' : 'Incidents'} sub="Prioridad Alta" icon="i-incident" />
-          <NavBtn id="monitors" label={lang === 'es' ? 'Monitores' : 'Monitors'} sub="Config SIEM" icon="i-threat" />
-          <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />
-          <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />
-          <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />
+          {user?.role === 'admin' && <NavBtn id="monitors" label={lang === 'es' ? 'Monitores' : 'Monitors'} sub="Config SIEM" icon="i-threat" />}
+          {user?.role === 'admin' && <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />}
+          {user?.role === 'admin' && <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />}
+          {user?.role === 'admin' && <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />}
           <NavBtn id="threat" label={t('threat_intel')} sub={t('threat_intel_sub')} icon="i-threat" badge="IOCs" />
           <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
-          <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />
+          {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
-          <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />
-          <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />
+          {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
+          {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
           
           <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
           <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
@@ -551,7 +621,7 @@ export default function App() {
                 {view === 'threatmap' && <ThreatMapView lang={lang} />}
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
-                {view === 'workspace' && <AnalystWorkspace lang={lang} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
+                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
                 {view === 'executive-report' && <ExecutiveReport lang={lang} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
                 {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (

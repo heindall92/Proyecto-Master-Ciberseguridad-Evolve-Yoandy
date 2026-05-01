@@ -3,11 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Valhalla SOC</title>
-    <script type="module" crossorigin src="/assets/index-BEoI4EzG.js"></script>
+    <title>VALHALLA.SOC // Tactical HUD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-C6OKp0xI.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C21bpE59.css">
   </head>
-  <body>
-    <div id="root"></div>
+  <body data-scheme="green" data-scan="on">
+    <div id="root"></div>
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        document.body.innerHTML = '<div style="color:red; font-size:24px; padding:20px; z-index:999999; position:absolute; background:black; top:0; left:0; width:100%; height:100%;">ERROR: ' + msg + '<br>Line: ' + line + '<br>Stack: ' + (error ? error.stack : '') + '</div>';
+        return false;
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        document.body.innerHTML = '<div style="color:red; font-size:24px; padding:20px; z-index:999999; position:absolute; background:black; top:0; left:0; width:100%; height:100%;">PROMISE ERROR: ' + event.reason + '</div>';
+      });
+    </script>
   </body>
 </html>
-

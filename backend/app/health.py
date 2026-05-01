@@ -42,7 +42,8 @@ async def check_dashboard() -> dict:
     try:
         async with asyncio.timeout(3):
             async with httpx.AsyncClient(verify=False) as client:
-                res = await client.get(f"https://{settings.opensearch_host}:5601/api/status")
+                # Dashboard is usually at wazuh.dashboard:443 in this setup
+                res = await client.get("https://wazuh.dashboard:443/api/status")
                 return {"status": "ok" if res.status_code == 200 else "warning", "latency_ms": int((time.time() - start)*1000), "error": None}
     except Exception as e:
         return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}

@@ -1,5 +1,11 @@
 import pytest
 import pytest_asyncio
+import sys
+import asyncio
+
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from app.main import app
 from app.db import engine, SessionLocal
 from app.models import Base, User

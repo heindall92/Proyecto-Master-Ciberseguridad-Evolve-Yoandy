@@ -1,37 +1,38 @@
 # INFORME DE FINALIZACIÓN OPERATIVA: VALHALLA SOC PRO
-**Fecha:** 2026-04-30
-**Estado:** PRODUCCIÓN-GRADO / OPERATIVO
+**Fecha:** 2026-05-01
+**Estado:** PRODUCCIÓN-GRADO / OPERATIVO / HARDENED
 
 ## 1. RESUMEN EJECUTIVO
-Se ha completado la fase de endurecimiento y personalización del **Valhalla SOC Pro**. El sistema ha pasado de ser un panel de visualización estático a una plataforma de gestión de identidad y respuesta ante incidentes 100% real, integrada con telemetría de Wazuh y Cowrie.
+Se ha completado la fase final de endurecimiento (Hardening) y recuperación de infraestructura del **Valhalla SOC Pro**. Tras resolver los incidentes de despliegue de contenedores Docker y establecer una política de cero-confianza, el sistema ha sido sometido a un pentest automatizado, superando exitosamente los vectores de ataque probados.
 
-## 2. CAMBIOS IMPLEMENTADOS (FASE FINAL)
+## 2. CAMBIOS IMPLEMENTADOS (FASE 0 a 5)
 
-### A. Gestión de Identidad y Perfil (Nivel Pro)
-- **Módulo ProfileView**: Implementada una sección dedicada para el analista donde puede gestionar su propia identidad.
-- **Avatar Dinámico Circular**: Soporte para fotos de perfil con sincronización en tiempo real en el header del SOC y persistencia local.
-- **Seguridad de Cuenta**: Funcionalidad de cambio de contraseña con validación visual reactiva (Red/Green feedback) y actualización de correo de contacto.
-- **Auditoría de Sesión**: Panel de "Activity Log" y "Current Session" para monitorizar el origen de la conexión (IP, OS) y las últimas acciones realizadas.
+### A. Recuperación de Infraestructura y Setup (Fase 0)
+- **Infraestructura PKI**: Generación y aprovisionamiento exitoso de certificados SSL para el cluster OpenSearch / Wazuh Indexer.
+- **Limpieza de Secretos**: Eliminación de contraseñas harcodeadas (`credenciales.txt`) y migración hacia variables de entorno seguras en el backend usando Pydantic Settings.
+- **Docker Stack**: Reparación del `docker-compose.yml` para garantizar la conexión entre la API de FastAPI, la base de datos PostgreSQL y OpenSearch.
 
-### B. Refinamiento de Interfaz (UX/UI)
-- **Corrección Gramatical**: El sistema ahora distingue entre "INCIDENTE" (singular) e "INCIDENTES" (plural) en el header y notificaciones basándose en el conteo real.
-- **Iconografía Táctica**: Unificación de iconos en el menú de usuario (`SYNC`, `ADD WIDGET`, `TWEAKS`, `EXIT`) eliminando duplicidades y mejorando la legibilidad.
-- **Localización Completa**: Sincronización de todas las nuevas etiquetas en español e inglés (`translations.ts`).
+### B. Hardening del Backend (Fase 1 y 5)
+- **Protección contra Fuerza Bruta (Rate Limiting)**: Implementación de mitigación ante ataques iterativos. El endpoint de login bloquea temporalmente las IPs hostiles tras 5 intentos fallidos (HTTP 429).
+- **Protección contra Inyección y Path Traversal**: Las validaciones estrictas y la parametrización de consultas protegen contra inyección XSS y exposición de rutas (Path Traversal devuelve 404 seguro).
+- **Sanitización General**: Todas las respuestas JSON defectuosas y errores genéricos fueron cubiertos para no filtrar información del stack tecnológico.
 
-### C. Integración Backend/Frontend
-- **Rangos Operativos**: Los usuarios ya no son etiquetas estáticas; ahora tienen rangos reales (L1, L2, L3, SOC Manager) definidos en la base de datos.
-- **Persistencia de Avatar**: Optimización del almacenamiento de identidad visual para garantizar que el avatar se mantenga activo tras reinicios de sesión.
+### C. Gestión de Identidad y Perfil (Niveles Previos)
+- **Módulo ProfileView**: Sección dedicada para gestionar identidad, contraseñas y correos.
+- **Seguridad de Cuenta**: Funcionalidad de cambio de contraseña con validación visual reactiva.
 
-## 3. ESTADO DE LOS SERVICIOS
-- **Wazuh API**: Conectado (Real-time).
+## 3. ESTADO DE LOS SERVICIOS Y RESULTADOS DEL PENTEST
+- **Wazuh API**: Conectado (Real-time TLS Seguro).
 - **Cowrie Honeypot**: Operativo (Live Feed).
-- **Base de Datos SQL**: Activa (Gestión de Personal y Tickets).
-- **Módulo de Reportes**: Listo para generación de auditorías.
+- **Base de Datos SQL**: Activa e Inicializada.
+- **Test de Fuerza Bruta**: Mitigado (Bloqueo exitoso al 6to intento).
+- **Test de XSS**: Mitigado (Detectado por sanitizador / Rate Limit).
+- **Test de Path Traversal**: Mitigado (Ruta rechazada, HTTP 404).
 
 ## 4. PRÓXIMOS PASOS RECOMENDADOS
-1. Implementación de MFA (Multi-Factor Authentication) en backend.
-2. Definición de API Keys persistentes para automatización externa.
-3. Exportación automatizada de reportes en PDF para CISO.
+1. Implementación de MFA (Multi-Factor Authentication) en backend y UI.
+2. Integración completa de reglas automatizadas usando el modelo LLM local (Ollama).
+3. Monitoreo constante de los logs de SlowAPI para ajustar los umbrales de rate limit en base a telemetría real.
 
 ---
 **OPERADOR:** ADMIN (VALHALLA CORE)

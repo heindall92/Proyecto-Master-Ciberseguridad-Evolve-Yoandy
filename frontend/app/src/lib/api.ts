@@ -96,6 +96,8 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export const fetchAuth = http;
+
 // Events & Alerts
 export function listEvents(limit = 50, offset = 0) {
   return http<EventOut[]>(`/events?limit=${limit}&offset=${offset}`);
@@ -172,6 +174,28 @@ export async function login(username: string, password: string) {
 
 export function getCurrentUser() {
   return http<UserOut>("/api/auth/me");
+}
+
+export async function uploadMyAvatar(file: File): Promise<{avatar_url: string}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
+  }
+
+  const resp = await fetch(`${API_BASE}/api/users/me/avatar`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: formData
+  });
+  if (!resp.ok) throw new Error("Failed to upload avatar");
+  return resp.json();
 }
 
 // Users

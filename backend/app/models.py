@@ -14,6 +14,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(String(32), default="analista", nullable=False)
     rank: Mapped[str] = mapped_column(String(64), default="L1 Analyst", nullable=False)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     assigned_tickets: Mapped[list["Ticket"]] = relationship(
@@ -83,6 +84,16 @@ class Ticket(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     severity: Mapped[str] = mapped_column(String(16), default="medium", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    affected_asset: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    wazuh_alert_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    affected_user: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mitre_technique: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    analysis_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     assigned_to_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reporter_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -97,6 +108,8 @@ class Evidence(Base):
     ticket_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="evidence")
 

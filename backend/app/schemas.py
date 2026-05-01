@@ -72,6 +72,7 @@ class UserBase(BaseModel):
     role: str = "analista"
     rank: str = "L1 Analyst"
     email: str | None = None
+    avatar_url: str | None = None
 
 class UserCreate(UserBase):
     password: str
@@ -82,6 +83,7 @@ class UserUpdate(BaseModel):
     role: str | None = None
     rank: str | None = None
     password: str | None = None
+    avatar_url: str | None = None
 
 class UserIn(UserBase):
     password: str
@@ -218,26 +220,26 @@ class TicketAnalysis(BaseModel):
 class TicketOut(BaseModel):
     id: int
     title: str
-    description: str | None
+    description: str | None = None
     severity: str
     status: str
-    category: str | None
-    source_ip: str | None
-    affected_asset: str | None
+    category: str | None = None
+    source_ip: str | None = None
+    affected_asset: str | None = None
     affected_user: str | None = None
     mitre_technique: str | None = None
-    wazuh_alert_id: str | None
-    assigned_to_id: int | None
-    reporter_id: int | None
+    wazuh_alert_id: str | None = None
+    assigned_to_id: int | None = None
+    reporter_id: int | None = None
     assignee_username: str | None = None
     reporter_username: str | None = None
-    ai_summary: str | None
-    ai_recommendation: str | None
-    analysis_notes: str | None
-    resolution_notes: str | None
+    ai_summary: str | None = None
+    ai_recommendation: str | None = None
+    analysis_notes: str | None = None
+    resolution_notes: str | None = None
     created_at: datetime
     updated_at: datetime
-    resolved_at: datetime | None
+    resolved_at: datetime | None = None
     evidence: list[EvidenceOut] = []
 
 class EvidenceOut(BaseModel):

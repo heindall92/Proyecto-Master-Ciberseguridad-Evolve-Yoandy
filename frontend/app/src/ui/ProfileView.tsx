@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserOut, updateUser } from "../lib/api";
+import { UserOut, updateUser, uploadMyAvatar } from "../lib/api";
 import { translations } from "./translations";
 
 export default function ProfileView({ 
@@ -49,19 +49,38 @@ export default function ProfileView({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
         alert(lang === 'es' ? "La imagen es demasiado grande (Máx 2MB)" : "Image is too large (Max 2MB)");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfilePic(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setLoading(true);
+      try {
+        const res = await uploadMyAvatar(file);
+        setProfilePic(res.avatar_url);
+        // Also update local user object to sync with HUD
+        onUpdate({ ...user, avatar_url: res.avatar_url });
+      } catch (err) {
+        alert(lang === 'es' ? "Error al subir avatar" : "Error uploading avatar");
+      } finally {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleRemoveAvatar = async () => {
+      setLoading(true);
+      try {
+          await updateUser(user.id, { avatar_url: "" });
+          setProfilePic(null);
+          onUpdate({ ...user, avatar_url: null });
+      } catch (err) {
+          alert(String(err));
+      } finally {
+          setLoading(false);
+      }
   };
 
   return (
@@ -91,7 +110,7 @@ export default function ProfileView({
                   transition: 'all 0.3s ease'
                 }}>
                   {profilePic ? (
-                    <img src={profilePic} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: '50px' }}>👤</span>
                   )}
@@ -119,7 +138,7 @@ export default function ProfileView({
                     ID: {user.id.toString().padStart(5, '0')}
                   </span>
                 </div>
-                <button onClick={() => setProfilePic(null)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '9px', cursor: 'pointer', marginTop: '10px', textDecoration: 'underline', padding: 0 }}>
+                <button onClick={handleRemoveAvatar} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '9px', cursor: 'pointer', marginTop: '10px', textDecoration: 'underline', padding: 0 }}>
                    {lang === 'es' ? 'ELIMINAR AVATAR' : 'REMOVE AVATAR'}
                 </button>
               </div>

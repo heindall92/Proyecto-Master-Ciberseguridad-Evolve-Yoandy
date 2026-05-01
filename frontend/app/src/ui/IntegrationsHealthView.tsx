@@ -22,11 +22,8 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
 
     const checkHealth = async () => {
         try {
-            const res = await fetchAuth("/api/health/integrations");
-            if (res.ok) {
-                const data = await res.json();
-                setHealth(data);
-            }
+            const data = await fetchAuth<IntegrationsHealth>("/api/health/integrations");
+            setHealth(data);
         } catch (err) {
             console.error("Health check failed", err);
         } finally {
