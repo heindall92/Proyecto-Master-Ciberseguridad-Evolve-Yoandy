@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import logger from '../lib/logger';
 import {
   listTickets,
   createTicket,
@@ -10,10 +11,14 @@ import {
   listUsers,
   getDashboardSummary,
   syncWazuhAlerts,
+  listRunbooks,
+  uploadEvidence,
   type TicketOut,
   type UserOut,
+  type RunbookOut,
 } from '../lib/api';
 import { playNotificationSound, playResolvedSound } from './audio';
+import { translations } from './translations';
 
 type KanbanStatus = 'open' | 'in_progress' | 'escalated' | 'resolved';
 
@@ -32,14 +37,18 @@ interface TicketCard {
   description: string | null;
   source_ip: string | null;
   affected_asset: string | null;
+  affected_user: string | null;
+  mitre_technique: string | null;
+  wazuh_alert_id: string | null;
+  evidence: any[];
   created_at: string;
 }
 
-const COLUMNS: { id: KanbanStatus; label: string; color: string }[] = [
-  { id: 'open', label: 'TRIAGE (NEW)', color: '#4D9FFF' },
-  { id: 'in_progress', label: 'INVESTIGATION', color: '#FF9F1C' },
-  { id: 'escalated', label: 'MITIGATION & RESPONSE', color: '#FF4D4D' },
-  { id: 'resolved', label: 'RESOLVED', color: '#4DFFA6' },
+const getColumns = (t: any): { id: KanbanStatus; label: string; color: string }[] => [
+  { id: 'open', label: t('triage').toUpperCase(), color: '#4D9FFF' },
+  { id: 'in_progress', label: t('investigation').toUpperCase(), color: '#FF9F1C' },
+  { id: 'escalated', label: t('mitigation').toUpperCase(), color: '#FF4D4D' },
+  { id: 'resolved', label: t('resolved').toUpperCase(), color: '#4DFFA6' },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -51,7 +60,18 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
 
-export default function AnalystWorkspace() {
+export default function AnalystWorkspace({ 
+  lang = "es", 
+  initialData, 
+  onClearInitialData,
+  currentUser
+}: { 
+  lang?: "es" | "en", 
+  initialData?: any, 
+  onClearInitialData?: () => void,
+  currentUser: UserOut
+}) {
+  const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
   const [tickets, setTickets] = useState<TicketCard[]>([]);
   const [users, setUsers] = useState<UserOut[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +84,7 @@ export default function AnalystWorkspace() {
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterAnalyst, setFilterAnalyst] = useState<string>('all');
   const [stats, setStats] = useState<any>(null);
+  const [runbooks, setRunbooks] = useState<RunbookOut[]>([]);
 
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -73,11 +94,37 @@ export default function AnalystWorkspace() {
     category: '',
     source_ip: '',
     affected_asset: '',
+    affected_user: '',
+    mitre_technique: '',
+    assigned_to_id: '' as string | number,
   });
 
   // Detail/edit state
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [activeRunbook, setActiveRunbook] = useState<RunbookOut | null>(null);
+
+  useEffect(() => {
+    if (initialData) {
+      setCreateForm({
+        ...createForm,
+        title: initialData.title || '',
+        source_ip: initialData.source_ip || '',
+        affected_asset: initialData.affected_asset || '',
+        description: initialData.description || ''
+      });
+      setShowCreateModal(true);
+      if (onClearInitialData) onClearInitialData();
+    }
+  }, [initialData, onClearInitialData]);
+
+  const interpolate = (text: string) => {
+    if (!selectedTicket) return text;
+    return text
+      .replace(/{{ip}}/g, selectedTicket.source_ip || 'N/A')
+      .replace(/{{asset}}/g, selectedTicket.affected_asset || 'N/A')
+      .replace(/{{user}}/g, selectedTicket.affected_user || 'N/A');
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -87,26 +134,40 @@ export default function AnalystWorkspace() {
 
       // Llamadas independientes - si una falla, las demás continúan
       try {
-        ticketsData = await listTickets();
-        console.log('[Workspace] Tickets loaded:', ticketsData.length);
+        const allTickets = await listTickets();
+        // Filtrado multi-sesión: 
+        // Los analistas solo ven sus propios tickets. Los admins ven todo.
+        if (currentUser.role === 'admin') {
+          ticketsData = allTickets;
+        } else {
+          ticketsData = allTickets.filter(t => t.assigned_to_id === currentUser.id);
+        }
+        logger.log('[Workspace] Tickets filtered for session:', ticketsData.length);
       } catch(e) {
-        console.error('[Workspace] Error loading tickets:', e);
+        logger.error('[Workspace] Error loading tickets:', e);
       }
 
       try {
         usersData = await listUsers();
-        console.log('[Workspace] Users loaded:', usersData.length);
+        logger.log('[Workspace] Users loaded:', usersData.length);
       } catch(e) {
-        console.error('[Workspace] Error loading users:', e);
+        logger.error('[Workspace] Error loading users:', e);
         usersData = [];
       }
 
       try {
         statsData = await getDashboardSummary();
-        console.log('[Workspace] Stats loaded:', statsData);
+        logger.log('[Workspace] Stats loaded:', statsData);
       } catch(e) {
-        console.error('[Workspace] Error loading stats:', e);
+        logger.error('[Workspace] Error loading stats:', e);
         statsData = null;
+      }
+
+      try {
+        const rbData = await listRunbooks();
+        setRunbooks(rbData || []);
+      } catch(e) {
+        logger.error('[Workspace] Error loading runbooks:', e);
       }
 
       const mapped: TicketCard[] = ticketsData.map((t: TicketOut) => ({
@@ -117,20 +178,25 @@ export default function AnalystWorkspace() {
         progress: t.status === 'resolved' ? 100 : t.status === 'in_progress' ? 50 : 0,
         actions: t.analysis_notes ? '1/3 Actions' : '0/3 Actions',
         tags: t.category ? [t.category] : [],
-        assignee_username: t.assignee_username,
+        assignee_username: t.assignee_username || (t as any).assignee?.username || null,
+        assigned_to_id: (t as any).assigned_to_id,
         ai_summary: t.ai_summary,
         ai_recommendation: t.ai_recommendation,
         analysis_notes: t.analysis_notes,
         description: t.description,
         source_ip: t.source_ip,
         affected_asset: t.affected_asset,
+        affected_user: t.affected_user,
+        mitre_technique: t.mitre_technique,
+        wazuh_alert_id: t.wazuh_alert_id,
+        evidence: t.evidence || [],
         created_at: t.created_at,
       }));
       setTickets(mapped);
       setUsers(usersData);
       setStats(statsData);
     } catch (err) {
-      console.error('Failed to fetch workspace data:', err);
+      logger.error('Failed to fetch workspace data:', err);
     } finally {
       setLoading(false);
     }
@@ -172,17 +238,17 @@ export default function AnalystWorkspace() {
 
     try {
       if (newStatus === 'resolved') {
-        await resolveTicket(ticketId, 'Resolved from workspace');
+        await resolveTicket(ticketId, 'Resolved via Kanban');
         playResolvedSound();
       } else {
         await updateTicket(ticketId, { status: newStatus });
         const wasResolved = tickets.find(t => t.id === ticketId)?.status === 'resolved';
-        if (wasResolved) {
-          playNotificationSound();
-        }
+        if (wasResolved) playNotificationSound();
       }
+      await fetchData(); // Refresh data to confirm sync with DB
     } catch (err) {
-      console.error('Failed to update ticket status:', err);
+      logger.error('Failed to update ticket status:', err);
+      alert('Error al mover incidente: ' + (err instanceof Error ? err.message : String(err)));
       fetchData(); // Revert on error
     }
   };
@@ -227,11 +293,28 @@ export default function AnalystWorkspace() {
       );
       setSelectedTicket(prev => prev ? { ...prev, analysis_notes: editNotes } : null);
     } catch (err) {
-      console.error('Failed to save notes:', err);
+      logger.error('Failed to save notes:', err);
     } finally {
       setSaving(false);
     }
   };
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedTicket || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    setSaving(true);
+    try {
+      const newEv = await uploadEvidence(selectedTicket.id, file);
+      const updated = { ...selectedTicket, evidence: [...(selectedTicket.evidence || []), newEv] };
+      setSelectedTicket(updated);
+      setTickets(prev => prev.map(t => t.id === selectedTicket.id ? updated : t));
+    } catch (err) {
+      logger.error('Upload failed:', err);
+      alert('Error subiendo archivo');
+    } finally {
+      setSaving(false);
+    }
+  }, [selectedTicket]);
 
   const handleAssign = async (userId: number) => {
     if (!selectedTicket) return;
@@ -241,7 +324,7 @@ export default function AnalystWorkspace() {
       await fetchData();
       setSelectedTicket(null);
     } catch (err) {
-      console.error('Failed to assign ticket:', err);
+      logger.error('Failed to assign ticket:', err);
     } finally {
       setSaving(false);
     }
@@ -258,13 +341,16 @@ export default function AnalystWorkspace() {
         category: createForm.category || null,
         source_ip: createForm.source_ip || null,
         affected_asset: createForm.affected_asset || null,
+        affected_user: createForm.affected_user || null,
+        mitre_technique: createForm.mitre_technique || null,
+        assigned_to_id: createForm.assigned_to_id && createForm.assigned_to_id !== "" ? Number(createForm.assigned_to_id) : null,
       };
       await createTicket(payload);
       setShowCreateModal(false);
-      setCreateForm({ title: '', description: '', severity: 'medium', category: '', source_ip: '', affected_asset: '' });
+      setCreateForm({ title: '', description: '', severity: 'medium', category: '', source_ip: '', affected_asset: '', affected_user: '', mitre_technique: '', assigned_to_id: '' });
       await fetchData();
     } catch (err: any) {
-      console.error('Failed to create ticket:', err);
+      logger.error('Failed to create ticket:', err);
       alert('Error al crear incidente: ' + (err?.message || err?.toString() || 'Error desconocido'));
     } finally {
       setSaving(false);
@@ -333,10 +419,10 @@ export default function AnalystWorkspace() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600, color: '#fff', letterSpacing: '0.5px' }}>
-            Incident Response Board
+            {t('incident_response_board')}
           </h1>
           <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '5px', display: 'block' }}>
-            Manage analyst workloads, playbook actions, and active threat mitigations.
+            {t('manage_workloads')}
           </span>
         </div>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
@@ -354,7 +440,7 @@ export default function AnalystWorkspace() {
               cursor: 'pointer',
             }}
           >
-            <option value="all">All Priorities</option>
+            <option value="all">{t('all_priorities')}</option>
             {SEVERITY_OPTIONS.map(s => (
               <option key={s} value={s}>{s.toUpperCase()}</option>
             ))}
@@ -372,8 +458,8 @@ export default function AnalystWorkspace() {
               cursor: 'pointer',
             }}
           >
-            <option value="all">All Analysts</option>
-            <option value="unassigned">Unassigned</option>
+            <option value="all">{t('all_analysts')}</option>
+            <option value="unassigned">{t('unassigned')}</option>
             {users.map(u => (
               <option key={u.id} value={u.username}>{u.username.toUpperCase()}</option>
             ))}
@@ -394,7 +480,7 @@ export default function AnalystWorkspace() {
               gap: '6px',
             }}
           >
-            + New Incident
+            + {t('new_incident')}
           </button>
         </div>
       </div>
@@ -403,20 +489,20 @@ export default function AnalystWorkspace() {
       {stats && (
         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF0055', fontWeight: 600 }}>{stats.metrics?.tickets_open || 0}</span> Open Tickets
+            <span style={{ color: '#FF0055', fontWeight: 600 }}>{stats.metrics?.tickets_open || 0}</span> {t('open_tickets')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF4D4D', fontWeight: 600 }}>{getTicketsByStatus('escalated').length}</span> Escalated
+            <span style={{ color: '#FF9F1C', fontWeight: 600 }}>{getTicketsByStatus('escalated').length}</span> {t('escalated_tickets')}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#4DFFA6', fontWeight: 600 }}>{getTicketsByStatus('resolved').length}</span> Resolved
+            <span style={{ color: '#4DFFA6', fontWeight: 600 }}>{getTicketsByStatus('resolved').length}</span> {t('resolved_tickets')}
           </div>
         </div>
       )}
 
       {/* Board */}
       <div style={{ display: 'flex', gap: '20px', flex: 1, overflowX: 'auto', paddingBottom: '10px' }}>
-        {COLUMNS.map(col => {
+        {getColumns(t).map(col => {
           const colTickets = getTicketsByStatus(col.id);
           const isDragOver = dragOverCol === col.id;
           return (
@@ -453,7 +539,7 @@ export default function AnalystWorkspace() {
                         const r = await purgeResolvedTickets(30);
                         await fetchData();
                         alert(`${r.deleted} tickets eliminados`);
-                      } catch (e) { console.error(e); }
+                      } catch (e) { logger.error(e); }
                     }}
                     style={{ fontSize: '9px', background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.3)', color: '#FF4D4D', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
                   >
@@ -480,12 +566,12 @@ export default function AnalystWorkspace() {
                     style={{
                       background: focusedId === ticket.id ? 'rgba(77,159,255,0.15)' : 'rgba(20, 25, 30, 0.6)',
                       backdropFilter: 'blur(10px)',
-                      border: focusedId === ticket.id ? '2px solid var(--signal)' : draggedId === ticket.id ? '2px solid var(--signal)' : '1px solid rgba(255, 255, 255, 0.05)',
+                      border: ticket.severity === 'critical' ? '2px solid #ef4444' : (focusedId === ticket.id ? '2px solid var(--signal)' : '1px solid rgba(255, 255, 255, 0.1)'),
                       borderRadius: '8px',
                       padding: '16px',
                       position: 'relative',
                       cursor: 'grab',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                      boxShadow: ticket.severity === 'critical' ? '0 0 15px rgba(239,68,68,0.2)' : '0 4px 12px rgba(0,0,0,0.2)',
                       transition: 'transform 0.2s, background 0.2s, opacity 0.2s',
                       minHeight: '120px',
                       display: 'flex',
@@ -518,8 +604,37 @@ export default function AnalystWorkspace() {
 
                     {/* Top Section: ID + Menu */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.3)', fontSize: '10px', marginBottom: '8px' }}>
-                      <span>#{ticket.id}</span>
-                      <span style={{ textTransform: 'uppercase' }}>{ticket.severity}</span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <span>#{ticket.id}</span>
+                        {(() => {
+                          const diff = Date.now() - new Date(ticket.created_at).getTime();
+                          const hrs = Math.floor(diff / 3600000);
+                          const mins = Math.floor((diff % 3600000) / 60000);
+                          return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}>🕒 {hrs}h {mins}m</span>;
+                        })()}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ textTransform: 'uppercase', color: PRIORITY_COLORS[ticket.severity], fontWeight: 600 }}>{ticket.severity}</span>
+                        {currentUser?.role === 'admin' && (
+                          <button
+                            title="Eliminar Incidente"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Estás seguro de que deseas eliminar el incidente #${ticket.id} permanentemente?`)) {
+                                  deleteTicket(ticket.id).then(() => fetchData());
+                                }
+                            }}
+                            style={{
+                                background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer',
+                                padding: '2px', display: 'flex', alignItems: 'center', opacity: 0.6, transition: 'opacity 0.2s'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.opacity = '1'}
+                            onMouseOut={e => e.currentTarget.style.opacity = '0.6'}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Title */}
@@ -567,34 +682,66 @@ export default function AnalystWorkspace() {
                         }} />
                       </div>
 
+                      {/* Quick Move Menu */}
+                      <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                        {getColumns(t).filter(c => c.id !== ticket.status).map(c => (
+                          <button
+                            key={c.id}
+                            title={`Mover a ${c.label}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDrop({ preventDefault: () => {}, dataTransfer: { dropEffect: 'move' } } as any, c.id);
+                                // Note: We simulate a drop call but we need a specific handler
+                                // For simplicity, let's use a direct call:
+                                updateTicket(ticket.id, { status: c.id }).then(() => fetchData());
+                            }}
+                            style={{
+                                width: '20px', height: '20px', borderRadius: '4px',
+                                border: `1px solid ${c.color}40`, background: 'rgba(0,0,0,0.2)',
+                                color: c.color, fontSize: '10px', cursor: 'pointer',
+                                display: 'grid', placeItems: 'center'
+                            }}
+                          >
+                          </button>
+                        ))}
+                      </div>
+
                       {/* Assignee */}
                       {ticket.assignee_username ? (
-                        <div title={`Assigned to ${ticket.assignee_username}`} style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          background: 'rgba(77,159,255,0.3)',
-                          display: 'grid',
-                          placeItems: 'center',
-                          fontSize: '10px',
-                          color: '#fff',
-                          border: '1px solid rgba(77,159,255,0.5)',
-                        }}>
-                          {ticket.assignee_username.charAt(0).toUpperCase()}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                           <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 600 }}>{ticket.assignee_username.toUpperCase()}</span>
+                           <div title={`Assigned to ${ticket.assignee_username}`} style={{
+                             width: '24px',
+                             height: '24px',
+                             borderRadius: '50%',
+                             background: 'rgba(77,159,255,0.3)',
+                             display: 'grid',
+                             placeItems: 'center',
+                             fontSize: '10px',
+                             color: '#fff',
+                             border: '1px solid rgba(77,159,255,0.5)',
+                           }}>
+                             {ticket.assignee_username.charAt(0).toUpperCase()}
+                           </div>
                         </div>
                       ) : (
                         <div title="Unassigned" style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          background: 'transparent',
-                          display: 'grid',
-                          placeItems: 'center',
-                          fontSize: '14px',
-                          color: 'rgba(255,255,255,0.2)',
-                          border: '1px dashed rgba(255,255,255,0.2)',
+                          display: 'flex', alignItems: 'center', gap: '6px'
                         }}>
-                          +
+                           <span style={{ fontSize: '10px', color: 'var(--danger)', fontWeight: 600 }}>UNASSIGNED</span>
+                           <div style={{
+                             width: '24px',
+                             height: '24px',
+                             borderRadius: '50%',
+                             background: 'transparent',
+                             display: 'grid',
+                             placeItems: 'center',
+                             fontSize: '14px',
+                             color: 'rgba(255,255,255,0.2)',
+                             border: '1px dashed rgba(255,255,255,0.2)',
+                           }}>
+                             +
+                           </div>
                         </div>
                       )}
                     </div>
@@ -640,15 +787,15 @@ export default function AnalystWorkspace() {
               Incident #{selectedTicket.id}
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {selectedTicket.status === 'resolved' && (
+              {currentUser?.role === 'admin' && (
                 <button
                   onClick={async () => {
-                    if (!window.confirm('¿Eliminar este ticket resuelto permanentemente?')) return;
+                    if (!window.confirm('¿Eliminar este ticket permanentemente? Esta acción no se puede deshacer.')) return;
                     try {
                       await deleteTicket(selectedTicket.id);
                       setSelectedTicket(null);
                       await fetchData();
-                    } catch (e) { console.error(e); }
+                    } catch (e) { logger.error(e); }
                   }}
                   style={{ background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.4)', color: '#FF4D4D', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}
                 >
@@ -704,13 +851,25 @@ export default function AnalystWorkspace() {
             {selectedTicket.source_ip && (
               <div>
                 <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Source IP</label>
-                <div style={{ color: '#fff', fontSize: '13px', marginTop: '4px' }}>{selectedTicket.source_ip}</div>
+                <div style={{ color: 'var(--signal)', fontSize: '13px', marginTop: '4px', fontFamily: 'var(--mono)' }}>{selectedTicket.source_ip}</div>
               </div>
             )}
             {selectedTicket.affected_asset && (
               <div>
                 <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Affected Asset</label>
                 <div style={{ color: '#fff', fontSize: '13px', marginTop: '4px' }}>{selectedTicket.affected_asset}</div>
+              </div>
+            )}
+            {selectedTicket.affected_user && (
+              <div>
+                <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Affected User</label>
+                <div style={{ color: '#f97316', fontSize: '13px', marginTop: '4px' }}>{selectedTicket.affected_user}</div>
+              </div>
+            )}
+            {selectedTicket.mitre_technique && (
+              <div>
+                <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>MITRE Technique</label>
+                <div style={{ color: '#38bdf8', fontSize: '13px', marginTop: '4px' }}>{selectedTicket.mitre_technique}</div>
               </div>
             )}
             <div>
@@ -720,9 +879,13 @@ export default function AnalystWorkspace() {
               </div>
             </div>
             <div>
-              <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Assignee</label>
-              <div style={{ color: '#fff', fontSize: '13px', marginTop: '4px' }}>
-                {selectedTicket.assignee_username || 'Unassigned'}
+              <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Telemetry</label>
+              <div style={{ marginTop: '4px' }}>
+                {selectedTicket.wazuh_alert_id ? (
+                  <button style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)', color: '#06b6d4', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}>
+                    VIEW IN WAZUH
+                  </button>
+                ) : <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)' }}>No link</span>}
               </div>
             </div>
           </div>
@@ -789,6 +952,147 @@ export default function AnalystWorkspace() {
             >
               {saving ? 'Saving...' : 'Save Notes'}
             </button>
+          </div>
+
+          {/* Suggested Runbooks */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ fontSize: '10px', color: '#4DFFA6', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+              Suggested Runbooks & SOPs
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {runbooks.filter(rb => {
+                const cat = (selectedTicket.category || "").toLowerCase();
+                const rbCat = (rb.category || "").toLowerCase();
+                return rbCat.includes(cat) || cat.includes(rbCat) || rb.severity_applicable === 'all' || rb.severity_applicable === selectedTicket.severity;
+              }).slice(0, 3).map(rb => (
+                <div 
+                  key={rb.id} 
+                  onClick={() => setActiveRunbook(rb)}
+                  style={{ 
+                    padding: '10px', 
+                    background: activeRunbook?.id === rb.id ? 'rgba(77,255,166,0.15)' : 'rgba(77,255,166,0.05)', 
+                    border: `1px solid ${activeRunbook?.id === rb.id ? 'var(--signal)' : 'rgba(77,255,166,0.2)'}`, 
+                    borderRadius: '6px', 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#4DFFA6' }}>{rb.name}</div>
+                    <span style={{ fontSize: '10px' }}>{activeRunbook?.id === rb.id ? '📖' : '👁️'}</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>{rb.description.substring(0, 60)}...</div>
+                </div>
+              ))}
+              {runbooks.length === 0 && <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>No matching runbooks found.</div>}
+            </div>
+          </div>
+
+          {/* Expanded Runbook Viewer */}
+          {activeRunbook && (
+            <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--signal)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--signal)', fontWeight: 700 }}>PROCEDURE: {activeRunbook.name.toUpperCase()}</div>
+                <button onClick={() => setActiveRunbook(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>✕</button>
+              </div>
+
+              {[
+                { label: 'Identification', steps: activeRunbook.identification_steps, icon: '🔍' },
+                { label: 'Containment', steps: activeRunbook.containment_steps, icon: '🛑' },
+                { label: 'Eradication', steps: activeRunbook.eradication_steps, icon: '🧹' },
+                { label: 'Recovery', steps: activeRunbook.recovery_steps, icon: '♻️' },
+                { label: 'Post-Mortem', steps: activeRunbook.post_mortem_steps, icon: '📝' }
+              ].map(phase => phase.steps && phase.steps.length > 0 && (
+                <div key={phase.label} style={{ marginBottom: '15px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>
+                    {phase.icon} {phase.label.toUpperCase()}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {phase.steps.map((step: any, idx: number) => (
+                      <div key={idx} style={{ fontSize: '11px' }}>
+                        <div style={{ color: '#fff', marginBottom: '4px' }}>
+                          <span style={{ color: 'var(--signal)', marginRight: '6px' }}>{idx + 1}.</span>
+                          {interpolate(step.text || step)}
+                        </div>
+                        {(step.command) && (
+                          <div style={{ 
+                            padding: '6px 10px', 
+                            background: '#000', 
+                            borderRadius: '4px', 
+                            fontFamily: 'var(--mono)', 
+                            fontSize: '10px', 
+                            color: 'var(--signal)',
+                            border: '1px solid rgba(0,255,136,0.2)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <code>{interpolate(step.command)}</code>
+                            <button 
+                              onClick={() => navigator.clipboard.writeText(interpolate(step.command))}
+                              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '8px', cursor: 'pointer' }}
+                            >
+                              COPY
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Evidence / Logs */}
+          <div style={{ marginBottom: '25px' }}>
+            <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+              Evidence & Artifacts
+            </label>
+            
+            {/* File List */}
+            {selectedTicket.evidence && selectedTicket.evidence.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                {selectedTicket.evidence.map(ev => (
+                  <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>📄</span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '11px', color: '#fff' }}>{ev.filename}</span>
+                        <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{(ev.file_size / 1024).toFixed(1)} KB</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        const { getEvidenceDownloadUrl } = await import('../lib/api');
+                        window.open(getEvidenceDownloadUrl(ev.id), '_blank');
+                      }}
+                      style={{ background: 'transparent', border: '1px solid var(--signal)', color: 'var(--signal)', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer' }}
+                    >
+                      DOWNLOAD
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '15px', textAlign: 'center', position: 'relative' }}>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>Upload logs or screenshots</div>
+              <input 
+                type="file" 
+                id="evidence-upload" 
+                hidden 
+                onChange={handleFileUpload} 
+                disabled={saving}
+              />
+              <button 
+                onClick={() => document.getElementById('evidence-upload')?.click()}
+                disabled={saving}
+                style={{ marginTop: '8px', background: 'transparent', border: '1px solid var(--signal)', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                {saving ? 'UPLOADING...' : 'SELECT FILE'}
+              </button>
+            </div>
           </div>
 
           {/* Assign Analyst */}
@@ -1024,6 +1328,54 @@ export default function AnalystWorkspace() {
                       boxSizing: 'border-box',
                     }}
                   />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
+                    MITRE Technique ID
+                  </label>
+                  <input
+                    value={createForm.mitre_technique}
+                    onChange={e => setCreateForm(prev => ({ ...prev, mitre_technique: e.target.value }))}
+                    placeholder="e.g., T1110"
+                    style={{
+                      width: '100%',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      padding: '12px',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
+                    Assign To
+                  </label>
+                  <select
+                    value={createForm.assigned_to_id}
+                    onChange={e => setCreateForm(prev => ({ ...prev, assigned_to_id: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      padding: '12px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>{u.username.toUpperCase()}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

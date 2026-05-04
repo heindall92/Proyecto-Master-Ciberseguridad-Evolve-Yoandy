@@ -277,6 +277,12 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
       OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-45}
+      WAZUH_API: ${WAZUH_API_URL:-https://wazuh.manager:55000}
+      WAZUH_USER: ${WAZUH_API_USER:-wazuh-wui}
+      WAZUH_PASS: ${WAZUH_API_PASSWORD:-wazuh-wui}
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-https://wazuh.indexer:9200}
+      OPENSEARCH_USER: ${OPENSEARCH_USER:-admin}
+      OPENSEARCH_PASS: ${OPENSEARCH_PASSWORD:-admin}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { getDashboardSummary } from "../lib/api";
 
 interface EndpointStatus {
@@ -47,7 +48,7 @@ export default function LSAMonitorView() {
       setEndpoints(endpointsRes);
       setAlerts(alertsRes);
     } catch (e) {
-      console.error("LSA fetch error:", e);
+      logger.error("LSA fetch error:", e);
       setEndpoints(generateMockData());
       setAlerts(generateMockAlerts());
     } finally {
@@ -72,7 +73,7 @@ export default function LSAMonitorView() {
       const data = await res.json();
       alert(data.message || "LSA Protection applied");
     } catch (e) {
-      console.error("Hardening error:", e);
+      logger.error("Hardening error:", e);
     } finally {
       setHardeningMode(false);
       fetchData();

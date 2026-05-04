@@ -32,6 +32,8 @@
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",
     "@types/leaflet": "^1.9.21",
+    "dompurify": "^3.4.2",
+    "framer-motion": "^12.38.0",
     "leaflet": "^1.9.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -40,6 +42,7 @@
     "react-router-dom": "^7.14.2"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",

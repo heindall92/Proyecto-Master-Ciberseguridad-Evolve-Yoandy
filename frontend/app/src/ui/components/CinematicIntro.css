@@ -1,0 +1,159 @@
+.cinematic-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+  z-index: 9999;
+  cursor: none;
+}
+
+.cinematic-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.cinematic-vig {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 35% 50%, rgba(0,40,20,.08) 0%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.9) 100%);
+}
+
+.cinematic-scl {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, transparent, transparent 3px, rgba(0,0,0,.06) 3px, rgba(0,0,0,.06) 4px);
+}
+
+.cinematic-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: .04;
+  mix-blend-mode: overlay;
+  animation: cinematic-grs .13s steps(1) infinite;
+}
+
+@keyframes cinematic-grs {
+  0% { background-position: 0 0 }
+  25% { background-position: 15% 5% }
+  55% { background-position: 12% -15% }
+  85% { background-position: 18% -5% }
+  100% { background-position: 0 0 }
+}
+
+.cinematic-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #000;
+  z-index: 100;
+}
+.cinematic-bar-top { top: 0; }
+.cinematic-bar-bottom { bottom: 0; }
+
+.cinematic-act {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#c-boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+#c-boot-cur {
+  width: 2px;
+  height: 20px;
+  background: #00ff88;
+  box-shadow: 0 0 8px #00ff88;
+  animation: cinematic-cur .65s step-end infinite;
+  opacity: 0;
+}
+@keyframes cinematic-cur { 50% { opacity: 0 } }
+
+#c-boot-txt {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(9px, 1vw, 13px);
+  color: #00e878;
+  line-height: 2;
+  width: min(640px, 82vw);
+  text-shadow: 0 0 6px rgba(0,232,120,.45);
+}
+
+.c-bl { opacity: 0; animation: cinematic-blin .08s ease forwards; }
+@keyframes cinematic-blin { to { opacity: 1 } }
+.c-b-ok { color: #00e878; }
+.c-b-dim { color: rgba(0,232,120,.4); }
+.c-b-w { color: #fff; }
+
+#c-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.c-al-row { display: flex; align-items: center; gap: 3px; }
+.c-al-sep {
+  color: rgba(0,232,120,.25);
+  align-self: center;
+  opacity: 0;
+  transition: opacity 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity;
+}
+
+.c-al-path {
+  stroke-dasharray: 101;
+  stroke-dashoffset: 101;
+  opacity: 0;
+  transition: stroke-dashoffset 1.8s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.8s ease;
+}
+.c-al-circle {
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 1.2s ease, transform 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.c-al-reveal .c-al-path { stroke-dashoffset: 0; opacity: 1; }
+.c-al-reveal .c-al-circle { opacity: 1; transform: scale(1); }
+
+#c-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(7px, .65vw, 9px);
+  letter-spacing: .28em;
+  color: rgba(255,255,255,.25);
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+  will-change: opacity;
+}
+
+#c-fl { position: absolute; inset: 0; background: #fff; z-index: 98; opacity: 0; pointer-events: none; }
+#c-fd { position: absolute; inset: 0; background: #000; z-index: 95; opacity: 1; pointer-events: none; transition: opacity .8s ease; }
+#c-lf {
+  position: absolute; inset: 0; z-index: 85; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse 55% 70% at 62% 48%, rgba(0,255,136,.18) 0%, rgba(0,255,136,.04) 40%, transparent 70%);
+}
+
+.c-chroma {
+  filter: url(#chroma-filter);
+}

@@ -194,13 +194,13 @@ export default function IncidentsView() {
                
                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>TÍTULO DEL INCIDENTE</label>
-                  <input type="text" id="new_title" style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)' }} placeholder="Ej: Posible exfiltración en DMZ" />
+                  <input type="text" id="new_title" style={{ flex: 1 }} placeholder="Ej: Posible exfiltración en DMZ" />
                </div>
 
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                      <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>SEVERIDAD</label>
-                     <select id="new_sev" style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)' }}>
+                     <select id="new_sev">
                         <option value="critical">CRÍTICO (P1)</option>
                         <option value="high">ALTO (P2)</option>
                         <option value="medium">MEDIO (P3)</option>
@@ -209,7 +209,7 @@ export default function IncidentsView() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                      <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>TIPO / CATEGORÍA</label>
-                     <select id="new_cat" style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)' }}>
+                     <select id="new_cat">
                         <option value="Intrusión">Intrusión</option>
                         <option value="Malware">Malware</option>
                         <option value="DDoS">DDoS</option>
@@ -222,17 +222,17 @@ export default function IncidentsView() {
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                      <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>ACTIVO AFECTADO</label>
-                     <input type="text" id="new_asset" style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)' }} placeholder="SRV-WEB-01" />
+                     <input type="text" id="new_asset" placeholder="SRV-WEB-01" />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                      <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>IOC (IP/Hash/Dominio)</label>
-                     <input type="text" id="new_ioc" style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)' }} placeholder="192.168.x.x" />
+                     <input type="text" id="new_ioc" placeholder="192.168.x.x" />
                   </div>
                </div>
 
                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>DESCRIPCIÓN Y EVIDENCIAS</label>
-                  <textarea id="new_desc" rows={4} style={{ background: '#000', border: '1px solid var(--line)', color: '#fff', padding: '10px', fontFamily: 'var(--mono)', resize: 'none' }} placeholder="Detalles del incidente..."></textarea>
+                  <textarea id="new_desc" rows={4} style={{ resize: 'none' }} placeholder="Detalles del incidente..."></textarea>
                </div>
 
                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>

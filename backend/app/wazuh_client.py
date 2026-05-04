@@ -31,4 +31,35 @@ class WazuhClient:
                 r = await client.request(method, f"{self.base_url}{path}", **kwargs)
             return r
 
+    async def get_agents(self):
+        r = await self.request("GET", "/agents")
+        return r.json().get("data", {}).get("affected_items", [])
+
+    async def get_sca_checks(self, agent_id: str, policy_id: str = "win_audit"):
+        # Wazuh SCA checks for LSA usually match specific IDs
+        r = await self.request("GET", f"/sca/{agent_id}/checks/{policy_id}")
+        return r.json().get("data", {}).get("affected_items", [])
+
+    async def run_active_response(self, agent_id: str, command: str, arguments: list[str] = None):
+        payload = {"command": command, "arguments": arguments or []}
+        r = await self.request("POST", f"/active-response/{agent_id}", json=payload)
+        return r.json()
+
+    async def get_agent_packages(self, agent_id: str):
+        r = await self.request("GET", f"/syscollector/{agent_id}/packages?limit=100")
+        return r.json().get("data", {}).get("affected_items", [])
+
+    async def get_agent_ports(self, agent_id: str):
+        r = await self.request("GET", f"/syscollector/{agent_id}/ports?limit=100")
+        return r.json().get("data", {}).get("affected_items", [])
+
+    async def get_agent_vulnerabilities(self, agent_id: str):
+        r = await self.request("GET", f"/vulnerability/{agent_id}?limit=100")
+        return r.json().get("data", {}).get("affected_items", [])
+
+    async def request_vulnerability_scan(self, agent_id: str):
+        # Wazuh v4 API uses this to trigger a scan request
+        r = await self.request("PUT", f"/vulnerability/{agent_id}/scan")
+        return r.json()
+
 wazuh = WazuhClient()
