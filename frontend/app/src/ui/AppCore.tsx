@@ -38,6 +38,7 @@ import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
 import ExecutiveReport from "./ExecutiveReport";
 import ProfileView from "./ProfileView";
+import CinematicIntro from "./components/CinematicIntro";
 
 const darkTheme = createTheme({ palette: { mode: "dark" } });
 
@@ -114,6 +115,7 @@ export default function App() {
   const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
+  const [showCinematic, setShowCinematic] = useState(() => !sessionStorage.getItem('valhalla_intro_played'));
 
   // ── Chat interno enterprise ──
   interface ChatAttachment { name: string; type: string; size: number; data: string; }
@@ -550,6 +552,13 @@ export default function App() {
     setPendingAttachment(null);
     setShowMentionDrop(false);
   }, [chatInput, user, activeChatId, pendingAttachment]);
+
+  if (showCinematic) {
+    return <CinematicIntro onComplete={() => {
+      sessionStorage.setItem('valhalla_intro_played', 'true');
+      setShowCinematic(false);
+    }} />;
+  }
 
   if (loading) {
     return (
