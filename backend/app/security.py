@@ -12,8 +12,7 @@ from functools import wraps
 from fastapi import HTTPException, Request, Depends
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
-
-logger = logging.getLogger("valhalla.security")
+from app.logger import logger
 
 # ============================================================================
 # RATE LIMITING & BRUTE FORCE PROTECTION
@@ -277,8 +276,38 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if forwarded:
             client_ip = forwarded.split(",")[0].strip()
         
+        # --- CSRF Protection (Double-Submit Cookie Pattern) ---
+        import secrets
+        
+        csrf_token = request.cookies.get("csrf_token")
+        if not csrf_token:
+            csrf_token = secrets.token_urlsafe(32)
+            
+        if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+            # Bypass CSRF for login, as it's the entry point and doesn't rely on existing auth
+            if request.url.path not in ["/api/auth/login"]:
+                header_csrf = request.headers.get("x-csrf-token")
+                if not header_csrf or header_csrf != csrf_token:
+                    # In a real scenario we'd return a 403 Response directly,
+                    # but with BaseHTTPMiddleware we can return a JSONResponse
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
+        
+        # Generate a nonce for this request
+        csp_nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = csp_nonce
+        
         # Add security headers
         response = await call_next(request)
+        
+        # Set CSRF cookie so frontend can read it (must NOT be httponly)
+        response.set_cookie(
+            key="csrf_token",
+            value=csrf_token,
+            httponly=False,
+            secure=True,
+            samesite="strict"
+        )
         
         # Additional security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -286,10 +315,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        response.headers["Content-Security-Policy"] = "default-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+        response.headers["Content-Security-Policy"] = f"default-src 'self'; script-src 'self' 'nonce-{csp_nonce}'; style-src 'self' 'nonce-{csp_nonce}' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; require-trusted-types-for 'script';"
         
         # Remove server identification
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         
         return response
 

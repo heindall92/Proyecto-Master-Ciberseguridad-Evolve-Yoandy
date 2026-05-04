@@ -337,3 +337,35 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
             "severity": severity,
         })
     return result
+
+async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
+    """Extrae comandos reales y sesiones de Cowrie."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": limit,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": since}}},
+                    {"match": {"rule.groups": "cowrie"}},
+                    {"exists": {"field": "data.input"}}
+                ]
+            }
+        },
+        "_source": ["@timestamp", "data.srcip", "data.session", "data.input", "data.geoip.country_code2"]
+    }
+    resp = await _search(body)
+    hits = resp.get("hits", {}).get("hits", [])
+    result = []
+    for h in hits:
+        src = h.get("_source", {})
+        data = src.get("data", {})
+        result.append({
+            "timestamp": src.get("@timestamp", ""),
+            "ip": data.get("srcip", "unknown"),
+            "geo": data.get("geoip", {}).get("country_code2", "XX"),
+            "session": data.get("session", "unknown"),
+            "command": data.get("input", "")
+        })
+    return result
