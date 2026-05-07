@@ -218,7 +218,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     doc.setTextColor(...white);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
+    doc.setFontSize(16);
     doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -367,7 +367,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 1 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 1 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 2
@@ -402,7 +402,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("TIPO DE ATAQUE", M + 3, 57);
     doc.text("DETECCIONES", M + 95, 57);
     doc.text("NIVEL DE RIESGO", M + 130, 57);
-    doc.text("QUÉ SIGNIFICA", M + 158, 57);
 
     const mitreExplained: Record<string, string> = {
       "Initial Access": "Intento de entrada al sistema",
@@ -417,28 +416,29 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     };
 
     (reportData.mitre_coverage ?? []).forEach((row, i) => {
-      const y = 62 + i * 14;
-      if (i % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(M, y - 4, col, 12, "F"); }
+      const y = 62 + i * 16;
+      if (i % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(M, y - 4, col, 14, "F"); }
       const lColor: [number, number, number] = row.level === "Critical" ? red : row.level === "High" ? orange : row.level === "Medium" ? yellow : green;
       doc.setTextColor(...black);
-      doc.setFont("helvetica", "normal");
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.text(row.tactic, M + 3, y + 4);
+      doc.text(row.tactic, M + 3, y + 2);
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.text(mitreExplained[row.tactic] || "Actividad sospechosa", M + 3, y + 8);
       doc.setTextColor(...navy);
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
       doc.text(String(row.count), M + 100, y + 4);
       doc.setFillColor(...lColor);
       doc.roundedRect(M + 128, y - 1, 25, 8, 1, 1, "F");
       doc.setTextColor(...white);
       doc.setFontSize(6);
       doc.text(levelLabels[row.level] || row.level, M + 140, y + 4, { align: "center" });
-      doc.setTextColor(...gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.text(mitreExplained[row.tactic] || "Actividad sospechosa", M + 158, y + 4);
     });
 
-    const tableEndY = 62 + (reportData.mitre_coverage?.length ?? 0) * 14 + 10;
+    const tableEndY = 62 + (reportData.mitre_coverage?.length ?? 0) * 16 + 10;
 
     doc.setDrawColor(...lightgray);
     doc.line(M, tableEndY, W - M, tableEndY);
@@ -537,6 +537,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const geoData = (reportData.geo_intel ?? []).map(e => ({ name: e.country, pct: e.pct, desc: e.desc }));
 
+    const barStartX = M + 28;
+    const barMaxW = 55;
     geoData.forEach((g, i) => {
       const gy = 50 + i * 22;
       doc.setTextColor(...black);
@@ -544,17 +546,19 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setFontSize(8);
       doc.text(g.name, M, gy + 6);
       doc.setFillColor(...lightgray);
-      doc.roundedRect(M + 30, gy, col - 60, 8, 2, 2, "F");
+      doc.roundedRect(barStartX, gy, barMaxW, 8, 2, 2, "F");
       doc.setFillColor(...navy);
-      doc.roundedRect(M + 30, gy, (col - 60) * g.pct / 100, 8, 2, 2, "F");
+      doc.roundedRect(barStartX, gy, barMaxW * g.pct / 100, 8, 2, 2, "F");
+      const pctX = barStartX + barMaxW + 3;
       doc.setTextColor(...navy);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.text(`${g.pct}%`, W - M - 25, gy + 6);
+      doc.text(`${g.pct}%`, pctX, gy + 6);
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
-      doc.text(g.desc, W - M, gy + 6, { align: "right" });
+      const descMaxW = W - M - pctX - 8;
+      doc.text(doc.splitTextToSize(g.desc, descMaxW), W - M, gy + 6, { align: "right" });
     });
 
     doc.setFillColor(...navy);

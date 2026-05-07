@@ -1,5 +1,24 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (fix visual PDF: título, geo bars, márgenes)
+
+### Problema
+Tres defectos visuales en la función `exportToPDF` de `ExecutiveReport.tsx`:
+1. El título "INFORME EJECUTIVO DE SEGURIDAD" usaba `setFontSize(22)` — demasiado grande para el header.
+2. Página 3 (Geo Intel): las barras de país ocupaban `col - 60 = 110mm` de ancho y el pct/desc se solapaban con ellas o entre sí.
+3. La tabla MITRE (página 2) tenía una 4.ª columna "QUÉ SIGNIFICA" iniciando en `M+158 = 178mm`, dejando solo 12mm hasta el margen `W-M = 190mm` — los textos desbordaban la página.
+
+### Solución
+1. `setFontSize(22)` → `setFontSize(16)` en el título de página 1.
+2. Geo bars: se introduce `barMaxW = 55mm` (barra termina en x=103, antes del centro 105mm). El pct se ubica justo a la derecha (`x=106`) y el desc se limita con `splitTextToSize` dentro del espacio restante hasta `W-M`.
+3. MITRE table: se elimina la 4.ª columna del header y de cada fila. La descripción ("qué significa") pasa a ser un subtexto en gris de 6pt debajo del nombre de la táctica. El alto de fila pasa de 14 a 16mm para dar espacio. `tableEndY` actualizado en consecuencia.
+4. Fix menor: footer de página 1 decía "1 de 3" en lugar de "1 de 4".
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — únicamente la función `exportToPDF`
+
+---
+
 ## 2026-05-07 (restauración archivos docs-julieta/ + integración real backend implementada)
 
 ### Cambios
