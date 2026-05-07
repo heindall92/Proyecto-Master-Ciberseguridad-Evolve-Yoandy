@@ -1,47 +1,74 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import logger from "../lib/logger";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
 
-export default function ThreatIntelView() {
+export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"ip" | "hash" | "domain">("ip");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS">("DETALLES");
-  const [vendorPage, setVendorPage] = useState(1);
-  const vendorScrollRef = useRef<HTMLDivElement>(null);
-  const VENDORS_PER_PAGE = 20;
-
-  useEffect(() => {
-    if (activeTab !== "VENDORS" || !vendorScrollRef.current) return;
-    const handleScroll = () => {
-      const el = vendorScrollRef.current;
-      if (el && el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
-        setVendorPage(p => {
-          if (result.vendor_results && p * VENDORS_PER_PAGE < result.vendor_results.length) {
-            return p + 1;
-          }
-          return p;
-        });
-      }
-    };
-    const el = vendorScrollRef.current;
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [activeTab, result]);
+  const [activeTab, setActiveTab] = useState<"DETALLES" | "VENDORS" | "WHOIS" | "DNS" | "COMUNIDAD">("DETALLES");
+  const [apiKey, setApiKey] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
 
   const loadWatchlist = async () => {
     try {
       const data = await listIOCs();
       setWatchlist(data);
     } catch (e) {
-      console.error("Error loading watchlist:", e);
+      logger.error("Error loading watchlist:", e);
     }
   };
 
   useEffect(() => {
     loadWatchlist();
-  }, []);
+    const savedKey = localStorage.getItem("vt_api_key");
+    if (savedKey) setApiKey(savedKey);
+    
+    if (initialIp) {
+      setQuery(initialIp);
+      setType("ip");
+      // Trigger search after state updates
+      setTimeout(() => {
+        const btn = document.getElementById("threat-search-btn");
+        if (btn) btn.click();
+      }, 100);
+    }
+  }, [initialIp]);
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem("vt_api_key", apiKey);
+    alert("API Key de VirusTotal guardada en la sesión actual.");
+    setShowConfig(false);
+  };
+
+  const testApiKey = async () => {
+    if (!apiKey) return alert("Ingrese una API Key primero");
+    
+    // Guardar temporalmente para que api.ts la lea
+    const previousKey = localStorage.getItem("vt_api_key");
+    localStorage.setItem("vt_api_key", apiKey);
+    
+    try {
+      // Hacemos una llamada real al backend, que a su vez llama a VT con la nueva key.
+      const testRes = await vtCheckIp("8.8.8.8");
+      if (testRes && !testRes.error) {
+        alert("¡Ping exitoso! La API Key de VirusTotal está funcionando correctamente y ha sido guardada.");
+        setShowConfig(false);
+      } else {
+        throw new Error(testRes?.error || "Respuesta inválida de VirusTotal");
+      }
+    } catch (e: any) {
+      // Revertimos si falla
+      if (previousKey) {
+        localStorage.setItem("vt_api_key", previousKey);
+      } else {
+        localStorage.removeItem("vt_api_key");
+      }
+      alert(`Error verificando API Key: ${e.message || "Credenciales inválidas o sin cuota"}`);
+    }
+  };
 
   const handleSearch = async () => {
     if (!query) return;
@@ -54,7 +81,6 @@ export default function ThreatIntelView() {
       else res = await vtCheckDomain(query);
       setResult(res);
       setActiveTab("DETALLES");
-      setVendorPage(1);
     } catch (e) {
       alert("Error en la consulta. Verifique la conexión con el backend o la API Key.");
     } finally {
@@ -77,10 +103,32 @@ export default function ThreatIntelView() {
         status: "watchlist",
         vt_report: result
       });
-      alert("Añadido a Watchlist correctamente.");
+      alert(lang === 'es' ? "Añadido a Watchlist correctamente." : "Added to Watchlist successfully.");
       loadWatchlist();
     } catch (e) {
-      alert("Error al añadir (quizás ya existe).");
+      alert(lang === 'es' ? "Error al añadir (quizás ya existe)." : "Error adding (maybe already exists).");
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!result) return;
+    try {
+      await addIOC({
+        value: query,
+        ioc_type: type,
+        malicious_score: result.malicious || 0,
+        total_engines: result.total || 0,
+        country: result.country,
+        asn: result.asn,
+        as_owner: result.as_owner,
+        tags: [...(result.tags || []), "blocked-manually"],
+        status: "blocked",
+        vt_report: result
+      });
+      alert(lang === 'es' ? "Indicador BLOQUEADO en el sistema SOC." : "Indicator BLOCKED in SOC system.");
+      loadWatchlist();
+    } catch (e) {
+      alert(lang === 'es' ? "Error al bloquear (quizás ya existe)." : "Error blocking (maybe already exists).");
     }
   };
 
@@ -90,7 +138,7 @@ export default function ThreatIntelView() {
       await updateIOC(id, { status: newStatus });
       loadWatchlist();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
     }
   };
 
@@ -100,7 +148,7 @@ export default function ThreatIntelView() {
       await deleteIOC(id);
       loadWatchlist();
     } catch (e) {
-      console.error(e);
+      logger.error(e);
     }
   };
 
@@ -116,10 +164,34 @@ export default function ThreatIntelView() {
 
       {/* Main Analysis Panel */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="panel__head">
+        <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">Motor de Inteligencia de Amenazas · VT REPORT ENGINE</span>
+          <button 
+            onClick={() => setShowConfig(!showConfig)}
+            style={{ background: 'var(--signal)', border: 'none', color: '#000', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            ⚙️ CONFIG API
+          </button>
         </div>
         <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', flex: 1, minHeight: 0 }}>
+          
+          {/* API Config Panel */}
+          {showConfig && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', border: '1px solid var(--signal)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-bright)', marginBottom: '8px' }}>Configuración de VirusTotal API Key</div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input 
+                  type="password" 
+                  value={apiKey} 
+                  onChange={e => setApiKey(e.target.value)} 
+                  placeholder="Ingrese su VirusTotal API Key..."
+                  style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--text-bright)', padding: '6px' }}
+                />
+                <button onClick={handleSaveApiKey} style={{ padding: '6px 12px', background: 'var(--signal)', color: '#000', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>GUARDAR</button>
+                <button onClick={testApiKey} style={{ padding: '6px 12px', background: 'var(--cyan)', color: '#000', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>COMPROBAR (PING)</button>
+              </div>
+            </div>
+          )}
 
           {/* Search Bar */}
           <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
@@ -140,7 +212,7 @@ export default function ThreatIntelView() {
               placeholder={type === 'ip' ? "Ej: 8.8.8.8" : type === 'hash' ? "SHA256..." : "Ej: example.com"}
               style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', outline: 'none' }}
             />
-            <button onClick={handleSearch} disabled={loading} style={{ padding: '8px 14px', background: loading ? 'var(--line)' : 'var(--signal)', border: 'none', color: loading ? 'var(--text)' : '#000', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>
+            <button id="threat-search-btn" onClick={handleSearch} disabled={loading} style={{ padding: '8px 14px', background: loading ? 'var(--line)' : 'var(--signal)', border: 'none', color: loading ? 'var(--text)' : '#000', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>
               {loading ? "ESCANEANDO..." : "ANALIZAR IOC"}
             </button>
           </div>
@@ -207,14 +279,14 @@ export default function ThreatIntelView() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ AÑADIR A WATCHLIST</button>
                     {result.malicious > 0 && (
-                        <button className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 BLOQUEAR EN FIREWALL</button>
+                        <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR EN FIREWALL' : 'BLOCK IN FIREWALL'}</button>
                     )}
                 </div>
               </div>
 
               {/* Tabs */}
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0 }}>
-                {(["DETALLES", "VENDORS", "WHOIS"] as const).map(tab => (
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0, overflowX: 'auto' }}>
+                {(["DETALLES", "VENDORS", "WHOIS", "DNS", "COMUNIDAD"] as const).map(tab => (
                   <button 
                     key={tab} 
                     onClick={() => setActiveTab(tab)}
@@ -227,10 +299,11 @@ export default function ThreatIntelView() {
                       cursor: 'pointer',
                       fontSize: '11px',
                       fontWeight: 600,
-                      letterSpacing: '1px'
+                      letterSpacing: '1px',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    {tab}
+                    {tab === "DNS" ? "DNS HISTORY" : tab}
                   </button>
                 ))}
               </div>
@@ -290,45 +363,27 @@ export default function ThreatIntelView() {
                   </>
                 )}
 
-{activeTab === "VENDORS" && (
-                   <section ref={vendorScrollRef} style={{ flex: 1, overflowY: 'auto' }}>
-                       <h4 style={{ color: 'var(--danger)', borderLeft: '3px solid var(--danger)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>RESULTADOS POR MOTOR DE SEGURIDAD ({result.vendor_results?.length || 0})</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
-                            {result.vendor_results && result.vendor_results.slice(0, vendorPage * VENDORS_PER_PAGE).map((v: any, idx: number) => {
-                                const isMalicious = v.category === "malicious";
-                                const isSuspicious = v.category === "suspicious";
-                                const color = isMalicious ? "var(--danger)" : isSuspicious ? "var(--amber)" : "var(--signal)";
-                                return (
-                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', border: `1px solid ${isMalicious || isSuspicious ? color : 'var(--line)'}`, padding: '8px 12px', borderRadius: '4px' }}>
-                                        <div style={{ color: 'var(--text-bright)', fontSize: '12px', fontWeight: 600 }}>{v.vendor}</div>
-                                        <div style={{ color: color, fontSize: '11px', fontFamily: 'var(--mono)', textAlign: 'right' }}>
-                                            <div>{v.result || v.category}</div>
-                                            {v.method && <div style={{ fontSize: '9px', opacity: 0.6 }}>({v.method})</div>}
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        {result.vendor_results && result.vendor_results.length > vendorPage * VENDORS_PER_PAGE && (
-                            <button 
-                                onClick={() => setVendorPage(p => p + 1)}
-                                style={{ 
-                                    marginTop: '15px', 
-                                    padding: '10px 20px', 
-                                    background: 'rgba(255,255,255,0.05)', 
-                                    border: '1px solid var(--line)', 
-                                    color: 'var(--text-bright)', 
-                                    borderRadius: '4px', 
-                                    cursor: 'pointer',
-                                    fontSize: '11px',
-                                    width: '100%'
-                                }}
-                            >
-                                VER MÁS ({result.vendor_results.length - vendorPage * VENDORS_PER_PAGE} restantes)
-                            </button>
-                        )}
-                    </section>
-                 )}
+                {activeTab === "VENDORS" && (
+                   <section>
+                       <h4 style={{ color: 'var(--danger)', borderLeft: '3px solid var(--danger)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>RESULTADOS POR MOTOR DE SEGURIDAD</h4>
+                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
+                           {result.vendor_results && result.vendor_results.map((v: any, idx: number) => {
+                               const isMalicious = v.category === "malicious";
+                               const isSuspicious = v.category === "suspicious";
+                               const color = isMalicious ? "var(--danger)" : isSuspicious ? "var(--amber)" : "var(--signal)";
+                               return (
+                                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', border: `1px solid ${isMalicious || isSuspicious ? color : 'var(--line)'}`, padding: '8px 12px', borderRadius: '4px' }}>
+                                       <div style={{ color: 'var(--text-bright)', fontSize: '12px', fontWeight: 600 }}>{v.vendor}</div>
+                                       <div style={{ color: color, fontSize: '11px', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                                           <div>{v.result || v.category}</div>
+                                           {v.method && <div style={{ fontSize: '9px', opacity: 0.6 }}>({v.method})</div>}
+                                       </div>
+                                   </div>
+                               )
+                           })}
+                       </div>
+                   </section>
+                )}
 
                 {activeTab === "WHOIS" && (
                     <section>
@@ -337,6 +392,60 @@ export default function ThreatIntelView() {
                         <pre style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--line)', padding: '15px', borderRadius: '4px', overflowX: 'auto', fontSize: '11px', color: 'var(--text-faint)', whiteSpace: 'pre-wrap' }}>
                             {result.whois || "No hay registro WHOIS disponible."}
                         </pre>
+                    </section>
+                )}
+
+                {activeTab === "DNS" && (
+                    <section>
+                        <h4 style={{ color: 'var(--cyan)', borderLeft: '3px solid var(--cyan)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>HISTÓRICO DE RESOLUCIONES DNS</h4>
+                        {!result.resolutions || result.resolutions.length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-faint)', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>No hay registros históricos disponibles.</div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                <thead>
+                                    <tr style={{ color: 'var(--text-dim)', textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+                                        <th style={{ padding: '8px' }}>HOST / DOMINIO</th>
+                                        <th style={{ padding: '8px' }}>DIRECCIÓN IP</th>
+                                        <th style={{ padding: '8px' }}>FECHA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {result.resolutions.map((r: any, i: number) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                                            <td style={{ padding: '8px', color: 'var(--signal)' }}>{r.host || "-"}</td>
+                                            <td style={{ padding: '8px', color: 'var(--cyan)' }}>{r.ip || "-"}</td>
+                                            <td style={{ padding: '8px', color: 'var(--text-dim)' }}>{r.date}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </section>
+                )}
+
+                {activeTab === "COMUNIDAD" && (
+                    <section>
+                        <h4 style={{ color: 'var(--amber)', borderLeft: '3px solid var(--amber)', paddingLeft: '8px', fontSize: '12px', margin: '0 0 15px 0' }}>COMENTARIOS DE LA COMUNIDAD (CROWD INTEL)</h4>
+                        {!result.comments || result.comments.length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-faint)', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>Sin comentarios de la comunidad.</div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                {result.comments.map((c: any, i: number) => (
+                                    <div key={i} style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}>👤 {c.user}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{c.date}</span>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#fff', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.text}</div>
+                                        <div style={{ marginTop: '10px', display: 'flex', gap: '10px', fontSize: '9px', color: 'var(--text-dim)' }}>
+                                            <span>👍 {c.votes?.positive || 0}</span>
+                                            <span>👎 {c.votes?.negative || 0}</span>
+                                            <span>🚩 {c.votes?.abuse || 0}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </section>
                 )}
 

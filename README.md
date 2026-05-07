@@ -453,6 +453,18 @@ hydra -l root -P wordlist.txt ssh://localhost:2222
 
 ---
 
+### 💬 Comunicación y Colaboración (Real-Time)
+- 🚀 **Chat de Operadores**: Sistema basado en WebSockets para comunicación instantánea entre múltiples navegadores o equipos.
+- 💾 **Persistencia Total**: Historial de chat almacenado en base de datos para no perder mensajes al refrescar o cambiar de sesión.
+- 🔔 **Notificaciones Visuales**: Alertas luminosas (Neon Red) cuando hay mensajes nuevos para el operador.
+
+### 🛡️ Inteligencia de Amenazas (Threat Intelligence)
+- 🔍 **Watchlist de IOCs**: Registro persistente de IPs, Hashes y Dominios maliciosos detectados mediante el modelo de datos unificado.
+- 🚫 **Bloqueo Directo**: Botón "Bloquear en Firewall" integrado directamente en la interfaz de análisis de indicadores.
+- 📊 **Integración con VirusTotal**: Análisis profundo de indicadores con reportes detallados cargados en tiempo real desde la API.
+
+---
+
 ## 📁 Estructura del Proyecto
 
 ```
