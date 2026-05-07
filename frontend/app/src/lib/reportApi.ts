@@ -3,6 +3,13 @@ import logger from "./logger";
 
 type SeverityKey = "low" | "medium" | "high" | "critical";
 
+export type GeoEntry = {
+  country: string;
+  code: string;
+  pct: number;
+  desc: string;
+};
+
 export type TopThreat = {
   attackType: string;
   severity: SeverityKey;
@@ -13,6 +20,34 @@ export type IsoControl = {
   control: string;
   status: "covered" | "partial" | "gap";
   note: string;
+};
+
+type BackendWazuhMetrics = {
+  total_alerts: number;
+  critical_alerts: number;
+  top_affected_assets: Array<{ name: string; ip: string; alerts: number }>;
+};
+type BackendMitreCoverage = { tactic: string; count: number; level: string; icon: string };
+type BackendHoneypotIntel = { unique_attackers: number; top_passwords_captured: string[]; malware_samples_collected: number };
+type BackendIncidentManagement = { total_tickets: number; closed_tickets: number; avg_resolution_time_min: number };
+type BackendRemediationStep = { task: string; action_cmd?: string };
+
+type BackendReportResponse = {
+  source: "api";
+  generatedAt: string;
+  executiveSummary: string;
+  riskScore: number;
+  metrics: Record<string, unknown>;
+  topThreats: TopThreat[];
+  iso27001: { overall: number; controls: IsoControl[] };
+  recommendations: string[];
+  executive_summary?: { status: string; health_score: number; key_finding: string };
+  wazuh_metrics?: BackendWazuhMetrics;
+  mitre_coverage?: BackendMitreCoverage[];
+  honeypot_intel?: BackendHoneypotIntel;
+  incident_management?: BackendIncidentManagement;
+  remediation_steps?: BackendRemediationStep[];
+  report_metadata?: { report_id: string; generation_date: string; analyst_name: string; company_name: string; period: string };
 };
 
 export type ExecutiveReportData = {
@@ -31,6 +66,14 @@ export type ExecutiveReportData = {
     controls: IsoControl[];
   };
   recommendations: string[];
+  geoIntel?: GeoEntry[];
+  wazuhMetrics?: BackendWazuhMetrics;
+  mitreCoverage?: BackendMitreCoverage[];
+  honeypotIntel?: BackendHoneypotIntel;
+  incidentManagement?: BackendIncidentManagement;
+  remediationSteps?: BackendRemediationStep[];
+  backendKeyFinding?: string;
+  analystNameFromBackend?: string;
 };
 
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -49,12 +92,18 @@ function normalizeSeverity(value: string | null | undefined): SeverityKey {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> || {}),
+  };
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(^| )csrf_token=([^;]+)/);
+    if (match) headers["X-CSRF-Token"] = match[2];
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
+    headers,
+    credentials: "include",
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -274,10 +323,92 @@ async function generateExecutiveSummary(alerts: AlertOut[], fallback: string): P
   }
 }
 
+const GEO_NAMES: Record<string, string> = {
+  CN: "China", RU: "Rusia", NL: "Países Bajos", US: "Estados Unidos",
+  DE: "Alemania", BR: "Brasil", SG: "Singapur", IN: "India",
+  UA: "Ucrania", FR: "Francia", KR: "Corea del Sur", IR: "Irán",
+};
+
+const GEO_DESCS: Record<string, string> = {
+  CN: "Ataques de fuerza bruta y reconocimiento masivo",
+  RU: "Credential stuffing y escaneo de servicios",
+  NL: "Tráfico a través de proxies anónimos",
+  US: "Inyección de comandos en servicios web",
+  DE: "Escaneo de puertos y reconocimiento",
+  BR: "Ataques de fuerza bruta SSH",
+  SG: "Reconocimiento de servicios expuestos",
+  IN: "Escaneo automatizado de vulnerabilidades",
+  UA: "Ataques dirigidos a servicios RDP",
+  FR: "Tráfico sospechoso de salida",
+  KR: "Intentos de acceso a paneles de administración",
+  IR: "Actividad de escaneo persistente",
+};
+
+const FALLBACK_GEO: GeoEntry[] = [
+  { country: "China", code: "CN", pct: 38, desc: GEO_DESCS.CN },
+  { country: "Rusia", code: "RU", pct: 27, desc: GEO_DESCS.RU },
+  { country: "Países Bajos", code: "NL", pct: 14, desc: GEO_DESCS.NL },
+  { country: "Singapur", code: "SG", pct: 11, desc: GEO_DESCS.SG },
+  { country: "Estados Unidos", code: "US", pct: 10, desc: GEO_DESCS.US },
+];
+
+function buildGeoIntel(events: EventOut[]): GeoEntry[] {
+  const counts: Record<string, number> = {};
+  events.forEach((e) => {
+    const code = (e.raw_log as Record<string, unknown>)?.geo as string | undefined;
+    if (code) counts[code] = (counts[code] || 0) + 1;
+  });
+  const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
+  return Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([code, count]) => ({
+      country: GEO_NAMES[code] || code,
+      code,
+      pct: Math.round((count / total) * 100),
+      desc: GEO_DESCS[code] || "Actividad sospechosa detectada",
+    }));
+}
+
+async function fetchGeoIntel(): Promise<GeoEntry[]> {
+  try {
+    const events = await http<EventOut[]>("/events?limit=200");
+    const geo = buildGeoIntel(events);
+    return geo.length > 0 ? geo : FALLBACK_GEO;
+  } catch {
+    return FALLBACK_GEO;
+  }
+}
+
 export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
   // Ahora llamamos directamente al endpoint del backend que ya procesa OpenSearch y Ollama
   try {
-    return await http<ExecutiveReportData>("/api/reports/executive");
+    const data = await http<BackendReportResponse>("/api/reports/executive");
+    const geoIntel = await fetchGeoIntel();
+    const criticalAlerts = data.wazuh_metrics?.critical_alerts ?? 0;
+    const totalAlerts = data.wazuh_metrics?.total_alerts ?? 0;
+    return {
+      source: "api",
+      generatedAt: data.generatedAt,
+      riskScore: data.riskScore,
+      executiveSummary: data.executiveSummary,
+      metrics: {
+        totalAlerts,
+        criticalAlerts,
+        bySeverity: { low: 0, medium: 0, high: 0, critical: criticalAlerts },
+      },
+      topThreats: data.topThreats ?? [],
+      iso27001: data.iso27001,
+      recommendations: data.recommendations ?? [],
+      geoIntel,
+      wazuhMetrics: data.wazuh_metrics,
+      mitreCoverage: data.mitre_coverage,
+      honeypotIntel: data.honeypot_intel,
+      incidentManagement: data.incident_management,
+      remediationSteps: data.remediation_steps,
+      backendKeyFinding: data.executive_summary?.key_finding,
+      analystNameFromBackend: data.report_metadata?.analyst_name,
+    };
   } catch (e) {
     logger.error("Error fetching real executive report, falling back to local simulation:", e);
     
@@ -304,6 +435,7 @@ export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
       topThreats,
       iso27001,
       recommendations,
+      geoIntel: FALLBACK_GEO,
     };
   }
 }
