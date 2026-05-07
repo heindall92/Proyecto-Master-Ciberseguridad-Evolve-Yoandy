@@ -23,7 +23,7 @@ from slowapi.errors import RateLimitExceeded
 from app.db import get_db, engine, SessionLocal
 from app.models import *
 from app.schemas import *
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, require_role
+from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, require_role
 from app.settings import settings
 from app.logger import logger
 from app.security import (
@@ -488,7 +488,7 @@ async def list_audit(db: AsyncSession = Depends(get_db), current: User = Depends
 
 # REPORTS
 @app.get("/api/reports/executive")
-async def executive_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def executive_report(db: AsyncSession = Depends(get_db), current: User | None = Depends(get_current_user_optional)):
     """Genera el informe ejecutivo completo con datos reales e IA."""
     try:
         # 1. Obtener estadisticas de OpenSearch
@@ -529,7 +529,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
             "report_metadata": {
                 "report_id": f"VHL-{datetime.now().year}-RT{datetime.now().strftime('%m%d')}",
                 "generation_date": datetime.now().strftime("%Y-%m-%d"),
-                "analyst_name": current.username.upper(),
+                "analyst_name": current.username.upper() if current else "SISTEMA",
                 "company_name": "VALHALLA SOC ENTERPRISE",
                 "period": datetime.now().strftime("%B %Y").upper()
             },
