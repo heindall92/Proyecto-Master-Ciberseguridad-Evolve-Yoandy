@@ -204,7 +204,7 @@ export default function AnalystWorkspace({
 
   useEffect(() => {
     fetchData();
-    const iv = setInterval(fetchData, 30_000);
+    const iv = setInterval(fetchData, 60000);
     return () => clearInterval(iv);
   }, [fetchData]);
 

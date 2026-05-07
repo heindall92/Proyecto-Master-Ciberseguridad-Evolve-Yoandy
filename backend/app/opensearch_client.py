@@ -369,3 +369,76 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
             "command": data.get("input", "")
         })
     return result
+
+async def get_mitre_stats(hours: int = 24) -> list[dict]:
+    """Agrega alertas por tactica MITRE."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": 0,
+        "query": {"range": {"@timestamp": {"gte": since}}},
+        "aggs": {
+            "tactics": {
+                "terms": {"field": "rule.mitre.tactic.keyword", "size": 10}
+            }
+        }
+    }
+    resp = await _search(body)
+    buckets = resp.get("aggregations", {}).get("tactics", {}).get("buckets", [])
+    return [{"tactic": b["key"], "count": b["doc_count"]} for b in buckets]
+
+async def get_honeypot_stats(hours: int = 24) -> dict:
+    """Extrae metricas clave de Cowrie (senuelo)."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": 0,
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": since}}},
+                    {"match": {"rule.groups": "cowrie"}}
+                ]
+            }
+        },
+        "aggs": {
+            "unique_ips": {"cardinality": {"field": "data.srcip.keyword"}},
+            "top_passwords": {
+                "terms": {"field": "data.password.keyword", "size": 5}
+            }
+        }
+    }
+    resp = await _search(body)
+    aggs = resp.get("aggregations", {})
+    return {
+        "unique_attackers": aggs.get("unique_ips", {}).get("value", 0),
+        "top_passwords": [b["key"] for b in aggs.get("top_passwords", {}).get("buckets", [])]
+    }
+
+async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
+    """Reconstruye la linea de tiempo de un atacante (Wazuh + Cowrie)."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": 200,
+        "sort": [{"@timestamp": {"order": "asc"}}],
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": since}}},
+                    {"match": {"data.srcip": ip}}
+                ]
+            }
+        },
+        "_source": ["@timestamp", "rule.description", "data.input", "data.session", "rule.groups"]
+    }
+    resp = await _search(body)
+    hits = resp.get("hits", {}).get("hits", [])
+    path = []
+    for h in hits:
+        src = h.get("_source", {})
+        path.append({
+            "timestamp": src.get("@timestamp"),
+            "event": src.get("rule", {}).get("description") or "Cowrie Action",
+            "input": src.get("data", {}).get("input"),
+            "session": src.get("data", {}).get("session"),
+            "type": "alert" if "cowrie" not in src.get("rule", {}).get("groups", []) else "honeypot"
+        })
+    return path
