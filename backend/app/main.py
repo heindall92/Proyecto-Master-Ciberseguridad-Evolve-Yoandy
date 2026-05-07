@@ -169,7 +169,9 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: str):
+    async def broadcast(self, message: Any):
+        if not isinstance(message, str):
+            message = json.dumps(message)
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
@@ -601,7 +603,73 @@ async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), curre
     await manager.broadcast(json.dumps(broadcast_data))
     return broadcast_data
 
-# IOC ENDPOINTS
+# WEBHOOKS
+@app.post("/api/webhook/wazuh")
+async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """Real-time alert webhook from Wazuh integrations."""
+    try:
+        alert = await request.json()
+    except:
+        raise HTTPException(400, "Invalid JSON")
+    
+    rule = alert.get("rule", {})
+    level = int(rule.get("level", 0))
+    description = rule.get("description", "Alert")
+    rule_id = rule.get("id", "0")
+    source_ip = alert.get("data", {}).get("srcip") or alert.get("srcip", "N/A")
+    agent_name = alert.get("agent", {}).get("name") or "Manager"
+    
+    # Map Wazuh level to Valhalla severity
+    if level >= 12: severity = "critical"
+    elif level >= 9: severity = "high"
+    elif level >= 5: severity = "medium"
+    else: severity = "low"
+
+    # 1. Background IA Analysis for high severity
+    ai_insight = None
+    if level >= 7:
+        async def run_ai():
+            res = await analyze_alert(int(rule_id), alert)
+            if res.ok:
+                # Update ticket or broadcast insight later if needed
+                # For now we just log it
+                logger.info(f"AI Insight for alert {rule_id}: {res.data.get('summary')}")
+        asyncio.create_task(run_ai())
+
+    # 2. Create Ticket automatically for high level alerts
+    if level >= 9:
+        admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
+        if admin:
+            ticket = Ticket(
+                title=f"Wazuh Real-time: {description}",
+                description=description,
+                severity=severity,
+                category="wazuh-realtime",
+                source_ip=source_ip,
+                affected_asset=agent_name,
+                wazuh_alert_id=str(alert.get("id") or rule_id),
+                reporter_id=admin.id,
+                status="open"
+            )
+            db.add(ticket)
+            await db.commit()
+
+    # 3. Broadcast to UI
+    broadcast_payload = {
+        "type": "NEW_ALERT",
+        "data": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "rule_id": rule_id,
+            "description": description,
+            "severity": severity,
+            "source_ip": source_ip,
+            "agent_name": agent_name
+        }
+    }
+    await manager.broadcast(broadcast_payload)
+    
+    return {"status": "processed"}
+
 @app.get("/api/ioc")
 async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     q = select(IOC).order_by(desc(IOC.created_at))
