@@ -1,5 +1,77 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (restauración archivos docs-julieta/ + integración real backend implementada)
+
+### Cambios
+- Se restauran los archivos de `docs-julieta/` eliminados por el merge de Rosalino: `README.md`, `arquitectura.md`, `componentes.md`, `images/executive1.png`, `images/executive2.png`.
+- Se implementa la integración real con el backend en `reportApi.ts` y `ExecutiveReport.tsx` según el plan documentado.
+
+### Implementado en `reportApi.ts`
+1. `http()` actualizado: `credentials: "include"` + header `X-CSRF-Token` desde cookie — autenticación idéntica a `api.ts`.
+2. Tipos internos `BackendReportResponse` y los campos de backend añadidos.
+3. `ExecutiveReportData` ampliado con campos opcionales: `wazuhMetrics?`, `mitreCoverage?`, `honeypotIntel?`, `incidentManagement?`, `remediationSteps?`, `backendKeyFinding?`, `analystNameFromBackend?`.
+4. Camino backend en `fetchExecutiveReportData()`: mapea la respuesta completa del backend a `ExecutiveReportData`. Sigue llamando `fetchGeoIntel()` para geo.
+
+### Implementado en `ExecutiveReport.tsx`
+5. `load()` reemplaza los 6 valores hardcodeados por datos reales del backend cuando están disponibles:
+   - `key_finding` → resumen ejecutivo de Ollama
+   - `wazuh_metrics` → alertas reales de OpenSearch
+   - `mitre_coverage` → tácticas reales de OpenSearch
+   - `honeypot_intel` → datos reales del honeypot Cowrie
+   - `incident_management` → tickets reales de la DB
+   - `remediation_steps` → pasos reales del backend
+   - `analystName` → username real del usuario logueado (actualizado en cada carga como `period`/`reportId`)
+6. Fallback local preservado intacto si el backend no responde.
+
+---
+
+## 2026-05-07 (integración real backend - plan confirmado post-actualización de Rosalino)
+
+### Estado
+- Merge con `origin/main` completado. Conflicto en `cambios.md` resuelto conservando nuestra versión.
+- **Nota:** el merge eliminó `docs-julieta/README.md`, `arquitectura.md`, `componentes.md` e `images/` (limpieza de Rosalino en main). Pendiente decisión de Julieta sobre restaurarlos.
+
+### Respuesta real del backend (confirmada en `backend/app/main.py`)
+
+El endpoint `GET /api/reports/executive` ahora devuelve la estructura completa de `ValhallaReportJSON` más los campos de `ExecutiveReportData`:
+
+```
+source, generatedAt, executiveSummary (Ollama), riskScore
+metrics (OpenSearch stats)
+topThreats, iso27001, recommendations
+report_metadata   → report_id, generation_date, analyst_name (username real), period
+executive_summary → status, health_score, key_finding (Ollama)
+wazuh_metrics     → total_alerts, critical_alerts, top_affected_assets (reales)
+mitre_coverage    → tactic, count, level, icon (reales desde OpenSearch)
+honeypot_intel    → unique_attackers, top_passwords_captured, malware_samples_collected
+incident_management → total_tickets, closed_tickets, avg_resolution_time_min
+remediation_steps → lista de tareas reales
+```
+
+No incluye `geoIntel` → seguirá viniendo de `fetchGeoIntel()`.
+
+### Plan de implementación
+
+**Archivo 1: `frontend/app/src/lib/reportApi.ts`**
+1. Actualizar `http()`: agregar `credentials: "include"` + header `X-CSRF-Token` leído del cookie (igual a `api.ts`).
+2. Agregar tipo `BackendReportResponse` con todos los campos que devuelve el backend.
+3. Agregar campos opcionales a `ExecutiveReportData` para pasar los campos ricos del backend hacia el componente: `wazuhMetrics?`, `mitreCoverage?`, `honeypotIntel?`, `incidentManagement?`, `remediationSteps?`, `backendKeyFinding?`, `analystNameFromBackend?`.
+4. En `fetchExecutiveReportData()` camino backend: mapear `BackendReportResponse` a `ExecutiveReportData` usando los campos reales. Llamar `fetchGeoIntel()` para geo.
+
+**Archivo 2: `frontend/app/src/ui/ExecutiveReport.tsx`**
+5. En `load()`, reemplazar los valores hardcodeados del objeto `structured` por los datos reales del backend cuando estén disponibles:
+   - `key_finding` → `raw.backendKeyFinding` (resumen Ollama real)
+   - `wazuh_metrics` → `raw.wazuhMetrics` (alertas reales de OpenSearch)
+   - `mitre_coverage` → `raw.mitreCoverage` (MITRE real de OpenSearch)
+   - `honeypot_intel` → `raw.honeypotIntel` (datos reales del honeypot)
+   - `incident_management` → `raw.incidentManagement` (tickets reales de DB)
+   - `remediation_steps` → `raw.remediationSteps` (pasos reales)
+   - `analystName` initial value → `raw.analystNameFromBackend` (username del usuario logueado)
+
+El fallback local permanece intacto si el backend falla.
+
+---
+
 ## 2026-05-07 (pausa integración backend - esperando Rosalino)
 
 ### Estado

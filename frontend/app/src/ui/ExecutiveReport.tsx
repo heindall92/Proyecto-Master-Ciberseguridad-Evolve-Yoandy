@@ -114,20 +114,21 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       const derivedReportId = `VHL-${d.getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
       setPeriod(derivedPeriod);
       setReportId(derivedReportId);
+      if (raw.analystNameFromBackend) setAnalystName(raw.analystNameFromBackend);
       const structured: ValhallaReportJSON = {
         report_metadata: {
           report_id: derivedReportId,
           generation_date: new Date().toISOString().split('T')[0],
-          analyst_name: analystName,
+          analyst_name: raw.analystNameFromBackend ?? analystName,
           company_name: companyName,
           period: derivedPeriod,
         },
         executive_summary: {
           status: raw.riskScore < 40 ? "Operativo" : "Alerta",
           health_score: 100 - raw.riskScore,
-          key_finding: "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
+          key_finding: raw.backendKeyFinding ?? "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
         },
-        wazuh_metrics: {
+        wazuh_metrics: raw.wazuhMetrics ?? {
           total_alerts: 42890,
           critical_alerts: 145,
           top_affected_assets: [
@@ -136,24 +137,24 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             { name: "WS-ADMIN-01", ip: "10.0.2.15", alerts: 620 }
           ]
         },
-        mitre_coverage: [
+        mitre_coverage: raw.mitreCoverage ?? [
           { tactic: "Initial Access", count: 120, level: "High", icon: "📥" },
           { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" },
           { tactic: "Persistence", count: 12, level: "Medium", icon: "🛡️" },
           { tactic: "Credential Access", count: 85, level: "Critical", icon: "🔑" },
           { tactic: "Lateral Movement", count: 4, level: "High", icon: "↗️" }
         ],
-        honeypot_intel: {
+        honeypot_intel: raw.honeypotIntel ?? {
           unique_attackers: 1438,
           top_passwords_captured: ["admin123", "root", "Valhalla@123"],
           malware_samples_collected: 12
         },
-        incident_management: {
+        incident_management: raw.incidentManagement ?? {
           total_tickets: 45,
           closed_tickets: 42,
           avg_resolution_time_min: 18
         },
-        remediation_steps: [
+        remediation_steps: raw.remediationSteps ?? [
           { task: "Bloqueo de IPs persistentes en el firewall core.", action_cmd: "iptables -A INPUT -s 185.x.x.x -j DROP" },
           { task: "Actualización de parches en activos críticos.", action_cmd: "apt update && apt upgrade -y" },
           { task: "Refuerzo de política MFA para el grupo de Administradores." }
