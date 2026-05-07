@@ -1,5 +1,30 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (período, analista y report_id dinámicos y editables)
+
+### Cambio
+- Se reemplazan los valores hardcodeados de `period`, `analyst_name` y `report_id` en `frontend/app/src/ui/ExecutiveReport.tsx` por estado React editable y generación dinámica desde la API.
+
+### Problema corregido
+- `period` fijo como `"ABRIL 2026"`, `analyst_name` fijo como `"Y. RAMIREZ"` y `report_id` fijo como `"VHL-2026-XQ7"` — ninguno reflejaba datos reales ni permitía edición.
+
+### Solución aplicada
+- Se agregan tres nuevos estados: `analystName` (default `"Y. RAMIREZ"`), `period` (string vacío inicial), `reportId` (string vacío inicial).
+- En `load()`, se derivan `period` y `reportId` de `raw.generatedAt` devuelto por la API:
+  - `period` → nombre del mes en español + año (ej: `"MAYO 2026"`).
+  - `reportId` → formato `VHL-YYYY-XXXX` con sufijo aleatorio de 4 caracteres.
+  - `analystName` nunca se sobreescribe desde `load()` — respeta la edición del usuario.
+- El objeto `report_metadata` dentro de `structured` usa estos valores de estado en lugar de literales.
+- En `exportToPDF()`, las líneas que leen `reportData.report_metadata.report_id`, `.period` y `.analyst_name` se reemplazan por las variables de estado correspondientes.
+- En el subtítulo del header de la UI se reemplaza `reportData?.report_metadata.report_id` por `reportId`.
+- En el formulario de configuración se agregan dos nuevos campos editables: `ANALYST` y `PERIOD`. El selector existente se renombra a `REPORT TYPE` para evitar ambigüedad.
+- Sin cambios en `reportApi.ts`.
+
+### Motivo
+- Que el reporte refleje el período real de los datos consumidos y permita que el analista personalice nombre y período para cada cliente antes de exportar el PDF.
+
+---
+
 ## 2026-05-07 (botón Recargar en la UI)
 
 ### Cambio

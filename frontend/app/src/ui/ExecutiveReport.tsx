@@ -98,19 +98,28 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [reportData, setReportData] = useState<ValhallaReportJSON | null>(null);
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
+  const [analystName, setAnalystName] = useState("Y. RAMIREZ");
+  const [period, setPeriod] = useState("");
+  const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
+      const MONTHS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      const d = new Date(raw.generatedAt || Date.now());
+      const derivedPeriod = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      const derivedReportId = `VHL-${d.getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setPeriod(derivedPeriod);
+      setReportId(derivedReportId);
       const structured: ValhallaReportJSON = {
         report_metadata: {
-          report_id: `VHL-2026-XQ7`,
+          report_id: derivedReportId,
           generation_date: new Date().toISOString().split('T')[0],
-          analyst_name: "Y. RAMIREZ",
+          analyst_name: analystName,
           company_name: companyName,
-          period: "ABRIL 2026"
+          period: derivedPeriod,
         },
         executive_summary: {
           status: raw.riskScore < 40 ? "Operativo" : "Alerta",
@@ -213,10 +222,10 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("Security Operations Center — Valhalla SOC", M, 30);
 
     doc.setFontSize(8);
-    doc.text(`Ref: ${reportData.report_metadata.report_id}`, W - M, 18, { align: "right" });
+    doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 25, { align: "right" });
-    doc.text(`Período: ${reportData.report_metadata.period}`, W - M, 32, { align: "right" });
-    doc.text(`Analista: ${reportData.report_metadata.analyst_name}`, W - M, 39, { align: "right" });
+    doc.text(`Período: ${period}`, W - M, 32, { align: "right" });
+    doc.text(`Analista: ${analystName}`, W - M, 39, { align: "right" });
 
     doc.setFillColor(240, 243, 247);
     doc.rect(M, 52, col, 18, "F");
@@ -732,7 +741,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
               EXECUTIVE <span style={{ color: 'var(--signal)' }}>REPORT</span>
             </Typography>
             <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px', textTransform: 'uppercase' }}>
-              {companyName} // SESSION: {reportData?.report_metadata.report_id}
+              {companyName} // SESSION: {reportId}
             </Typography>
           </Box>
         </Stack>
@@ -755,8 +764,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="CLIENT NAME" variant="standard" value={companyName} onChange={e => setCompanyName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
+            <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField fullWidth size="small" label="PERIOD" variant="standard" value={period} onChange={e => setPeriod(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small" variant="standard">
-              <InputLabel sx={{ color: 'var(--signal)' }}>PERIOD</InputLabel>
+              <InputLabel sx={{ color: 'var(--signal)' }}>REPORT TYPE</InputLabel>
               <Select value={reportType} onChange={e => setReportType(e.target.value)} sx={{ color: 'var(--text)' }}>
                 <MenuItem value="monthly">MONTHLY SUMMARY</MenuItem>
                 <MenuItem value="weekly">WEEKLY AUDIT</MenuItem>
