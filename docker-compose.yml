@@ -16,7 +16,10 @@ services:
   # ATTACKER (opcional para simulaciones)
   # ──────────────────────────────────────────────────
   attacker:
-    image: kalilinux/kali-rolling
+    build:
+      context: ./attacker
+      dockerfile: Dockerfile
+    image: valhalla-attacker:latest
     logging:
       driver: "json-file"
       options:
@@ -29,6 +32,11 @@ services:
     command: /bin/bash
     restart: unless-stopped
     profiles: ["labs"]
+    volumes:
+      - attacker-home:/root/workspace
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       - valhalla-net
 
@@ -325,6 +333,7 @@ volumes:
   cowrie_downloads:
   pgdata:
   ollama:
+  attacker-home:
 
 networks:
   valhalla-net:
