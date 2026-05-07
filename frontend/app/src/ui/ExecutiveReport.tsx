@@ -740,6 +740,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
             {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
           </Button>
+          <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
+            RECARGAR
+          </Button>
           <Button variant="contained" onClick={exportToPDF} sx={{ bgcolor: 'var(--signal)', color: '#000', fontWeight: 'bold', '&:hover': { bgcolor: 'var(--signal-bright)' } }}>
             EXPORT PDF
           </Button>

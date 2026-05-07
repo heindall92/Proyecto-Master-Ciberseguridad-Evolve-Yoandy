@@ -1,5 +1,23 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (botón Recargar en la UI)
+
+### Cambio
+- Se agrega botón "RECARGAR" visible en la barra superior de `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- No había forma de forzar una nueva carga de datos sin recargar la página entera del navegador. Útil especialmente cuando el backend no estaba disponible al cargar inicialmente.
+
+### Solución aplicada
+- Se agrega un tercer botón `RECARGAR` en el grupo de botones superiores (junto a `PREVIEW UI` y `EXPORT PDF`).
+- Al hacer clic llama a `load()`, que re-ejecuta la carga de datos y muestra el spinner mientras carga.
+- Sin cambios en `reportApi.ts` ni otros archivos.
+
+### Motivo
+- Permite recuperarse de un error de carga sin salir de la vista, y fuerza actualización de datos en demo sin recargar el browser.
+
+---
+
 ## 2026-05-07 (fix error silencioso en Executive Report)
 
 ### Cambio
