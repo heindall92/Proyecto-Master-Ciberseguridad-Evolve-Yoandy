@@ -46,17 +46,31 @@ def send_to_wazuh(ai_analysis, original_alert):
         log_debug(f"Error escribiendo log local: {e}")
 
 
-def query_ollama(description, ip):
-    """Consulta a la IA de Ollama local"""
-    prompt = f"Eres un analista SOC. Alerta detectada: '{description}' desde IP {ip}. En 2 oraciones: describe el objetivo del ataque y el nivel de amenaza (Bajo/Medio/Alto/Critico). Solo el analisis, sin introducciones."
+def query_ollama(alert):
+    """Consulta a la IA de Ollama local con contexto expandido"""
+    desc = alert.get("rule", {}).get("description", "Unknown")
+    ip = alert.get("data", {}).get("srcip") or alert.get("srcip", "Unknown")
+    full_log = alert.get("full_log", "")
+    data = alert.get("data", {})
+    
+    prompt = (
+        f"Eres un analista SOC Senior. Alerta detectada: '{desc}'\n"
+        f"IP Origen: {ip}\n"
+        f"Datos adicionales: {json.dumps(data)}\n"
+        f"Log completo: {full_log}\n\n"
+        "Analiza esta alerta y describe en 2 oraciones:\n"
+        "1. El objetivo probable del atacante.\n"
+        "2. El nivel de amenaza (Bajo/Medio/Alto/Critico).\n"
+        "Se directo y tecnico."
+    )
     
     payload = {
-        "model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct"),
+        "model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
         "prompt": prompt,
         "stream": False,
         "options": {
-            "temperature": 0.3,
-            "num_predict": 150
+            "temperature": 0.2,
+            "num_predict": 200
         }
     }
     
@@ -103,7 +117,7 @@ def main():
         
         log_debug(f"Analizando alerta nivel {rule_level}: {desc} (IP: {ip})")
         
-        analysis = query_ollama(desc, ip)
+        analysis = query_ollama(alert)
         send_to_wazuh(analysis, alert)
     else:
         log_debug(f"Ignorando alerta nivel {rule_level} (por debajo del umbral de IA).")

@@ -12,19 +12,29 @@ import httpx
 from app.settings import settings
 
 logger = logging.getLogger("valhalla.ollama")
+_client_instance: httpx.AsyncClient | None = None
+
+def get_ollama_client() -> httpx.AsyncClient:
+    global _client_instance
+    if _client_instance is None or _client_instance.is_closed:
+        _client_instance = httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.ollama_timeout_seconds),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=5)
+        )
+    return _client_instance
 
 Severity = Literal["low", "medium", "high", "critical"]
 
 
 SYSTEM_PROMPT = (
-    "Eres un Analista Senior de SOC con mas de 10 anos de experiencia, experto en deteccion de amenazas y respuesta ante incidentes. "
+    "Eres un Analista Senior de SOC con mas de 10 años de experiencia, experto en deteccion de amenazas y respuesta ante incidentes. "
     "Tu objetivo es analizar telemetria de Wazuh y Cowrie para proporcionar inteligencia accionable. "
-    "Debes clasificar la alerta segun la categoria de evento, identificar tecnicas MITRE ATT&CK si es posible, "
+    "Debes clasificar la alerta segun la categoria de evento, identificar tecnicas MITRE ATT&CK (ej. T1110 para Brute Force) si es posible, "
     "y dar una recomendacion tactica clara para el operador de turno. "
     "Responde UNICAMENTE con un objeto JSON valido con estas claves: "
     "attack_type (categoria/tipo de ataque), severity (low, medium, high, critical), "
-    "summary (resumen ejecutivo en espanol), recommended_action (pasos de mitigacion en espanol). "
-    "IMPORTANTE: No uses acentos ni caracteres especiales, solo ASCII plano."
+    "summary (resumen ejecutivo detallado en español), recommended_action (pasos de mitigacion especificos en español). "
+    "IMPORTANTE: Proporciona respuestas tecnicas, precisas y directas."
 )
 
 SYSTEM_PROMPT_REPORT = (
@@ -65,14 +75,18 @@ def _extract_first_json_object(text: str) -> dict[str, Any] | None:
         pass
 
     # Extract first JSON object heuristically
-    m = re.search(r"\{[\s\S]*\}", text)
-    if not m:
-        return None
     try:
-        val = json.loads(m.group(0))
-        return val if isinstance(val, dict) else None
+        # Look for the first '{' and the last '}'
+        start = text.find('{')
+        end = text.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            json_str = text[start:end+1]
+            val = json.loads(json_str)
+            return val if isinstance(val, dict) else None
     except Exception:
-        return None
+        pass
+    
+    return None
 
 
 def _normalize_analysis(obj: dict[str, Any], alert_id: int) -> dict[str, Any] | None:
@@ -84,17 +98,18 @@ def _normalize_analysis(obj: dict[str, Any], alert_id: int) -> dict[str, Any] | 
     if severity not in {"low", "medium", "high", "critical"}:
         return None
 
-    def _ascii_text(value: Any) -> str:
+    def _clean_text(value: Any) -> str:
         text = str(value).strip()
-        # Keep output console-friendly on Windows terminals with legacy code pages.
-        return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+        # Remove markdown bold/italic if model included it in JSON values
+        text = re.sub(r'[*_`]', '', text)
+        return text
 
     return {
         "alert_id": alert_id,
-        "attack_type": _ascii_text(obj["attack_type"]) or "unknown",
+        "attack_type": _clean_text(obj.get("attack_type", "unknown")),
         "severity": severity,
-        "summary": _ascii_text(obj["summary"]),
-        "recommended_action": _ascii_text(obj["recommended_action"]),
+        "summary": _clean_text(obj.get("summary", "N/A")),
+        "recommended_action": _clean_text(obj.get("recommended_action", "N/A")),
         "raw_response": obj,
     }
 
@@ -129,25 +144,24 @@ async def analyze_alert(alert_id: int, context: dict[str, Any]) -> OllamaResult:
     chat_url = f"{base}/api/chat"
     gen_url = f"{base}/api/generate"
 
+    client = get_ollama_client()
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.post(chat_url, json=chat_payload)
-            if r.status_code == 404:
-                # Some Ollama builds expose /api/generate but not /api/chat.
-                gen_payload = {
-                    "model": settings.ollama_model,
-                    "stream": False,
-                    "options": {"temperature": float(settings.ollama_temperature)},
-                    "prompt": (
-                        SYSTEM_PROMPT
-                        + "\nReturn ONLY the required JSON. Write summary and recommended_action in Spanish "
-                        + "using plain ASCII only (no accents or special characters).\n"
-                        + json.dumps(context, ensure_ascii=False)
-                    ),
-                }
-                r = await client.post(gen_url, json=gen_payload)
-            r.raise_for_status()
-            body = r.json()
+        r = await client.post(chat_url, json=chat_payload)
+        if r.status_code == 404:
+            # Some Ollama builds expose /api/generate but not /api/chat.
+            gen_payload = {
+                "model": settings.ollama_model,
+                "stream": False,
+                "options": {"temperature": float(settings.ollama_temperature)},
+                "prompt": (
+                    SYSTEM_PROMPT
+                    + "\nReturn ONLY the required JSON. Write summary and recommended_action in Spanish.\n"
+                    + json.dumps(context, ensure_ascii=False)
+                ),
+            }
+            r = await client.post(gen_url, json=gen_payload)
+        r.raise_for_status()
+        body = r.json()
 
         # Ollama chat: { message: { content } } ; generate: { response }
         content: Any = None
@@ -192,12 +206,12 @@ async def generate_executive_summary(metrics_context: dict[str, Any]) -> str:
         ],
     }
 
+    client = get_ollama_client()
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(f"{settings.ollama_base_url.rstrip('/')}/api/chat", json=chat_payload)
-            r.raise_for_status()
-            body = r.json()
-            return body.get("message", {}).get("content", "Error generando resumen ejecutivo.").strip()
+        r = await client.post(f"{settings.ollama_base_url.rstrip('/')}/api/chat", json=chat_payload, timeout=60.0)
+        r.raise_for_status()
+        body = r.json()
+        return body.get("message", {}).get("content", "Error generando resumen ejecutivo.").strip()
     except Exception as e:
         logger.warning("Ollama report generation failed: %s", e)
         return "El sistema de IA no esta disponible para generar el resumen en este momento. Se recomienda revisar las metricas tecnicas adjuntas."

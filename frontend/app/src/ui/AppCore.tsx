@@ -394,7 +394,19 @@ export default function App() {
 
     ws.onmessage = (e) => {
       try {
-        const msg: ChatMessage = JSON.parse(e.data);
+        const data = JSON.parse(e.data);
+        
+        // Handle New Alerts (Real-time integration)
+        if (data.type === "NEW_ALERT") {
+          window.dispatchEvent(new CustomEvent('valhalla-new-alert', { detail: data.data }));
+          if (data.data.severity === 'critical' || data.data.severity === 'high') {
+             playNotificationSound();
+          }
+          return;
+        }
+
+        // Handle Chat Messages
+        const msg: ChatMessage = data;
         
         // Update messages state (avoid duplicates)
         setChatMsgsByChat(prev => {
