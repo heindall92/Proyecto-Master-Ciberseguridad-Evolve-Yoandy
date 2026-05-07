@@ -53,6 +53,7 @@ interface ValhallaReportJSON {
     controls: Array<{ control: string; status: string; note: string }>;
   };
   recommendations?: string[];
+  geo_intel?: Array<{ country: string; pct: number; desc: string }>;
 }
 
 const GlassCard = ({ children, sx = {}, title }: any) => (
@@ -98,26 +99,36 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [reportData, setReportData] = useState<ValhallaReportJSON | null>(null);
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
+  const [analystName, setAnalystName] = useState("Y. RAMIREZ");
+  const [period, setPeriod] = useState("");
+  const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
+      const MONTHS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      const d = new Date(raw.generatedAt || Date.now());
+      const derivedPeriod = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      const derivedReportId = `VHL-${d.getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setPeriod(derivedPeriod);
+      setReportId(derivedReportId);
+      if (raw.analystNameFromBackend) setAnalystName(raw.analystNameFromBackend);
       const structured: ValhallaReportJSON = {
         report_metadata: {
-          report_id: `VHL-2026-XQ7`,
+          report_id: derivedReportId,
           generation_date: new Date().toISOString().split('T')[0],
-          analyst_name: "Y. RAMIREZ",
+          analyst_name: raw.analystNameFromBackend ?? analystName,
           company_name: companyName,
-          period: "ABRIL 2026"
+          period: derivedPeriod,
         },
         executive_summary: {
           status: raw.riskScore < 40 ? "Operativo" : "Alerta",
           health_score: 100 - raw.riskScore,
-          key_finding: "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
+          key_finding: raw.backendKeyFinding ?? "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
         },
-        wazuh_metrics: {
+        wazuh_metrics: raw.wazuhMetrics ?? {
           total_alerts: 42890,
           critical_alerts: 145,
           top_affected_assets: [
@@ -126,24 +137,24 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             { name: "WS-ADMIN-01", ip: "10.0.2.15", alerts: 620 }
           ]
         },
-        mitre_coverage: [
+        mitre_coverage: raw.mitreCoverage ?? [
           { tactic: "Initial Access", count: 120, level: "High", icon: "📥" },
           { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" },
           { tactic: "Persistence", count: 12, level: "Medium", icon: "🛡️" },
           { tactic: "Credential Access", count: 85, level: "Critical", icon: "🔑" },
           { tactic: "Lateral Movement", count: 4, level: "High", icon: "↗️" }
         ],
-        honeypot_intel: {
+        honeypot_intel: raw.honeypotIntel ?? {
           unique_attackers: 1438,
           top_passwords_captured: ["admin123", "root", "Valhalla@123"],
           malware_samples_collected: 12
         },
-        incident_management: {
+        incident_management: raw.incidentManagement ?? {
           total_tickets: 45,
           closed_tickets: 42,
           avg_resolution_time_min: 18
         },
-        remediation_steps: [
+        remediation_steps: raw.remediationSteps ?? [
           { task: "Bloqueo de IPs persistentes en el firewall core.", action_cmd: "iptables -A INPUT -s 185.x.x.x -j DROP" },
           { task: "Actualización de parches en activos críticos.", action_cmd: "apt update && apt upgrade -y" },
           { task: "Refuerzo de política MFA para el grupo de Administradores." }
@@ -152,7 +163,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           overall: raw.iso27001?.overall ?? 73,
           controls: raw.iso27001?.controls ?? []
         },
-        recommendations: raw.recommendations ?? []
+        recommendations: raw.recommendations ?? [],
+        geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
     } catch (e) {
@@ -213,10 +225,10 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("Security Operations Center — Valhalla SOC", M, 30);
 
     doc.setFontSize(8);
-    doc.text(`Ref: ${reportData.report_metadata.report_id}`, W - M, 18, { align: "right" });
+    doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 25, { align: "right" });
-    doc.text(`Período: ${reportData.report_metadata.period}`, W - M, 32, { align: "right" });
-    doc.text(`Analista: ${reportData.report_metadata.analyst_name}`, W - M, 39, { align: "right" });
+    doc.text(`Período: ${period}`, W - M, 32, { align: "right" });
+    doc.text(`Analista: ${analystName}`, W - M, 39, { align: "right" });
 
     doc.setFillColor(240, 243, 247);
     doc.rect(M, 52, col, 18, "F");
@@ -493,26 +505,40 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(pw, pwX + 25, pwY + 17, { align: "center" });
     });
 
-    const geoY = pwY + 30;
-    doc.setDrawColor(...lightgray);
-    doc.line(M, geoY, W - M, geoY);
+    doc.setFillColor(...navy);
+    doc.rect(0, 285, W, 12, "F");
+    doc.setTextColor(...white);
+    doc.setFontSize(7);
+    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
+    doc.text("Página 2 de 4", W - M, 293, { align: "right" });
+
+    // ════════════════════════════
+    // PÁGINA 3 — GEO INTEL
+    // ════════════════════════════
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, W, 18, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("INTELIGENCIA GEOGRÁFICA DE AMENAZAS", M, 12);
+
     doc.setTextColor(...navy);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, geoY + 12);
+    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...gray);
-    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, geoY + 19);
+    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, 37);
 
-    const geoData = [
-      { name: "China", pct: 85, desc: "Principal origen de ataques de fuerza bruta" },
-      { name: "Rusia", pct: 65, desc: "Ataques de reconocimiento y escaneo" },
-      { name: "Países Bajos", pct: 45, desc: "Tráfico a través de proxies anónimos" },
-    ];
+    const geoData = (reportData.geo_intel ?? []).map(e => ({ name: e.country, pct: e.pct, desc: e.desc }));
 
     geoData.forEach((g, i) => {
-      const gy = geoY + 27 + i * 18;
+      const gy = 50 + i * 22;
       doc.setTextColor(...black);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
@@ -536,7 +562,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...white);
     doc.setFontSize(7);
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 2 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 3 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 3
@@ -696,7 +722,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 3 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 4 de 4", W - M, 293, { align: "right" });
 
     doc.save(`valhalla-informe-ejecutivo-${reportData.report_metadata.generation_date}.pdf`);
   }
@@ -704,6 +730,19 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   if (loading) return (
     <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)' }}>
       <CircularProgress sx={{ color: 'var(--signal)' }} />
+    </Box>
+  );
+
+  if (error) return (
+    <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)', p: 4 }}>
+      <GlassCard title="ERROR DE CARGA" sx={{ maxWidth: 500, textAlign: 'center' }}>
+        <Typography sx={{ color: 'var(--danger)', fontSize: '13px', mb: 3, fontFamily: 'var(--ff-mono)', wordBreak: 'break-word' }}>
+          {error}
+        </Typography>
+        <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--signal)', color: 'var(--signal)', '&:hover': { borderColor: 'var(--signal-bright)', color: 'var(--signal-bright)' } }}>
+          REINTENTAR
+        </Button>
+      </GlassCard>
     </Box>
   );
 
@@ -719,13 +758,16 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
               EXECUTIVE <span style={{ color: 'var(--signal)' }}>REPORT</span>
             </Typography>
             <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px', textTransform: 'uppercase' }}>
-              {companyName} // SESSION: {reportData?.report_metadata.report_id}
+              {companyName} // SESSION: {reportId}
             </Typography>
           </Box>
         </Stack>
         <Stack direction="row" spacing={2}>
           <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
             {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
+          </Button>
+          <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
+            RECARGAR
           </Button>
           <Button variant="contained" onClick={exportToPDF} sx={{ bgcolor: 'var(--signal)', color: '#000', fontWeight: 'bold', '&:hover': { bgcolor: 'var(--signal-bright)' } }}>
             EXPORT PDF
@@ -739,8 +781,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="CLIENT NAME" variant="standard" value={companyName} onChange={e => setCompanyName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
+            <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField fullWidth size="small" label="PERIOD" variant="standard" value={period} onChange={e => setPeriod(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small" variant="standard">
-              <InputLabel sx={{ color: 'var(--signal)' }}>PERIOD</InputLabel>
+              <InputLabel sx={{ color: 'var(--signal)' }}>REPORT TYPE</InputLabel>
               <Select value={reportType} onChange={e => setReportType(e.target.value)} sx={{ color: 'var(--text)' }}>
                 <MenuItem value="monthly">MONTHLY SUMMARY</MenuItem>
                 <MenuItem value="weekly">WEEKLY AUDIT</MenuItem>
@@ -814,14 +862,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           <Grid size={{ xs: 12, md: 5 }}>
             <GlassCard title="ATTACK ORIGIN (GEO-INTEL)" sx={{ height: '100%' }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
-                {['CHINA', 'RUSSIA', 'NETHERLANDS'].map((country, i) => (
-                  <Box key={country}>
+                {(reportData.geo_intel ?? []).map((entry, i) => (
+                  <Box key={entry.country}>
                     <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{country}</Typography>
-                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{85 - i * 20}% THREAT LOAD</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{entry.country.toUpperCase()}</Typography>
+                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{entry.pct}% THREAT LOAD</Typography>
                     </Stack>
                     <Box sx={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                      <Box sx={{ width: `${85 - i * 20}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
+                      <Box sx={{ width: `${entry.pct}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
                     </Box>
                   </Box>
                 ))}

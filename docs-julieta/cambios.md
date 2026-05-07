@@ -1,0 +1,438 @@
+# Registro de cambios - Julieta
+
+## 2026-05-07 (restauración archivos docs-julieta/ + integración real backend implementada)
+
+### Cambios
+- Se restauran los archivos de `docs-julieta/` eliminados por el merge de Rosalino: `README.md`, `arquitectura.md`, `componentes.md`, `images/executive1.png`, `images/executive2.png`.
+- Se implementa la integración real con el backend en `reportApi.ts` y `ExecutiveReport.tsx` según el plan documentado.
+
+### Implementado en `reportApi.ts`
+1. `http()` actualizado: `credentials: "include"` + header `X-CSRF-Token` desde cookie — autenticación idéntica a `api.ts`.
+2. Tipos internos `BackendReportResponse` y los campos de backend añadidos.
+3. `ExecutiveReportData` ampliado con campos opcionales: `wazuhMetrics?`, `mitreCoverage?`, `honeypotIntel?`, `incidentManagement?`, `remediationSteps?`, `backendKeyFinding?`, `analystNameFromBackend?`.
+4. Camino backend en `fetchExecutiveReportData()`: mapea la respuesta completa del backend a `ExecutiveReportData`. Sigue llamando `fetchGeoIntel()` para geo.
+
+### Implementado en `ExecutiveReport.tsx`
+5. `load()` reemplaza los 6 valores hardcodeados por datos reales del backend cuando están disponibles:
+   - `key_finding` → resumen ejecutivo de Ollama
+   - `wazuh_metrics` → alertas reales de OpenSearch
+   - `mitre_coverage` → tácticas reales de OpenSearch
+   - `honeypot_intel` → datos reales del honeypot Cowrie
+   - `incident_management` → tickets reales de la DB
+   - `remediation_steps` → pasos reales del backend
+   - `analystName` → username real del usuario logueado (actualizado en cada carga como `period`/`reportId`)
+6. Fallback local preservado intacto si el backend no responde.
+
+---
+
+## 2026-05-07 (integración real backend - plan confirmado post-actualización de Rosalino)
+
+### Estado
+- Merge con `origin/main` completado. Conflicto en `cambios.md` resuelto conservando nuestra versión.
+- **Nota:** el merge eliminó `docs-julieta/README.md`, `arquitectura.md`, `componentes.md` e `images/` (limpieza de Rosalino en main). Pendiente decisión de Julieta sobre restaurarlos.
+
+### Respuesta real del backend (confirmada en `backend/app/main.py`)
+
+El endpoint `GET /api/reports/executive` ahora devuelve la estructura completa de `ValhallaReportJSON` más los campos de `ExecutiveReportData`:
+
+```
+source, generatedAt, executiveSummary (Ollama), riskScore
+metrics (OpenSearch stats)
+topThreats, iso27001, recommendations
+report_metadata   → report_id, generation_date, analyst_name (username real), period
+executive_summary → status, health_score, key_finding (Ollama)
+wazuh_metrics     → total_alerts, critical_alerts, top_affected_assets (reales)
+mitre_coverage    → tactic, count, level, icon (reales desde OpenSearch)
+honeypot_intel    → unique_attackers, top_passwords_captured, malware_samples_collected
+incident_management → total_tickets, closed_tickets, avg_resolution_time_min
+remediation_steps → lista de tareas reales
+```
+
+No incluye `geoIntel` → seguirá viniendo de `fetchGeoIntel()`.
+
+### Plan de implementación
+
+**Archivo 1: `frontend/app/src/lib/reportApi.ts`**
+1. Actualizar `http()`: agregar `credentials: "include"` + header `X-CSRF-Token` leído del cookie (igual a `api.ts`).
+2. Agregar tipo `BackendReportResponse` con todos los campos que devuelve el backend.
+3. Agregar campos opcionales a `ExecutiveReportData` para pasar los campos ricos del backend hacia el componente: `wazuhMetrics?`, `mitreCoverage?`, `honeypotIntel?`, `incidentManagement?`, `remediationSteps?`, `backendKeyFinding?`, `analystNameFromBackend?`.
+4. En `fetchExecutiveReportData()` camino backend: mapear `BackendReportResponse` a `ExecutiveReportData` usando los campos reales. Llamar `fetchGeoIntel()` para geo.
+
+**Archivo 2: `frontend/app/src/ui/ExecutiveReport.tsx`**
+5. En `load()`, reemplazar los valores hardcodeados del objeto `structured` por los datos reales del backend cuando estén disponibles:
+   - `key_finding` → `raw.backendKeyFinding` (resumen Ollama real)
+   - `wazuh_metrics` → `raw.wazuhMetrics` (alertas reales de OpenSearch)
+   - `mitre_coverage` → `raw.mitreCoverage` (MITRE real de OpenSearch)
+   - `honeypot_intel` → `raw.honeypotIntel` (datos reales del honeypot)
+   - `incident_management` → `raw.incidentManagement` (tickets reales de DB)
+   - `remediation_steps` → `raw.remediationSteps` (pasos reales)
+   - `analystName` initial value → `raw.analystNameFromBackend` (username del usuario logueado)
+
+El fallback local permanece intacto si el backend falla.
+
+---
+
+## 2026-05-07 (pausa integración backend - esperando Rosalino)
+
+### Estado
+- Integración con el backend real **en pausa**.
+
+### Contexto
+- Se analizó el mecanismo de autenticación (`credentials: "include"` + cookie httpOnly de sesión + header `X-CSRF-Token`).
+- Se identificó que el endpoint `/api/reports/executive` devuelve `{ generatedAt, executiveSummary, metrics }`, esquema incompleto para las necesidades del módulo.
+- El plan de implementación está documentado en la entrada anterior de este archivo.
+
+### Próximo paso
+- Rosalino actualizará `/api/reports/executive` para que devuelva los campos necesarios (`riskScore`, `topThreats`, `iso27001`, `recommendations`).
+- Cuando esté listo: hacer pull de main, retomar desde el plan documentado arriba.
+
+### Módulo en estado funcional
+- El fallback local cubre el 100% de la funcionalidad para la demo mientras se espera la actualización del backend.
+
+---
+
+## 2026-05-07 (integración real backend: auth cookies + adaptación de esquema)
+
+### Cambio
+- Se conecta `frontend/app/src/lib/reportApi.ts` al backend real con autenticación correcta y se adapta el esquema de respuesta.
+
+### Problema corregido
+- El `http()` interno de `reportApi.ts` no enviaba `credentials: "include"` ni el header `X-CSRF-Token`, por lo que el backend retornaba 401 en todos los casos y el módulo siempre corría en modo fallback.
+- El tipo esperado `ExecutiveReportData` no coincidía con la respuesta real del backend (`{ generatedAt, executiveSummary, metrics }`).
+
+### Mecanismo de autenticación (según `api.ts`)
+- El backend usa **cookies httpOnly de sesión** (no JWT en header). Se setean al hacer login.
+- Todos los requests autenticados envían las cookies automáticamente con `credentials: "include"`.
+- Los requests también envían `X-CSRF-Token` leído del cookie `csrf_token`.
+- No hay token manual en `localStorage` — el sistema migró a cookies.
+
+### Solución aplicada en `reportApi.ts`
+1. Se actualiza el `http()` interno:
+   - Se agrega `credentials: "include"` al `fetch()`.
+   - Se agrega lectura del cookie `csrf_token` y envío como `X-CSRF-Token` (idéntico a `api.ts`).
+2. Se agrega tipo `BackendReportResponse` para la respuesta real del backend.
+3. En `fetchExecutiveReportData()`, cuando el backend responde correctamente:
+   - Se usa `executiveSummary` de Ollama directamente.
+   - Se extraen campos de `metrics` con acceso defensivo (`??`) dado que la estructura interna de OpenSearch stats no está tipada.
+   - `riskScore`, `topThreats`, `iso27001`, `recommendations` se derivan de `metrics` si están disponibles, con fallback a valores computados.
+   - Se llama `fetchGeoIntel()` para geo data (que ahora también funciona con auth correcta).
+   - `source` se setea a `"api"`.
+4. El fallback local permanece intacto si el backend no responde (red caída, backend apagado, etc.).
+
+### Archivos modificados
+- `frontend/app/src/lib/reportApi.ts` únicamente.
+- Sin cambios en `ExecutiveReport.tsx`, `api.ts` ni archivos del backend.
+
+### Motivo
+- Que el módulo use el resumen ejecutivo real generado por Ollama y las métricas reales de OpenSearch cuando el backend esté disponible.
+
+---
+
+## 2026-05-07 (fix corte sección 6 PDF - geo intel a página propia)
+
+### Cambio
+- Se corrige el desbordamiento de la sección "6. ORIGEN GEOGRÁFICO DE LOS ATAQUES" en `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- La sección 6 comenzaba en `geoY = 252` sobre una página de 297mm con footer en 285. Con datos dinámicos de hasta 5 países (5 × 18px = 90px de barras + cabeceras), el contenido superaba el footer y China se solapaba con el pie de página.
+
+### Solución aplicada
+- Se elimina la sección 6 del final de la página 2.
+- Se agrega una nueva página 3 dedicada exclusivamente a la sección 6 (Geo Intel), con `geoY = 30` — espacio amplio para hasta 5 países.
+- La antigua página 3 (Remediation + Recomendaciones + ISO 27001) pasa a ser página 4.
+- Los footers se actualizan de "X de 3" a "X de 4".
+
+### Motivo
+- Con geo data dinámica (hasta 5 países) el contenido no cabe al final de la página 2. La solución más limpia es darle una página propia en lugar de ajustes de espaciado frágiles.
+
+---
+
+## 2026-05-07 (geo data dinámica desde Cowrie honeypot)
+
+### Cambio
+- Se reemplaza la geo data hardcodeada (China/Rusia/Países Bajos con porcentajes estáticos) por datos reales del honeypot Cowrie en `frontend/app/src/lib/reportApi.ts` y `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- La card "ATTACK ORIGIN (GEO-INTEL)" y la sección 6 del PDF mostraban siempre China 85%, Rusia 65%, Países Bajos 45% independientemente de los datos reales.
+
+### Solución aplicada en `reportApi.ts`
+- Se agrega el tipo exportado `GeoEntry = { country, code, pct, desc }`.
+- Se agrega `geoIntel?: GeoEntry[]` al tipo `ExecutiveReportData`.
+- Se agregan constantes `GEO_NAMES` (código ISO → nombre en español) y `GEO_DESCS` (código → descripción de amenaza).
+- Se agrega `FALLBACK_GEO`: 5 países con distribución realista (China 38%, Rusia 27%, Países Bajos 14%, Singapur 11%, EE.UU. 10%).
+- Se agrega `buildGeoIntel(events)`: extrae `raw_log.geo` de eventos Cowrie, agrupa por país, normaliza a porcentajes, devuelve hasta 5 países.
+- Se agrega `fetchGeoIntel()`: llama a `GET /events?limit=200`, computa geo real; si falla retorna `FALLBACK_GEO`.
+- En `fetchExecutiveReportData()`: camino backend llama `fetchGeoIntel()` y adjunta al resultado. Camino fallback adjunta `FALLBACK_GEO`.
+
+### Solución aplicada en `ExecutiveReport.tsx`
+- Se agrega `geo_intel?` a la interfaz `ValhallaReportJSON`.
+- En `load()`, se mapea `raw.geoIntel` a `structured.geo_intel`.
+- La card "ATTACK ORIGIN" itera `reportData.geo_intel` en lugar del array hardcodeado.
+- La sección 6 del PDF usa `reportData.geo_intel` en lugar de `geoData` hardcodeado.
+
+### Motivo
+- Mostrar el origen geográfico real de los ataques capturados por el honeypot Cowrie. En modo fallback, presentar una distribución diversa y creíble para demo.
+
+---
+
+## 2026-05-07 (período, analista y report_id dinámicos y editables)
+
+### Cambio
+- Se reemplazan los valores hardcodeados de `period`, `analyst_name` y `report_id` en `frontend/app/src/ui/ExecutiveReport.tsx` por estado React editable y generación dinámica desde la API.
+
+### Problema corregido
+- `period` fijo como `"ABRIL 2026"`, `analyst_name` fijo como `"Y. RAMIREZ"` y `report_id` fijo como `"VHL-2026-XQ7"` — ninguno reflejaba datos reales ni permitía edición.
+
+### Solución aplicada
+- Se agregan tres nuevos estados: `analystName` (default `"Y. RAMIREZ"`), `period` (string vacío inicial), `reportId` (string vacío inicial).
+- En `load()`, se derivan `period` y `reportId` de `raw.generatedAt` devuelto por la API:
+  - `period` → nombre del mes en español + año (ej: `"MAYO 2026"`).
+  - `reportId` → formato `VHL-YYYY-XXXX` con sufijo aleatorio de 4 caracteres.
+  - `analystName` nunca se sobreescribe desde `load()` — respeta la edición del usuario.
+- El objeto `report_metadata` dentro de `structured` usa estos valores de estado en lugar de literales.
+- En `exportToPDF()`, las líneas que leen `reportData.report_metadata.report_id`, `.period` y `.analyst_name` se reemplazan por las variables de estado correspondientes.
+- En el subtítulo del header de la UI se reemplaza `reportData?.report_metadata.report_id` por `reportId`.
+- En el formulario de configuración se agregan dos nuevos campos editables: `ANALYST` y `PERIOD`. El selector existente se renombra a `REPORT TYPE` para evitar ambigüedad.
+- Sin cambios en `reportApi.ts`.
+
+### Motivo
+- Que el reporte refleje el período real de los datos consumidos y permita que el analista personalice nombre y período para cada cliente antes de exportar el PDF.
+
+---
+
+## 2026-05-07 (botón Recargar en la UI)
+
+### Cambio
+- Se agrega botón "RECARGAR" visible en la barra superior de `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- No había forma de forzar una nueva carga de datos sin recargar la página entera del navegador. Útil especialmente cuando el backend no estaba disponible al cargar inicialmente.
+
+### Solución aplicada
+- Se agrega un tercer botón `RECARGAR` en el grupo de botones superiores (junto a `PREVIEW UI` y `EXPORT PDF`).
+- Al hacer clic llama a `load()`, que re-ejecuta la carga de datos y muestra el spinner mientras carga.
+- Sin cambios en `reportApi.ts` ni otros archivos.
+
+### Motivo
+- Permite recuperarse de un error de carga sin salir de la vista, y fuerza actualización de datos en demo sin recargar el browser.
+
+---
+
+## 2026-05-07 (fix error silencioso en Executive Report)
+
+### Cambio
+- Se agrega pantalla de error visible en `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- El estado `error` se seteaba correctamente pero nunca se mostraba en la UI. Si el backend y el fallback fallaban, el componente quedaba en pantalla en blanco sin ningún mensaje para el usuario.
+
+### Solución aplicada
+- Se agrega bloque condicional después del spinner de carga: si `error !== null`, se renderiza una `GlassCard` con el mensaje de error y un botón "REINTENTAR" que invoca `load()`.
+- Sin cambios en `reportApi.ts` ni otros archivos.
+
+### Motivo
+- Evitar pantalla en blanco durante la demo si el backend no está disponible en el momento de la presentación.
+
+---
+
+## 2026-05-07 (verificación de sincronización con main)
+
+### Cambio
+- Se ejecutó `git fetch origin` + `git merge origin/main` antes de iniciar nueva sesión de trabajo.
+
+### Resultado
+- Rama local `main` ya estaba al día con `origin/main`. Sin cambios nuevos entrantes.
+- Commits recientes de compañeros (`b326e0a`, `549d6c5`, `dc04336`) no tocan ningún archivo del módulo Executive Report Generator.
+
+### Motivo
+- Buena práctica de sincronización antes de modificar código para evitar conflictos.
+
+## 2026-04-21
+
+### Cambio
+- Se documenta la decisión de arquitectura para usar `react-router-dom` antes de modificar código de frontend.
+
+### Detalle
+- Se revisó `frontend/app/src/main.tsx`:
+  - Montaje actual: `ThemeProvider` + `CssBaseline` + `App`.
+  - No hay enrutamiento activo.
+- Se definió integración incremental:
+  - Mantener `/` con `App` existente.
+  - Agregar `/executive-report` para [[Executive Report Generator]].
+
+### Motivo
+- Integrar el módulo ejecutivo sin romper la experiencia operativa actual del SOC.
+
+### Documentos relacionados
+- [[arquitectura]]
+- [[README]]
+- [[componentes]]
+- [[endpoints]]
+
+## 2026-04-21 (routing mínimo)
+
+### Cambio
+- Se aprueba e inicia integración mínima de `react-router-dom` compatible con React 19.
+
+### Detalle
+- Se documenta, antes de tocar código, el alcance exacto de esta iteración:
+  - Instalar `react-router-dom` en frontend.
+  - Configurar enrutamiento base en `main.tsx`.
+  - Definir dos rutas:
+    - `/` -> `App` existente sin cambios.
+    - `/executive-report` -> [[Executive Report Generator]].
+
+### Motivo
+- Habilitar navegación entre vista operativa y vista ejecutiva sin alterar la lógica del dashboard actual.
+
+### Riesgo y control
+- Riesgo: romper renderizado inicial.
+- Control: mantener `App` intacta y limitar cambios al punto de entrada y nuevo componente.
+
+### Documentos relacionados
+- [[arquitectura]]
+- [[Executive Report Generator]]
+
+## 2026-04-21 (README de módulo)
+
+### Cambio
+- Se crea `docs-julieta/README.md` con documentación completa del módulo [[Executive Report Generator]] en formato Markdown para GitHub.
+
+### Contenido agregado
+- Título oficial del módulo.
+- Badge de estado (`funcionando`).
+- Descripción ejecutiva en español.
+- Referencia a dos capturas:
+  - `images/screenshot-1.png`
+  - `images/screenshot-2.png`
+- Secciones:
+  - Características
+  - Stack técnico
+  - Endpoints que consume
+  - Cómo ejecutar en local
+  - Fallback sin Docker
+  - Autora (Julieta - Análisis)
+
+### Documentos relacionados
+- [[README]]
+- [[componentes]]
+- [[cambios]]
+
+## 2026-04-29 (resolución de conflictos merge)
+
+### Cambio
+- Se resolvieron conflictos de merge en:
+  - `frontend/app/src/main.tsx`
+  - `frontend/package.json`
+  - `frontend/package-lock.json`
+
+### Criterio aplicado
+- Base: conservar cambios provenientes de `main`.
+- Excepción requerida: mantener ruta `/executive-report` activa en `main.tsx`.
+- Dependencias: mantener paquete de `main` y asegurar `react-router-dom` instalado.
+
+### Resultado
+- `main.tsx` quedó con `AppCore` como ruta raíz (`/`) y nueva ruta `/executive-report` hacia `ExecutiveReport`.
+- `package.json` conserva dependencias de `main` (incluyendo `react-grid-layout` y `react-leaflet`) y añade `react-router-dom`.
+- `package-lock.json` fue regenerado sin marcadores de conflicto y contiene `react-router-dom`.
+
+### Verificación
+- No quedan marcadores `<<<<<<<`, `=======`, `>>>>>>>` en los 3 archivos.
+- `react-router-dom` confirmado en `package.json` y `package-lock.json`.
+
+## 2026-04-29 (alineación visual con AppCore)
+
+### Cambio
+- Se analiza `frontend/app/src/ui/AppCore.tsx` y se adapta `frontend/app/src/ui/ExecutiveReport.tsx` para usar el mismo lenguaje visual de la aplicación principal.
+
+### Hallazgos del análisis
+- Tema MUI activo: `createTheme({ palette: { mode: "dark" } })` en `main.tsx` y `AppCore.tsx`.
+- Diseño base real proviene de `HUD.css`:
+  - Variables `--bg-void`, `--bg-panel`, `--signal`, `--text`, `--mono`, `--sans`.
+  - Contenedores tipo panel (`.panel`, `.panel__head`, `.panel__title`, `.panel__body`).
+  - Glow y líneas con `var(--signal-glow)` y `var(--line)`.
+
+### Resultado aplicado en Executive Report
+- Se reemplaza estilo hardcodeado por tokens visuales del HUD (`var(...)`).
+- Se reestructura cada card como panel HUD para coincidir con `AppCore`.
+- Se ajusta tipografía a `var(--mono)` / `var(--sans)` y botones con bordes y hover del esquema principal.
+- Se mantienen componentes MUI (`Button`, `Chip`, `CircularProgress`, `Typography`, `Grid2`) con estilos alineados.
+
+## 2026-04-29 (fix scroll Executive Report)
+
+### Cambio
+- Se corrige el contenedor principal de `frontend/app/src/ui/ExecutiveReport.tsx` para permitir desplazamiento vertical.
+
+### Ajuste aplicado
+- En el `Box` raíz:
+  - Se mantiene `minHeight: "100vh"` (sin `height` fijo).
+  - Se agrega `overflow: "auto"` para habilitar scroll cuando el contenido excede la vista.
+
+## 2026-04-29 (fix scroll independiente del body)
+
+### Cambio
+- Se corrige `frontend/app/src/ui/ExecutiveReport.tsx` para que tenga un contenedor scrolleable propio, independiente de `body { overflow: hidden; }`.
+
+### Ajuste aplicado
+- En el contenedor raíz del componente:
+  - `height: "100vh"`
+  - `overflowY: "auto"`
+  - `overflowX: "hidden"`
+
+### Motivo
+- Garantizar scroll funcional en `/executive-report` incluso cuando el layout global bloquea el scroll del `body`.
+
+## 2026-04-21 (implementación Executive Report)
+
+### Cambio
+- Se inicia la implementación funcional completa de [[Executive Report Generator]] con consumo API y fallback offline.
+
+### Alcance de esta iteración
+- Crear `frontend/app/src/lib/reportApi.ts`.
+- Implementar `frontend/app/src/ui/ExecutiveReport.tsx` con:
+  - HUD terminal SOC.
+  - Score de riesgo con gauge visual.
+  - Resumen ejecutivo con apoyo Ollama.
+  - Métricas, top amenazas, ISO 27001 y recomendaciones.
+  - Exportación PDF.
+- Mantener el módulo aislado y tolerante a caída de backend.
+
+### Documentos relacionados
+- [[componentes]]
+- [[arquitectura]]
+
+### Resultado de implementación
+- Se creó `frontend/app/src/lib/reportApi.ts` con:
+  - Consumo real de `GET /events` y `GET /alerts`.
+  - Intento de resumen por Ollama vía `POST /api/analyze/{alert_id}`.
+  - Fallback automático con dataset simulado realista y resumen alternativo.
+- Se implementó `frontend/app/src/ui/ExecutiveReport.tsx` con:
+  - UI HUD terminal SOC (`#0a0a0a`, `#00ff41`, monospace, glow).
+  - Gauge visual de riesgo `0-100`.
+  - Resumen ejecutivo, métricas, top amenazas, ISO 27001 y recomendaciones.
+  - Botón `Exportar PDF` funcional.
+- Validación técnica:
+  - `npm run build` en `frontend/` completado con éxito.
+
+## 2026-04-21 (verificación de compilación y rutas)
+
+### Cambio
+- Se valida ejecución del frontend con Node actualizado y se comprueba funcionamiento del routing base.
+
+### Detalle
+- Entorno verificado: `node v24.15.0`.
+- Comando ejecutado en `frontend/`: `npm run dev`.
+- Resultado de compilación:
+  - Vite inicia correctamente en `http://localhost:3000/`.
+  - Sin errores de arranque durante la prueba.
+- Validación de rutas por HTTP:
+  - `GET /` -> `200 OK`.
+  - `GET /executive-report` -> `200 OK`.
+  - Ambas respuestas incluyen el contenedor `#root` esperado de la SPA.
+
+### Motivo
+- Confirmar que la integración mínima de `react-router-dom` no rompe la app y que ambas rutas quedan operativas.
+
+### Documentos relacionados
+- [[arquitectura]]
+- [[Executive Report Generator]]
