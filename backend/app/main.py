@@ -137,6 +137,45 @@ async def _auto_sync_loop():
             logger.warning(f"Auto-sync failed: {e}")
         await asyncio.sleep(120)
 
+async def _threat_intel_loop():
+    """Analiza proactivamente atacantes del honeypot con VirusTotal."""
+    while True:
+        try:
+            async with SessionLocal() as db:
+                # 1. Obtener atacantes recientes del honeypot
+                attackers = await osc.get_cowrie_sessions(limit=20, hours=1)
+                ips = {a["ip"] for a in attackers if a["ip"] != "unknown"}
+                
+                # 2. Obtener API Key de VT
+                s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+                if s:
+                    vt_key = decrypt_secret(s.value)
+                    for ip in ips:
+                        # Ver si ya esta en IOCs
+                        existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+                        if not existing:
+                            report = await vt.check_ip(ip, vt_key)
+                            if "error" not in report:
+                                stats = report.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+                                ioc = IOC(
+                                    value=ip,
+                                    ioc_type="ip",
+                                    malicious_score=stats.get("malicious", 0),
+                                    total_engines=sum(stats.values()) if stats else 0,
+                                    country=report.get("data", {}).get("attributes", {}).get("country"),
+                                    as_owner=report.get("data", {}).get("attributes", {}).get("as_owner"),
+                                    status="malicious" if stats.get("malicious", 0) > 0 else "watchlist",
+                                    vt_report=report
+                                )
+                                db.add(ioc)
+                                logger.info(f"Proactive TI: Added IOC {ip} (score: {ioc.malicious_score})")
+                    await db.commit()
+        except Exception as e:
+            logger.error(f"Threat Intel Loop error: {e}")
+        await asyncio.sleep(3600) # Una vez por hora
+
+_report_cache = {"timestamp": None, "content": None}
+
 @app.on_event("startup")
 async def on_startup():
     async with engine.begin() as conn:
@@ -154,6 +193,7 @@ async def on_startup():
         await db.commit()
     
     asyncio.create_task(_auto_sync_loop())
+    asyncio.create_task(_threat_intel_loop())
     logger.info("Valhalla SOC API Started")
 
 # --- WEBSOCKET CHAT ---
@@ -500,8 +540,14 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
         total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
         closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status == "closed"))).scalar() or 0
         
-        # 3. Generar resumen ejecutivo con IA (Ollama)
-        ai_summary = await generate_executive_summary(stats)
+        # 3. Generar resumen ejecutivo con IA (Ollama) con Cache de 30min
+        now_ts = time.time()
+        if _report_cache["timestamp"] and (now_ts - _report_cache["timestamp"] < 1800):
+            ai_summary = _report_cache["content"]
+        else:
+            ai_summary = await generate_executive_summary(stats)
+            _report_cache["timestamp"] = now_ts
+            _report_cache["content"] = ai_summary
         
         # 4. Estructurar respuesta para el frontend (ValhallaReportJSON)
         report = {
