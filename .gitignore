@@ -15,6 +15,10 @@ credenciales.txt
 # ── SSL certificates (sensitive) ─────────────────────────────────────────────
 config/wazuh_indexer_ssl_certs/*.pem
 config/wazuh_indexer_ssl_certs/*.key
+wazuh-certificates/
+
+# IDE / editor artifacts
+.vs/
 
 # ── Docker volumes data ──────────────────────────────────────────────────────
 wazuh-*-data/
