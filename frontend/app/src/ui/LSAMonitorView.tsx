@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getDashboardSummary, listRunbooks } from "../lib/api";
+import logger from "../lib/logger";
+import { getDashboardSummary } from "../lib/api";
 
 interface EndpointStatus {
   hostname: string;
@@ -30,35 +31,26 @@ const LSA_HARDENING_CMD = "New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControl
 
 const CHECK_LSA_STATUS = "$runasppl = (Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name 'RunAsPPL').RunAsPPL; if($runasppl -eq 2){'OK'}else{'ALERT'}";
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL || "").trim() ||
-  (typeof window !== "undefined" && window.location.protocol !== "file:"
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : "http://localhost:8000");
-
 export default function LSAMonitorView() {
   const [endpoints, setEndpoints] = useState<EndpointStatus[]>([]);
   const [alerts, setAlerts] = useState<LSAAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [hardeningMode, setHardeningMode] = useState(false);
-  const [runbooks, setRunbooks] = useState<any[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [endpointsRes, alertsRes, runbooksRes] = await Promise.all([
-        fetch(`${API_BASE}/api/lsa/endpoints`).then(r => r.json()).catch(() => []),
-        fetch(`${API_BASE}/api/lsa/alerts?hours=24`).then(r => r.json()).catch(() => []),
-        fetch(`${API_BASE}/api/runbooks`).then(r => r.json()).catch(() => [])
+      // Fetch real data from API
+      const [endpointsRes, alertsRes] = await Promise.all([
+        fetch('/api/lsa/endpoints').then(r => r.json()).catch(() => []),
+        fetch('/api/lsa/alerts?hours=24').then(r => r.json()).catch(() => [])
       ]);
       setEndpoints(endpointsRes);
       setAlerts(alertsRes);
-      setRunbooks(runbooksRes || []);
     } catch (e) {
-      console.error("LSA fetch error:", e);
+      logger.error("LSA fetch error:", e);
       setEndpoints(generateMockData());
       setAlerts(generateMockAlerts());
-      setRunbooks([]);
     } finally {
       setLoading(false);
     }
@@ -73,7 +65,7 @@ export default function LSAMonitorView() {
   const handleHardening = async () => {
     setHardeningMode(true);
     try {
-      const res = await fetch(`${API_BASE}/api/lsa/apply-hardening`, {
+      const res = await fetch('/api/lsa/apply-hardening', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hostname: 'all', method: 'registry' })
@@ -81,7 +73,7 @@ export default function LSAMonitorView() {
       const data = await res.json();
       alert(data.message || "LSA Protection applied");
     } catch (e) {
-      console.error("Hardening error:", e);
+      logger.error("Hardening error:", e);
     } finally {
       setHardeningMode(false);
       fetchData();
@@ -91,29 +83,6 @@ export default function LSAMonitorView() {
   const vulnerableCount = endpoints.filter(e => !e.runasppl_enabled).length;
   const highRiskCount = endpoints.filter(e => e.risk_score > 70).length;
   const criticalAlerts = alerts.filter(a => a.severity === "critical" && !a.blocked).length;
-
-  const getSuggestedRunbook = (alertType: string, severity: string) => {
-    const type = alertType.toLowerCase();
-    if (type.includes("lsass") || type.includes("credential")) {
-      return runbooks.find(rb => rb.name?.toLowerCase().includes("lsa") || rb.name?.toLowerCase().includes("credential"));
-    }
-    if (type.includes("lateral") || type.includes("movement")) {
-      return runbooks.find(rb => rb.name?.toLowerCase().includes("lateral"));
-    }
-    if (type.includes("process") || type.includes("injection")) {
-      return runbooks.find(rb => rb.name?.toLowerCase().includes("process") || rb.name?.toLowerCase().includes("malware"));
-    }
-    return runbooks.find(rb => rb.severity_applicable === severity || rb.severity_applicable === "all");
-  };
-
-  const handleRunbookClick = (alert: any) => {
-    const rb = getSuggestedRunbook(alert.type, alert.severity);
-    if (rb) {
-      alert(`Runbook sugerido: ${rb.name}\n\n${rb.description?.slice(0, 200)}`);
-    } else {
-      alert("No hay runbook específico para este tipo de alerta");
-    }
-  };
 
   if (loading) {
     return <div style={{ padding: "20px", color: "var(--signal)" }}>CARGANDO LSA MONITOR...</div>;
@@ -246,27 +215,10 @@ export default function LSAMonitorView() {
                     <span style={{ fontSize: "11px", color: "var(--text)" }}>{alert.source_ip}</span>
                     <span style={{ fontSize: "10px", color: "var(--text-dim)", marginLeft: "8px" }}>{alert.hostname}</span>
                   </div>
-<div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
-                      {new Date(alert.timestamp).toLocaleTimeString()}
-                    </div>
-                    {getSuggestedRunbook(alert.type, alert.severity) && (
-                      <button 
-                        onClick={() => handleRunbookClick(alert)}
-                        style={{ 
-                          padding: "4px 8px", 
-                          background: "rgba(0,255,136,0.15)", 
-                          border: "1px solid var(--signal)",
-                          color: "var(--signal)",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                          fontSize: "9px",
-                          marginLeft: "8px"
-                        }}
-                      >
-                        RUNBOOK
-                      </button>
-                    )}
+                  <div style={{ fontSize: "10px", color: "var(--text-dim)" }}>
+                    {new Date(alert.timestamp).toLocaleTimeString()}
                   </div>
+                </div>
               ))
             )}
           </div>

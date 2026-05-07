@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+def _sanitize_html(v: str | None) -> str | None:
+    if v is None: return v
+    return re.sub(r'<[^>]+>', '', v).strip()
 
 
 Severity = Literal["low", "medium", "high", "critical"]
@@ -65,7 +70,9 @@ class AnalysisOut(BaseModel):
 class UserBase(BaseModel):
     username: str
     role: str = "analista"
+    rank: str = "L1 Analyst"
     email: str | None = None
+    avatar_url: str | None = None
 
 class UserCreate(UserBase):
     password: str
@@ -74,7 +81,9 @@ class UserUpdate(BaseModel):
     username: str | None = None
     email: str | None = None
     role: str | None = None
+    rank: str | None = None
     password: str | None = None
+    avatar_url: str | None = None
 
 class UserIn(UserBase):
     password: str
@@ -123,58 +132,123 @@ class AgentOut(BaseModel):
 # --- Tickets (Incident Management) ---
 
 class TicketCreate(BaseModel):
-    title: str
-    description: str | None = None
+    title: str = Field(..., max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
     severity: Severity = "medium"
-    category: str | None = None
-    source_ip: str | None = None
-    affected_asset: str | None = None
-    wazuh_alert_id: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    source_ip: str | None = Field(default=None, max_length=45)
+    affected_asset: str | None = Field(default=None, max_length=100)
+    affected_user: str | None = Field(default=None, max_length=100)
+    mitre_technique: str | None = Field(default=None, max_length=20)
+    wazuh_alert_id: str | None = Field(default=None, max_length=100)
     assigned_to_id: int | None = None
 
+    @field_validator("source_ip")
+    @classmethod
+    def validate_ip(cls, v: str | None):
+        if not v: return v
+        if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", v): raise ValueError("Invalid IPv4 format")
+        if any(not (0 <= int(o) <= 255) for o in v.split(".")): raise ValueError("IPv4 octets out of range")
+        return v
+
+    @field_validator("mitre_technique")
+    @classmethod
+    def validate_mitre(cls, v: str | None):
+        if not v: return v
+        if not re.match(r"^T\d{4}(?:\.\d{3})?$", v): raise ValueError("Invalid MITRE technique")
+        return v
+
+    @field_validator("description", "title", "category", "affected_asset", "affected_user")
+    @classmethod
+    def sanitize_html(cls, v: str | None):
+        return _sanitize_html(v)
+
 class TicketUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
     severity: Severity | None = None
     status: TicketStatus | None = None
-    category: str | None = None
-    source_ip: str | None = None
-    affected_asset: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    source_ip: str | None = Field(default=None, max_length=45)
+    affected_asset: str | None = Field(default=None, max_length=100)
+    affected_user: str | None = Field(default=None, max_length=100)
+    mitre_technique: str | None = Field(default=None, max_length=20)
     assigned_to_id: int | None = None
-    analysis_notes: str | None = None
-    resolution_notes: str | None = None
+    analysis_notes: str | None = Field(default=None, max_length=5000)
+    resolution_notes: str | None = Field(default=None, max_length=5000)
+
+    @field_validator("source_ip")
+    @classmethod
+    def validate_ip(cls, v: str | None):
+        if not v: return v
+        if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", v): raise ValueError("Invalid IPv4 format")
+        if any(not (0 <= int(o) <= 255) for o in v.split(".")): raise ValueError("IPv4 octets out of range")
+        return v
+
+    @field_validator("mitre_technique")
+    @classmethod
+    def validate_mitre(cls, v: str | None):
+        if not v: return v
+        if not re.match(r"^T\d{4}(?:\.\d{3})?$", v): raise ValueError("Invalid MITRE technique")
+        return v
+
+    @field_validator("description", "title", "category", "affected_asset", "affected_user", "analysis_notes", "resolution_notes")
+    @classmethod
+    def sanitize_html(cls, v: str | None):
+        return _sanitize_html(v)
 
 class TicketAssign(BaseModel):
     assigned_to_id: int
 
 class TicketResolve(BaseModel):
-    resolution_notes: str
+    resolution_notes: str = Field(..., max_length=5000)
     status: TicketStatus = "resolved"
 
+    @field_validator("resolution_notes")
+    @classmethod
+    def sanitize_html(cls, v: str):
+        return _sanitize_html(v) or ""
+
 class TicketAnalysis(BaseModel):
-    analysis_notes: str
+    analysis_notes: str = Field(..., max_length=5000)
+
+    @field_validator("analysis_notes")
+    @classmethod
+    def sanitize_html(cls, v: str):
+        return _sanitize_html(v) or ""
 
 class TicketOut(BaseModel):
     id: int
     title: str
-    description: str | None
+    description: str | None = None
     severity: str
     status: str
-    category: str | None
-    source_ip: str | None
-    affected_asset: str | None
-    wazuh_alert_id: str | None
-    assigned_to_id: int | None
-    reporter_id: int | None
+    category: str | None = None
+    source_ip: str | None = None
+    affected_asset: str | None = None
+    affected_user: str | None = None
+    mitre_technique: str | None = None
+    wazuh_alert_id: str | None = None
+    assigned_to_id: int | None = None
+    reporter_id: int | None = None
     assignee_username: str | None = None
     reporter_username: str | None = None
-    ai_summary: str | None
-    ai_recommendation: str | None
-    analysis_notes: str | None
-    resolution_notes: str | None
+    ai_summary: str | None = None
+    ai_recommendation: str | None = None
+    analysis_notes: str | None = None
+    resolution_notes: str | None = None
     created_at: datetime
     updated_at: datetime
-    resolved_at: datetime | None
+    resolved_at: datetime | None = None
+    evidence: list[EvidenceOut] = []
+
+class EvidenceOut(BaseModel):
+    id: int
+    ticket_id: int
+    filename: str
+    file_size: int
+    content_type: str | None
+    created_at: datetime
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -185,9 +259,11 @@ class RunbookIn(BaseModel):
     name: str
     category: str
     description: str
-    containment_steps: list[str] = []
-    eradication_steps: list[str] = []
-    recovery_steps: list[str] = []
+    identification_steps: list[Any] = []
+    containment_steps: list[Any] = []
+    eradication_steps: list[Any] = []
+    recovery_steps: list[Any] = []
+    post_mortem_steps: list[Any] = []
     severity_applicable: str = "all"
 
 
@@ -196,9 +272,11 @@ class RunbookOut(BaseModel):
     name: str
     category: str
     description: str
-    containment_steps: list[str]
-    eradication_steps: list[str]
-    recovery_steps: list[str]
+    identification_steps: list[Any]
+    containment_steps: list[Any]
+    eradication_steps: list[Any]
+    recovery_steps: list[Any]
+    post_mortem_steps: list[Any]
     severity_applicable: str
     is_active: bool
     created_by_id: int | None = None
@@ -225,3 +303,39 @@ class ThreatMapData(BaseModel):
     attacks: list[GeoLocation]
     countries: list[dict]
     total_attacks: int
+
+class AuditLogOut(BaseModel):
+    id: int
+    user_id: int | None
+    username: str | None
+    action: str
+    route: str
+    ip_address: str | None
+    payload: dict | None = None
+    timestamp: datetime
+
+class SystemSettingIn(BaseModel):
+    key: str
+    value: str
+    is_sensitive: bool = False
+
+class SystemSettingOut(BaseModel):
+    key: str
+    value: str # Will be decrypted before sending
+    is_sensitive: bool
+    updated_at: datetime
+
+class MonitorOut(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    enabled: bool
+    threshold: int
+    severity_floor: str
+    rule_id_pattern: str | None
+    updated_at: datetime
+
+class MonitorUpdate(BaseModel):
+    enabled: bool | None = None
+    threshold: int | None = None
+    severity_floor: str | None = None

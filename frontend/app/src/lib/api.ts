@@ -29,9 +29,12 @@ export type AnalysisOut = {
 export type UserOut = {
   id: number;
   username: string;
-  email?: string | null;
+  email: string;
+  full_name?: string;
+  is_active: boolean;
+  is_superuser: boolean;
   role: string;
-  created_at: string;
+  rank: string;
 };
 
 export type AgentOut = {
@@ -40,6 +43,8 @@ export type AgentOut = {
   ip: string | null;
   os: string | null;
   status: string;
+  version?: string;
+  last_keep_alive?: string;
   type: string;
   agent: string;
   group: any;
@@ -60,19 +65,23 @@ const fallbackApiBase =
 const API_BASE = envApiBase || fallbackApiBase;
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> || {}),
   };
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  // Add CSRF token if available
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
+    credentials: "include",
   });
 
   if (res.status === 401 && !path.includes("/auth/login")) {
@@ -86,6 +95,8 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return (await res.json()) as T;
 }
+
+export const fetchAuth = http;
 
 // Events & Alerts
 export function listEvents(limit = 50, offset = 0) {
@@ -101,12 +112,38 @@ export function analyzeAlert(alertId: number) {
 }
 
 // Dashboard
-export function getDashboardSummary() {
-  return http<any>("/api/dashboard");
+export function getDashboardSummary(hours = 24) {
+  return http<any>(`/api/dashboard?hours=${hours}`);
 }
 
 export function getOpenTicketsCount() {
   return http<{open: number}>("/api/tickets/count/open");
+}
+
+export async function uploadEvidence(ticketId: number, file: File): Promise<EvidenceOut> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
+  }
+
+  const resp = await fetch(`${API_BASE}/api/tickets/${ticketId}/evidence`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: formData
+  });
+  if (!resp.ok) throw new Error("Failed to upload evidence");
+  return resp.json();
+}
+
+export function getEvidenceDownloadUrl(evidenceId: number): string {
+  return `${API_BASE}/api/evidence/${evidenceId}/download`;
 }
 
 export function syncWazuhAlerts(hours = 1) {
@@ -131,12 +168,34 @@ export async function login(username: string, password: string) {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
-  localStorage.setItem("token", res.access_token);
+  // Token is now set as an httpOnly cookie by the backend
   return res;
 }
 
 export function getCurrentUser() {
   return http<UserOut>("/api/auth/me");
+}
+
+export async function uploadMyAvatar(file: File): Promise<{avatar_url: string}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    if (match) {
+      headers["X-CSRF-Token"] = match[2];
+    }
+  }
+
+  const resp = await fetch(`${API_BASE}/api/users/me/avatar`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: formData
+  });
+  if (!resp.ok) throw new Error("Failed to upload avatar");
+  return resp.json();
 }
 
 // Users
@@ -186,6 +245,10 @@ export function getAgentPorts(agentId: string) {
 export function getAgentVulnerabilities(agentId: string) {
   return http<any[]>(`/api/agents/${agentId}/vulnerabilities`);
 }
+
+export function scanAgent(agentId: string) {
+  return http<any>(`/api/agents/${agentId}/scan`, { method: "POST" });
+}
 // Tickets (Incident Management)
 export type TicketOut = {
   id: number;
@@ -196,6 +259,8 @@ export type TicketOut = {
   category: string | null;
   source_ip: string | null;
   affected_asset: string | null;
+  affected_user: string | null;
+  mitre_technique: string | null;
   wazuh_alert_id: string | null;
   assigned_to_id: number | null;
   reporter_id: number | null;
@@ -208,7 +273,17 @@ export type TicketOut = {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  evidence: EvidenceOut[];
 };
+
+export interface EvidenceOut {
+  id: number;
+  ticket_id: number;
+  filename: string;
+  file_size: number;
+  content_type: string | null;
+  created_at: string;
+}
 
 export function listTickets(status?: string, severity?: string, limit = 50, offset = 0) {
   let url = `/api/tickets?limit=${limit}&offset=${offset}`;
@@ -264,6 +339,10 @@ export function getCowrieStats(hours = 24) {
   return http<any>(`/api/wazuh/cowrie-stats?hours=${hours}`);
 }
 
+export function getCowrieSessions(limit = 100, hours = 24) {
+  return http<any[]>(`/api/wazuh/cowrie-sessions?limit=${limit}&hours=${hours}`);
+}
+
 export function getAlertVolume(hours = 24, interval = "1h") {
   return http<any[]>(`/api/wazuh/alert-volume?hours=${hours}&interval=${interval}`);
 }
@@ -276,17 +355,27 @@ export function getAlertLevels(hours = 24) {
   return http<any>(`/api/wazuh/alert-levels?hours=${hours}`);
 }
 
+export function getWazuhServices() {
+  return http<any>("/api/wazuh/services");
+}
+
 // VirusTotal
 export function vtCheckIp(ip: string) {
-  return http<any>(`/api/vt/ip/${ip}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/virustotal/ip/${ip}`, { headers });
 }
 
 export function vtCheckHash(hash: string) {
-  return http<any>(`/api/vt/hash/${hash}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/virustotal/hash/${hash}`, { headers });
 }
 
 export function vtCheckDomain(domain: string) {
-  return http<any>(`/api/vt/domain/${domain}`);
+  const key = localStorage.getItem("vt_api_key");
+  const headers = key ? { "X-VT-API-Key": key } : undefined;
+  return http<any>(`/api/virustotal/domain/${domain}`, { headers });
 }
 
 // Ollama Status
@@ -386,3 +475,18 @@ export interface ThreatMapData {
 export function getThreatMap(hours: number = 24) {
   return http<ThreatMapData>(`/api/threat-map?hours=${hours}`);
 }
+
+// CHAT PERSISTENCE & REAL-TIME
+export function getChatHistory(chatId: string, limit = 100) {
+  return http<any[]>(`/api/chat/${chatId}?limit=${limit}`);
+}
+
+export function postChatMessage(msg: any) {
+  return http<any>("/api/chat", { method: "POST", body: JSON.stringify(msg) });
+}
+
+export const getChatWsUrl = () => {
+  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = API_BASE.replace(/^https?:\/\//, "");
+  return `${wsProto}//${host}/ws/chat`;
+};

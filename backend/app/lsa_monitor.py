@@ -282,3 +282,46 @@ async def get_lsa_commands():
         "lsass_check": QUERY_LSASS_PROTECTION,
         "enable_protection": CMD_ENABLE_LSA_PROTECTION
     }
+
+from app.wazuh_client import wazuh
+
+@router.get("/agents/{agent_id}/status")
+async def get_agent_lsa_status(agent_id: str):
+    """
+    Get real LSA status from Wazuh SCA for a specific agent
+    """
+    try:
+        # Fetch SCA checks (using windows audit policy)
+        checks = await wazuh.get_sca_checks(agent_id, "win_audit")
+        
+        # Look for LSA related checks (e.g. 18231: Ensure 'Configure LSA RunAsPPL' is set to 'Enabled')
+        runasppl = next((c for c in checks if "RunAsPPL" in c.get("title", "")), None)
+        lsa_protected = next((c for c in checks if "LSA" in c.get("title", "") and "Protection" in c.get("title", "")), None)
+        
+        return {
+            "agent_id": agent_id,
+            "runasppl_enabled": runasppl.get("result") == "passed" if runasppl else False,
+            "lsa_protected": lsa_protected.get("result") == "passed" if lsa_protected else False,
+            "checks": [runasppl, lsa_protected] if runasppl or lsa_protected else [],
+            "last_scan": checks[0].get("end_scan") if checks else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/agents/{agent_id}/harden")
+async def harden_agent_lsa(agent_id: str):
+    """
+    Trigger LSA hardening active response on a specific agent
+    """
+    try:
+        # Trigger the 'lsa-harden' command on the agent
+        # The script must be defined in Wazuh Manager's ossec.conf and exist on the agent
+        result = await wazuh.run_active_response(agent_id, "lsa-harden.cmd")
+        return {
+            "success": True,
+            "agent_id": agent_id,
+            "wazuh_response": result,
+            "message": "Hardening command sent to agent successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
