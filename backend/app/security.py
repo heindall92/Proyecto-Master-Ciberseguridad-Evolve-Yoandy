@@ -284,8 +284,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             csrf_token = secrets.token_urlsafe(32)
             
         if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-            # Bypass CSRF for login, as it's the entry point and doesn't rely on existing auth
-            if request.url.path not in ["/api/auth/login"]:
+            # Bypass CSRF for login and external integrations (webhooks)
+            if request.url.path not in ["/api/auth/login", "/api/webhook/wazuh", "/health"]:
                 header_csrf = request.headers.get("x-csrf-token")
                 if not header_csrf or header_csrf != csrf_token:
                     # In a real scenario we'd return a 403 Response directly,

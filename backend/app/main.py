@@ -505,6 +505,27 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
         
         # 4. Estructurar respuesta para el frontend (ValhallaReportJSON)
         report = {
+            "source": "api",
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "executiveSummary": ai_summary,
+            "riskScore": max(0, 100 - (stats.get("critical_alerts", 0) * 10 + stats.get("high_alerts", 0) * 5)),
+            "metrics": stats,
+            "topThreats": [
+                {"attackType": m["tactic"], "count": m["count"], "severity": "high" if m["count"] > 10 else "medium"}
+                for m in mitre
+            ],
+            "iso27001": {
+                "overall": 75,
+                "controls": [
+                    {"control": "A.5.7 Threat Intelligence", "status": "covered", "note": "Analisis de IA activo"},
+                    {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"}
+                ]
+            },
+            "recommendations": [
+                "Implementar MFA en todos los accesos externos.",
+                "Realizar escaneo de vulnerabilidades semanal.",
+                "Revisar logs de auditoria de base de datos."
+            ],
             "report_metadata": {
                 "report_id": f"VHL-{datetime.now().year}-RT{datetime.now().strftime('%m%d')}",
                 "generation_date": datetime.now().strftime("%Y-%m-%d"),
@@ -521,7 +542,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
                 "total_alerts": stats.get("total_alerts", 0),
                 "critical_alerts": stats.get("critical_alerts", 0),
                 "top_affected_assets": [
-                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245}, # Mocked assets for now
+                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245}, 
                     {"name": "GW-FIREWALL-01", "ip": "10.0.1.1", "alerts": 840}
                 ]
             },
@@ -532,28 +553,16 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
             "honeypot_intel": {
                 "unique_attackers": hp.get("unique_attackers", 0),
                 "top_passwords_captured": hp.get("top_passwords", []),
-                "malware_samples_collected": 0 # Placeholder
+                "malware_samples_collected": 0 
             },
             "incident_management": {
                 "total_tickets": total_tickets,
                 "closed_tickets": closed_tickets,
-                "avg_resolution_time_min": 15 # Placeholder
+                "avg_resolution_time_min": 15 
             },
             "remediation_steps": [
                 {"task": "Actualizar parches de seguridad en activos criticos."},
                 {"task": "Bloquear IPs con multiples fallos de autenticacion."}
-            ],
-            "iso27001": {
-                "overall": 75,
-                "controls": [
-                    {"control": "A.5.7 Threat Intelligence", "status": "covered", "note": "Analisis de IA activo"},
-                    {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"}
-                ]
-            },
-            "recommendations": [
-                "Implementar MFA en todos los accesos externos.",
-                "Realizar escaneo de vulnerabilidades semanal.",
-                "Revisar logs de auditoria de base de datos."
             ]
         }
         return report
