@@ -1,5 +1,34 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (fix error silencioso en Executive Report)
+
+### Cambio
+- Se agrega pantalla de error visible en `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- El estado `error` se seteaba correctamente pero nunca se mostraba en la UI. Si el backend y el fallback fallaban, el componente quedaba en pantalla en blanco sin ningún mensaje para el usuario.
+
+### Solución aplicada
+- Se agrega bloque condicional después del spinner de carga: si `error !== null`, se renderiza una `GlassCard` con el mensaje de error y un botón "REINTENTAR" que invoca `load()`.
+- Sin cambios en `reportApi.ts` ni otros archivos.
+
+### Motivo
+- Evitar pantalla en blanco durante la demo si el backend no está disponible en el momento de la presentación.
+
+---
+
+## 2026-05-07 (verificación de sincronización con main)
+
+### Cambio
+- Se ejecutó `git fetch origin` + `git merge origin/main` antes de iniciar nueva sesión de trabajo.
+
+### Resultado
+- Rama local `main` ya estaba al día con `origin/main`. Sin cambios nuevos entrantes.
+- Commits recientes de compañeros (`b326e0a`, `549d6c5`, `dc04336`) no tocan ningún archivo del módulo Executive Report Generator.
+
+### Motivo
+- Buena práctica de sincronización antes de modificar código para evitar conflictos.
+
 ## 2026-04-21
 
 ### Cambio

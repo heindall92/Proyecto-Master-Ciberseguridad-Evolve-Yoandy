@@ -707,6 +707,19 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     </Box>
   );
 
+  if (error) return (
+    <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)', p: 4 }}>
+      <GlassCard title="ERROR DE CARGA" sx={{ maxWidth: 500, textAlign: 'center' }}>
+        <Typography sx={{ color: 'var(--danger)', fontSize: '13px', mb: 3, fontFamily: 'var(--ff-mono)', wordBreak: 'break-word' }}>
+          {error}
+        </Typography>
+        <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--signal)', color: 'var(--signal)', '&:hover': { borderColor: 'var(--signal-bright)', color: 'var(--signal-bright)' } }}>
+          REINTENTAR
+        </Button>
+      </GlassCard>
+    </Box>
+  );
+
   return (
     <Box sx={{ flex: 1, overflowY: "auto", p: 4, bgcolor: "var(--bg-void)", color: "var(--text)" }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
