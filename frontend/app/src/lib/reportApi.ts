@@ -22,6 +22,34 @@ export type IsoControl = {
   note: string;
 };
 
+type BackendWazuhMetrics = {
+  total_alerts: number;
+  critical_alerts: number;
+  top_affected_assets: Array<{ name: string; ip: string; alerts: number }>;
+};
+type BackendMitreCoverage = { tactic: string; count: number; level: string; icon: string };
+type BackendHoneypotIntel = { unique_attackers: number; top_passwords_captured: string[]; malware_samples_collected: number };
+type BackendIncidentManagement = { total_tickets: number; closed_tickets: number; avg_resolution_time_min: number };
+type BackendRemediationStep = { task: string; action_cmd?: string };
+
+type BackendReportResponse = {
+  source: "api";
+  generatedAt: string;
+  executiveSummary: string;
+  riskScore: number;
+  metrics: Record<string, unknown>;
+  topThreats: TopThreat[];
+  iso27001: { overall: number; controls: IsoControl[] };
+  recommendations: string[];
+  executive_summary?: { status: string; health_score: number; key_finding: string };
+  wazuh_metrics?: BackendWazuhMetrics;
+  mitre_coverage?: BackendMitreCoverage[];
+  honeypot_intel?: BackendHoneypotIntel;
+  incident_management?: BackendIncidentManagement;
+  remediation_steps?: BackendRemediationStep[];
+  report_metadata?: { report_id: string; generation_date: string; analyst_name: string; company_name: string; period: string };
+};
+
 export type ExecutiveReportData = {
   source: "api" | "fallback";
   generatedAt: string;
@@ -39,6 +67,13 @@ export type ExecutiveReportData = {
   };
   recommendations: string[];
   geoIntel?: GeoEntry[];
+  wazuhMetrics?: BackendWazuhMetrics;
+  mitreCoverage?: BackendMitreCoverage[];
+  honeypotIntel?: BackendHoneypotIntel;
+  incidentManagement?: BackendIncidentManagement;
+  remediationSteps?: BackendRemediationStep[];
+  backendKeyFinding?: string;
+  analystNameFromBackend?: string;
 };
 
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -57,12 +92,18 @@ function normalizeSeverity(value: string | null | undefined): SeverityKey {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> || {}),
+  };
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(^| )csrf_token=([^;]+)/);
+    if (match) headers["X-CSRF-Token"] = match[2];
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
+    headers,
+    credentials: "include",
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -342,9 +383,32 @@ async function fetchGeoIntel(): Promise<GeoEntry[]> {
 export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
   // Ahora llamamos directamente al endpoint del backend que ya procesa OpenSearch y Ollama
   try {
-    const data = await http<ExecutiveReportData>("/api/reports/executive");
+    const data = await http<BackendReportResponse>("/api/reports/executive");
     const geoIntel = await fetchGeoIntel();
-    return { ...data, geoIntel };
+    const criticalAlerts = data.wazuh_metrics?.critical_alerts ?? 0;
+    const totalAlerts = data.wazuh_metrics?.total_alerts ?? 0;
+    return {
+      source: "api",
+      generatedAt: data.generatedAt,
+      riskScore: data.riskScore,
+      executiveSummary: data.executiveSummary,
+      metrics: {
+        totalAlerts,
+        criticalAlerts,
+        bySeverity: { low: 0, medium: 0, high: 0, critical: criticalAlerts },
+      },
+      topThreats: data.topThreats ?? [],
+      iso27001: data.iso27001,
+      recommendations: data.recommendations ?? [],
+      geoIntel,
+      wazuhMetrics: data.wazuh_metrics,
+      mitreCoverage: data.mitre_coverage,
+      honeypotIntel: data.honeypot_intel,
+      incidentManagement: data.incident_management,
+      remediationSteps: data.remediation_steps,
+      backendKeyFinding: data.executive_summary?.key_finding,
+      analystNameFromBackend: data.report_metadata?.analyst_name,
+    };
   } catch (e) {
     logger.error("Error fetching real executive report, falling back to local simulation:", e);
     
