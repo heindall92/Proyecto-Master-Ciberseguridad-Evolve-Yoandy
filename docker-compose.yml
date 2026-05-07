@@ -16,7 +16,10 @@ services:
   # ATTACKER (opcional para simulaciones)
   # ──────────────────────────────────────────────────
   attacker:
-    image: kalilinux/kali-rolling
+    build:
+      context: ./attacker
+      dockerfile: Dockerfile
+    image: valhalla-attacker:latest
     logging:
       driver: "json-file"
       options:
@@ -29,6 +32,11 @@ services:
     command: /bin/bash
     restart: unless-stopped
     profiles: ["labs"]
+    volumes:
+      - attacker-home:/root/workspace
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       - valhalla-net
 
@@ -125,13 +133,15 @@ services:
       - ./wazuh_config/decoders/cowrie_decoders.xml:/var/ossec/etc/decoders/cowrie_decoders.xml
       # Montamos el script en /tmp para luego copiarlo con permisos correctos en el entrypoint
       - ./wazuh_config/integrations/custom-ollama.py:/tmp/custom-ollama-src:ro
+      - ./wazuh_config/integrations/custom-valhalla.py:/tmp/custom-valhalla-src:ro
     entrypoint: >
       bash -c "
       mkdir -p /var/ossec/integrations /var/ossec/etc/shared &&
       touch /var/ossec/etc/shared/ar.conf &&
       cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama &&
-      chown root:wazuh /var/ossec/integrations/custom-ollama 2>/dev/null || true &&
-      chmod 750 /var/ossec/integrations/custom-ollama &&
+      cp /tmp/custom-valhalla-src /var/ossec/integrations/custom-valhalla &&
+      chown root:wazuh /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true &&
+      chmod 750 /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla &&
       echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf &&
       exec /init
       "
@@ -325,6 +335,7 @@ volumes:
   cowrie_downloads:
   pgdata:
   ollama:
+  attacker-home:
 
 networks:
   valhalla-net:

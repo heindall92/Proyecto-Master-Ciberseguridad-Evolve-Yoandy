@@ -230,7 +230,24 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+
+    const handleNewAlert = (e: any) => {
+      setAlerts(prev => {
+        // Avoid duplicate alerts if possible (by comparing description and source_ip)
+        const isDuplicate = prev.some(a => a.description === e.detail.description && a.timestamp === e.detail.timestamp);
+        if (isDuplicate) return prev;
+        return [e.detail, ...prev].slice(0, 100);
+      });
+      // Refresh summary to update KPI counts
+      getDashboardSummary(timeRange).then(setSummary).catch(() => {});
+    };
+
+    window.addEventListener('valhalla-new-alert', handleNewAlert);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('valhalla-new-alert', handleNewAlert);
+    };
   }, [timeRange]);
 
   const handleSyncWazuh = async () => {
