@@ -1,5 +1,52 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (fix corte sección 6 PDF - geo intel a página propia)
+
+### Cambio
+- Se corrige el desbordamiento de la sección "6. ORIGEN GEOGRÁFICO DE LOS ATAQUES" en `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- La sección 6 comenzaba en `geoY = 252` sobre una página de 297mm con footer en 285. Con datos dinámicos de hasta 5 países (5 × 18px = 90px de barras + cabeceras), el contenido superaba el footer y China se solapaba con el pie de página.
+
+### Solución aplicada
+- Se elimina la sección 6 del final de la página 2.
+- Se agrega una nueva página 3 dedicada exclusivamente a la sección 6 (Geo Intel), con `geoY = 30` — espacio amplio para hasta 5 países.
+- La antigua página 3 (Remediation + Recomendaciones + ISO 27001) pasa a ser página 4.
+- Los footers se actualizan de "X de 3" a "X de 4".
+
+### Motivo
+- Con geo data dinámica (hasta 5 países) el contenido no cabe al final de la página 2. La solución más limpia es darle una página propia en lugar de ajustes de espaciado frágiles.
+
+---
+
+## 2026-05-07 (geo data dinámica desde Cowrie honeypot)
+
+### Cambio
+- Se reemplaza la geo data hardcodeada (China/Rusia/Países Bajos con porcentajes estáticos) por datos reales del honeypot Cowrie en `frontend/app/src/lib/reportApi.ts` y `frontend/app/src/ui/ExecutiveReport.tsx`.
+
+### Problema corregido
+- La card "ATTACK ORIGIN (GEO-INTEL)" y la sección 6 del PDF mostraban siempre China 85%, Rusia 65%, Países Bajos 45% independientemente de los datos reales.
+
+### Solución aplicada en `reportApi.ts`
+- Se agrega el tipo exportado `GeoEntry = { country, code, pct, desc }`.
+- Se agrega `geoIntel?: GeoEntry[]` al tipo `ExecutiveReportData`.
+- Se agregan constantes `GEO_NAMES` (código ISO → nombre en español) y `GEO_DESCS` (código → descripción de amenaza).
+- Se agrega `FALLBACK_GEO`: 5 países con distribución realista (China 38%, Rusia 27%, Países Bajos 14%, Singapur 11%, EE.UU. 10%).
+- Se agrega `buildGeoIntel(events)`: extrae `raw_log.geo` de eventos Cowrie, agrupa por país, normaliza a porcentajes, devuelve hasta 5 países.
+- Se agrega `fetchGeoIntel()`: llama a `GET /events?limit=200`, computa geo real; si falla retorna `FALLBACK_GEO`.
+- En `fetchExecutiveReportData()`: camino backend llama `fetchGeoIntel()` y adjunta al resultado. Camino fallback adjunta `FALLBACK_GEO`.
+
+### Solución aplicada en `ExecutiveReport.tsx`
+- Se agrega `geo_intel?` a la interfaz `ValhallaReportJSON`.
+- En `load()`, se mapea `raw.geoIntel` a `structured.geo_intel`.
+- La card "ATTACK ORIGIN" itera `reportData.geo_intel` en lugar del array hardcodeado.
+- La sección 6 del PDF usa `reportData.geo_intel` en lugar de `geoData` hardcodeado.
+
+### Motivo
+- Mostrar el origen geográfico real de los ataques capturados por el honeypot Cowrie. En modo fallback, presentar una distribución diversa y creíble para demo.
+
+---
+
 ## 2026-05-07 (período, analista y report_id dinámicos y editables)
 
 ### Cambio

@@ -53,6 +53,7 @@ interface ValhallaReportJSON {
     controls: Array<{ control: string; status: string; note: string }>;
   };
   recommendations?: string[];
+  geo_intel?: Array<{ country: string; pct: number; desc: string }>;
 }
 
 const GlassCard = ({ children, sx = {}, title }: any) => (
@@ -161,7 +162,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           overall: raw.iso27001?.overall ?? 73,
           controls: raw.iso27001?.controls ?? []
         },
-        recommendations: raw.recommendations ?? []
+        recommendations: raw.recommendations ?? [],
+        geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
     } catch (e) {
@@ -502,26 +504,40 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(pw, pwX + 25, pwY + 17, { align: "center" });
     });
 
-    const geoY = pwY + 30;
-    doc.setDrawColor(...lightgray);
-    doc.line(M, geoY, W - M, geoY);
+    doc.setFillColor(...navy);
+    doc.rect(0, 285, W, 12, "F");
+    doc.setTextColor(...white);
+    doc.setFontSize(7);
+    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
+    doc.text("Página 2 de 4", W - M, 293, { align: "right" });
+
+    // ════════════════════════════
+    // PÁGINA 3 — GEO INTEL
+    // ════════════════════════════
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, W, 18, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("INTELIGENCIA GEOGRÁFICA DE AMENAZAS", M, 12);
+
     doc.setTextColor(...navy);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, geoY + 12);
+    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...gray);
-    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, geoY + 19);
+    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, 37);
 
-    const geoData = [
-      { name: "China", pct: 85, desc: "Principal origen de ataques de fuerza bruta" },
-      { name: "Rusia", pct: 65, desc: "Ataques de reconocimiento y escaneo" },
-      { name: "Países Bajos", pct: 45, desc: "Tráfico a través de proxies anónimos" },
-    ];
+    const geoData = (reportData.geo_intel ?? []).map(e => ({ name: e.country, pct: e.pct, desc: e.desc }));
 
     geoData.forEach((g, i) => {
-      const gy = geoY + 27 + i * 18;
+      const gy = 50 + i * 22;
       doc.setTextColor(...black);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
@@ -545,7 +561,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...white);
     doc.setFontSize(7);
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 2 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 3 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 3
@@ -705,7 +721,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 3 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 4 de 4", W - M, 293, { align: "right" });
 
     doc.save(`valhalla-informe-ejecutivo-${reportData.report_metadata.generation_date}.pdf`);
   }
@@ -845,14 +861,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           <Grid size={{ xs: 12, md: 5 }}>
             <GlassCard title="ATTACK ORIGIN (GEO-INTEL)" sx={{ height: '100%' }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
-                {['CHINA', 'RUSSIA', 'NETHERLANDS'].map((country, i) => (
-                  <Box key={country}>
+                {(reportData.geo_intel ?? []).map((entry, i) => (
+                  <Box key={entry.country}>
                     <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{country}</Typography>
-                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{85 - i * 20}% THREAT LOAD</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{entry.country.toUpperCase()}</Typography>
+                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{entry.pct}% THREAT LOAD</Typography>
                     </Stack>
                     <Box sx={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                      <Box sx={{ width: `${85 - i * 20}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
+                      <Box sx={{ width: `${entry.pct}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
                     </Box>
                   </Box>
                 ))}
