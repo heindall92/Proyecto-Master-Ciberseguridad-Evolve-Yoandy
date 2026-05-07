@@ -55,6 +55,30 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     request.state.user = user
     return user
 
+async def get_current_user_optional(request: Request, db: AsyncSession = Depends(get_db)):
+    """Versión opcional de get_current_user que no lanza excepción si no hay token."""
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        
+        q = select(User).where(User.username == username)
+        user = (await db.execute(q)).scalar_one_or_none()
+        if user:
+            request.state.user = user
+        return user
+    except:
+        return None
+
 def require_role(role: str):
     async def role_checker(current_user: User = Depends(get_current_user)):
         if current_user.role.lower() != role.lower() and current_user.role.lower() != "admin":
