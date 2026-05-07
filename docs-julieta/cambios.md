@@ -1,5 +1,61 @@
 # Registro de cambios - Julieta
 
+## 2026-05-07 (pausa integración backend - esperando Rosalino)
+
+### Estado
+- Integración con el backend real **en pausa**.
+
+### Contexto
+- Se analizó el mecanismo de autenticación (`credentials: "include"` + cookie httpOnly de sesión + header `X-CSRF-Token`).
+- Se identificó que el endpoint `/api/reports/executive` devuelve `{ generatedAt, executiveSummary, metrics }`, esquema incompleto para las necesidades del módulo.
+- El plan de implementación está documentado en la entrada anterior de este archivo.
+
+### Próximo paso
+- Rosalino actualizará `/api/reports/executive` para que devuelva los campos necesarios (`riskScore`, `topThreats`, `iso27001`, `recommendations`).
+- Cuando esté listo: hacer pull de main, retomar desde el plan documentado arriba.
+
+### Módulo en estado funcional
+- El fallback local cubre el 100% de la funcionalidad para la demo mientras se espera la actualización del backend.
+
+---
+
+## 2026-05-07 (integración real backend: auth cookies + adaptación de esquema)
+
+### Cambio
+- Se conecta `frontend/app/src/lib/reportApi.ts` al backend real con autenticación correcta y se adapta el esquema de respuesta.
+
+### Problema corregido
+- El `http()` interno de `reportApi.ts` no enviaba `credentials: "include"` ni el header `X-CSRF-Token`, por lo que el backend retornaba 401 en todos los casos y el módulo siempre corría en modo fallback.
+- El tipo esperado `ExecutiveReportData` no coincidía con la respuesta real del backend (`{ generatedAt, executiveSummary, metrics }`).
+
+### Mecanismo de autenticación (según `api.ts`)
+- El backend usa **cookies httpOnly de sesión** (no JWT en header). Se setean al hacer login.
+- Todos los requests autenticados envían las cookies automáticamente con `credentials: "include"`.
+- Los requests también envían `X-CSRF-Token` leído del cookie `csrf_token`.
+- No hay token manual en `localStorage` — el sistema migró a cookies.
+
+### Solución aplicada en `reportApi.ts`
+1. Se actualiza el `http()` interno:
+   - Se agrega `credentials: "include"` al `fetch()`.
+   - Se agrega lectura del cookie `csrf_token` y envío como `X-CSRF-Token` (idéntico a `api.ts`).
+2. Se agrega tipo `BackendReportResponse` para la respuesta real del backend.
+3. En `fetchExecutiveReportData()`, cuando el backend responde correctamente:
+   - Se usa `executiveSummary` de Ollama directamente.
+   - Se extraen campos de `metrics` con acceso defensivo (`??`) dado que la estructura interna de OpenSearch stats no está tipada.
+   - `riskScore`, `topThreats`, `iso27001`, `recommendations` se derivan de `metrics` si están disponibles, con fallback a valores computados.
+   - Se llama `fetchGeoIntel()` para geo data (que ahora también funciona con auth correcta).
+   - `source` se setea a `"api"`.
+4. El fallback local permanece intacto si el backend no responde (red caída, backend apagado, etc.).
+
+### Archivos modificados
+- `frontend/app/src/lib/reportApi.ts` únicamente.
+- Sin cambios en `ExecutiveReport.tsx`, `api.ts` ni archivos del backend.
+
+### Motivo
+- Que el módulo use el resumen ejecutivo real generado por Ollama y las métricas reales de OpenSearch cuando el backend esté disponible.
+
+---
+
 ## 2026-05-07 (fix corte sección 6 PDF - geo intel a página propia)
 
 ### Cambio
