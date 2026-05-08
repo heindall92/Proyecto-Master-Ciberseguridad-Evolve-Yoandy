@@ -14,11 +14,29 @@ import {
   assignTicket,
   listUsers,
   UserOut,
-  TicketOut,
   getChatHistory,
   postChatMessage,
   getChatWsUrl
 } from "../lib/api";
+
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import {
+  setUser, setToken, setProfilePic, setLoading, setIsOffline, logout, loginOffline,
+} from "../store/authSlice";
+import {
+  setView, setScheme, setScanlines, setTvMode, setTheme, setLang,
+  navigateToIntel, navigateToWorkspace, clearWorkspaceData,
+} from "../store/uiSlice";
+import {
+  setStats, patchStats, setRecentOpenTickets, setLastTicketCount, setNotifSeen,
+} from "../store/dashboardSlice";
+import {
+  setChatOpen, setActiveChatId, upsertMessage, setHistoryForChat, clearChat,
+  setTeamUsers, setDmUserIds, addDmUser,
+  setUnreadForChat, incrementUnread, clearUnread,
+  setChatInput, setMentionFilter, setShowMentionDrop, setPendingAttachment,
+  ChatMessage, ChatAttachment,
+} from "../store/chatSlice";
 
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
@@ -94,59 +112,61 @@ const AlexanaWord = ({ word, color = "#fff", height = "40px" }: { word: string, 
   );
 };
 
+const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
+const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
+
 export default function App() {
-  const [user, setUser] = useState<UserOut | null>(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
-  const [view, setView] = useState("overview");
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+
+  // ── Auth ──
+  const user = useAppSelector((s) => s.auth.user);
+  const token = useAppSelector((s) => s.auth.token);
+  const profilePic = useAppSelector((s) => s.auth.profilePic);
+  const loading = useAppSelector((s) => s.auth.loading);
+  const isOffline = useAppSelector((s) => s.auth.isOffline);
+
+  // ── UI ──
+  const view = useAppSelector((s) => s.ui.view);
+  const scheme = useAppSelector((s) => s.ui.scheme);
+  const scanlines = useAppSelector((s) => s.ui.scanlines);
+  const tvMode = useAppSelector((s) => s.ui.tvMode);
+  const theme = useAppSelector((s) => s.ui.theme);
+  const lang = useAppSelector((s) => s.ui.lang);
+  const intelIp = useAppSelector((s) => s.ui.intelIp);
+  const workspaceData = useAppSelector((s) => s.ui.workspaceData);
+
+  // ── Dashboard ──
+  const stats = useAppSelector((s) => s.dashboard.stats);
+  const recentOpenTickets = useAppSelector((s) => s.dashboard.recentOpenTickets);
+  const lastTicketCount = useAppSelector((s) => s.dashboard.lastTicketCount);
+  const notifSeen = useAppSelector((s) => s.dashboard.notifSeen);
+
+  // ── Chat ──
+  const chatOpen = useAppSelector((s) => s.chat.chatOpen);
+  const activeChatId = useAppSelector((s) => s.chat.activeChatId);
+  const chatMsgsByChat = useAppSelector((s) => s.chat.chatMsgsByChat);
+  const dmUserIds = useAppSelector((s) => s.chat.dmUserIds);
+  const teamUsers = useAppSelector((s) => s.chat.teamUsers);
+  const unreadByChat = useAppSelector((s) => s.chat.unreadByChat);
+  const chatInput = useAppSelector((s) => s.chat.chatInput);
+  const mentionFilter = useAppSelector((s) => s.chat.mentionFilter);
+  const showMentionDrop = useAppSelector((s) => s.chat.showMentionDrop);
+  const pendingAttachment = useAppSelector((s) => s.chat.pendingAttachment);
+
+  // ── Local UI state (no necesita store global) ──
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [scheme, setScheme] = useState("green");
-  const [scanlines, setScanlines] = useState(true);
-  const [stats, setStats] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
-  const [notifSeen, setNotifSeen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
-  const [lang, setLang] = useState<"es" | "en">(localStorage.getItem('valhalla_lang') as "es" | "en" || "es");
-  const [lastTicketCount, setLastTicketCount] = useState(0);
-  const [intelIp, setIntelIp] = useState<string | undefined>(undefined);
-  const [workspaceData, setWorkspaceData] = useState<any>(null);
-  const [tvMode, setTvMode] = useState(false);
-  const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
-  const [profilePic, setProfilePic] = useState<string | null>(null);
-  const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
+  const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [showCinematic, setShowCinematic] = useState(() => !sessionStorage.getItem('valhalla_intro_played'));
 
-  // ── Chat interno enterprise ──
-  interface ChatAttachment { name: string; type: string; size: number; data: string; }
-  interface ChatMessage {
-    id: string; userId: number; username: string; rank: string;
-    text: string; timestamp: string; chatId: string;
-    mentions: string[]; attachment?: ChatAttachment;
-  }
-
-  const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
-  const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
-
-  const [chatOpen, setChatOpen] = useState(false);
-  const [activeChatId, setActiveChatId] = useState<string>('global');
-  const [chatMsgsByChat, setChatMsgsByChat] = useState<Record<string, ChatMessage[]>>({});
-  const [dmUserIds, setDmUserIds] = useState<number[]>([]);
-  const [teamUsers, setTeamUsers] = useState<UserOut[]>([]);
-  const [unreadByChat, setUnreadByChat] = useState<Record<string, number>>({});
-  const [chatInput, setChatInput] = useState('');
-  const [mentionFilter, setMentionFilter] = useState('');
-  const [showMentionDrop, setShowMentionDrop] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatChannelRef = useRef<BroadcastChannel | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
 
-  // Update Tab Title when unread (Safe hook placement)
   useEffect(() => {
     const originalTitle = "Valhalla SOC";
     if (totalUnread > 0) {
@@ -160,21 +180,11 @@ export default function App() {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
   const toggleLang = () => {
-    const newLang = lang === "es" ? "en" : "es";
-    setLang(newLang);
-    localStorage.setItem('valhalla_lang', newLang);
-  };
-  const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-
-  const updateProfilePic = (newPic: string | null) => {
-    setProfilePic(newPic);
+    dispatch(setLang(lang === "es" ? "en" : "es"));
   };
 
   const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    localStorage.setItem('valhalla_theme', newTheme);
+    dispatch(setTheme(theme === "dark" ? "light" : "dark"));
   };
 
   useEffect(() => {
@@ -183,23 +193,16 @@ export default function App() {
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
-    // Si hay más tickets de los que teníamos, o si es la primera carga y hay tickets críticos
     if (ticketsNow > lastTicketCount || (lastTicketCount === 0 && ticketsNow > 0)) {
       if (lastTicketCount > 0) playNotificationSound();
-      if (!notifSeen) setNotifSeen(false);
+      if (!notifSeen) dispatch(setNotifSeen(false));
     }
-    setLastTicketCount(ticketsNow);
+    dispatch(setLastTicketCount(ticketsNow));
   }, [stats?.metrics?.tickets_open]);
 
   useEffect(() => {
-    const handleNavigateIntel = (e: any) => {
-      setIntelIp(e.detail.ip);
-      setView("threat");
-    };
-    const handleNavigateWorkspace = (e: any) => {
-      setWorkspaceData(e.detail);
-      setView("workspace");
-    };
+    const handleNavigateIntel = (e: any) => dispatch(navigateToIntel(e.detail.ip));
+    const handleNavigateWorkspace = (e: any) => dispatch(navigateToWorkspace(e.detail));
     window.addEventListener('navigate-to-intel', handleNavigateIntel);
     window.addEventListener('navigate-to-workspace', handleNavigateWorkspace);
     return () => {
@@ -213,30 +216,25 @@ export default function App() {
     const fd = new FormData(e.target as HTMLFormElement);
     try {
       const res = await login(fd.get("u") as string, fd.get("p") as string);
-      localStorage.setItem("token", res.access_token);
-      setToken(res.access_token);
+      dispatch(setToken(res.access_token));
       setUserMenuOpen(false);
       setNotifMenuOpen(false);
-      setView("overview");
+      dispatch(setView("overview"));
     } catch (err: any) {
       if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
-        setIsOffline(true);
+        dispatch(setIsOffline(true));
         alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
-        setToken("offline-mode-token");
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
-        setView("overview");
-        setLoading(false);
+        dispatch(loginOffline());
+        dispatch(setView("overview"));
       } else {
         alert("ERROR: Credenciales inválidas.");
       }
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    setProfilePic(null);
+  const handleLogout = () => {
+    dispatch(logout());
+    dispatch(setProfilePic(null));
     setIsLocked(true);
   };
 
@@ -245,7 +243,7 @@ export default function App() {
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') {
         ctx.resume().then(() => {
-          playNotificationSound(); // Play test sound
+          playNotificationSound();
           console.log("Audio unlocked and tested");
         });
       } else {
@@ -265,36 +263,38 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
     if (!token) {
-      setLoading(false);
+      dispatch(setLoading(false));
       return;
     }
     if (token === "offline-mode-token") {
-        setIsOffline(true);
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
-        setLoading(false);
-        return;
+      dispatch(setIsOffline(true));
+      dispatch(setUser({
+        id: 1, username: "admin_offline", email: "admin@valhalla",
+        full_name: "Admin Offline", is_active: true, is_superuser: true,
+        role: "admin", rank: "L3 Blue Team",
+      }));
+      dispatch(setLoading(false));
+      return;
     }
     getCurrentUser()
       .then(u => {
-         if (isMounted) {
-           setUser(u);
-           setProfilePic(u.avatar_url || null);
-           setLoading(false);
-         }
+        if (isMounted) {
+          dispatch(setUser(u));
+          dispatch(setProfilePic((u as any).avatar_url || null));
+          dispatch(setLoading(false));
+        }
       })
       .catch((err: any) => {
-         if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
-           setIsOffline(true);
-           setLoading(false);
-           return;
-         }
-         logger.error("Token invalid, showing login:", err);
-         if (isMounted) {
-           localStorage.removeItem("token");
-           setToken(null);
-           setUser(null);
-           setLoading(false);
-         }
+        if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
+          dispatch(setIsOffline(true));
+          dispatch(setLoading(false));
+          return;
+        }
+        logger.error("Token invalid, showing login:", err);
+        if (isMounted) {
+          dispatch(logout());
+          dispatch(setLoading(false));
+        }
       });
     return () => { isMounted = false; };
   }, [token]);
@@ -304,50 +304,40 @@ export default function App() {
     document.body.setAttribute("data-scan", scanlines ? "on" : "off");
   }, [scheme, scanlines]);
 
-  const fetchStats = () => {
-      getOpenTicketsCount()
-        .then((r) => { 
-          setStats((prev: any) => ({...prev, metrics: {...(prev?.metrics || {}), tickets_open: r.open}})); 
-        })
-        .catch((e) => { logger.error('[Dashboard] Error:', e); });
-      
-      listTickets('open', undefined, 10)
-        .then(allOpen => {
-          console.log('[DEBUG] Notif raw tickets:', allOpen.map(t => ({id: t.id, aid: (t as any).assigned_to_id})));
-          // Filtrado inteligente según rol
-          let filtered = allOpen;
-          if (user?.role !== 'admin') {
-            // En la campana mostramos:
-            // 1. Lo que no tiene dueño (para que cualquiera lo tome)
-            // 2. Lo que me han asignado a MI (directamente por el admin)
-            filtered = allOpen.filter(tk => !tk.assigned_to_id || tk.assigned_to_id === user.id);
-          }
-          
-          // Lógica de alerta: Si hay tickets nuevos que me corresponden
-          const oldIds = new Set(recentOpenTickets.map(t => t.id));
-          const hasNew = filtered.some(t => !oldIds.has(t.id));
-          
-          if (hasNew) {
-            // Siempre poner el punto rojo si hay algo nuevo que no hemos visto
-            setNotifSeen(false);
-            
-            // Solo pitar si ya teníamos la lista cargada (evita pitar al loguearse)
-            if (recentOpenTickets.length > 0) {
-              playNotificationSound();
-              // Si hay algún ticket crítico nuevo, pitar una segunda vez para urgencia
-              const hasCritical = filtered.some(t => t.severity === 'critical' && !oldIds.has(t.id));
-              if (hasCritical) {
-                setTimeout(playNotificationSound, 800);
-              }
+  const fetchStats = useCallback(() => {
+    getOpenTicketsCount()
+      .then((r) => {
+        dispatch(patchStats({ metrics: { tickets_open: r.open } }));
+      })
+      .catch((e) => { logger.error('[Dashboard] Error:', e); });
+
+    listTickets('open', undefined, 10)
+      .then(allOpen => {
+        let filtered = allOpen;
+        if (user?.role !== 'admin') {
+          filtered = allOpen.filter(tk => !tk.assigned_to_id || tk.assigned_to_id === user!.id);
+        }
+
+        const oldIds = new Set(recentOpenTickets.map(t => t.id));
+        const hasNew = filtered.some(t => !oldIds.has(t.id));
+
+        if (hasNew) {
+          dispatch(setNotifSeen(false));
+          if (recentOpenTickets.length > 0) {
+            playNotificationSound();
+            const hasCritical = filtered.some(t => t.severity === 'critical' && !oldIds.has(t.id));
+            if (hasCritical) {
+              setTimeout(playNotificationSound, 800);
             }
           }
-          
-          setRecentOpenTickets(filtered);
-        })
-        .catch((e) => logger.error('[Dashboard] Tickets error:', e));
+        }
 
-      getDashboardSummary().then(s => setStats(s)).catch((e) => logger.error('[Dashboard] Summary error:', e));
-  }
+        dispatch(setRecentOpenTickets(filtered));
+      })
+      .catch((e) => logger.error('[Dashboard] Tickets error:', e));
+
+    getDashboardSummary().then(s => dispatch(setStats(s))).catch((e) => logger.error('[Dashboard] Summary error:', e));
+  }, [user, recentOpenTickets, dispatch]);
 
   useEffect(() => {
     if (user) {
@@ -363,7 +353,7 @@ export default function App() {
       await assignTicket(ticketId, user.id);
       fetchStats();
       playResolvedSound();
-      setNotifMenuOpen(false); // Cierra el menú al asignar
+      setNotifMenuOpen(false);
       alert(lang === 'es' ? "Incidente asignado correctamente" : "Incident assigned successfully");
     } catch (err) {
       logger.error("Error assigning ticket", err);
@@ -373,86 +363,65 @@ export default function App() {
   // Load team users & DM list
   useEffect(() => {
     if (!user) return;
-    listUsers().then(setTeamUsers).catch(() => {});
-    try { setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')); } catch {}
+    listUsers().then(u => dispatch(setTeamUsers(u))).catch(() => {});
+    try {
+      dispatch(setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')));
+    } catch {}
   }, [user?.id]);
 
-  // WebSocket / Sync logic (Real-time cross-browser)
+  // WebSocket / Sync logic
   useEffect(() => {
     if (!user) return;
 
-    // 1. Sync from Backend when switching chat
     getChatHistory(activeChatId).then(history => {
-       if (history?.length > 0) {
-          setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: history }));
-       }
+      if (history?.length > 0) {
+        dispatch(setHistoryForChat({ chatId: activeChatId, messages: history }));
+      }
     }).catch(() => {});
 
-    // 2. Real-time WebSocket
     const wsUrl = getChatWsUrl();
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (e) => {
       try {
-        const data = JSON.parse(e.data);
-        
-        // Handle New Alerts (Real-time integration)
-        if (data.type === "NEW_ALERT") {
-          window.dispatchEvent(new CustomEvent('valhalla-new-alert', { detail: data.data }));
-          if (data.data.severity === 'critical' || data.data.severity === 'high') {
-             playNotificationSound();
-          }
-          return;
-        }
+        const msg: ChatMessage = JSON.parse(e.data);
 
-        // Handle Chat Messages
-        const msg: ChatMessage = data;
-        
-        // Update messages state (avoid duplicates)
-        setChatMsgsByChat(prev => {
-          const list = prev[msg.chatId] || [];
-          if (list.some(m => m.id === msg.id)) return prev;
-          const next = [...list, msg].slice(-200);
-          return { ...prev, [msg.chatId]: next };
-        });
+        dispatch(upsertMessage(msg));
 
         const myId = user?.id ?? -1;
         const myUsername = (user?.username || '').toLowerCase();
-        
+
         const isFromMe = msg.userId === myId;
         if (isFromMe) return;
 
-        const isMentionOfMe = Array.isArray(msg.mentions) && 
+        const isMentionOfMe = Array.isArray(msg.mentions) &&
           msg.mentions.some(m => m.toLowerCase() === myUsername);
-        
+
         const isDmToMe = msg.chatId.startsWith('dm:') &&
           msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
-        
+
         const isGlobal = msg.chatId === 'global';
         const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
 
         if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
-          setUnreadByChat(prev => {
-            const next = { ...prev, [msg.chatId]: (prev[msg.chatId] || 0) + 1 };
-            localStorage.setItem('valhalla.unread', JSON.stringify(next));
-            return next;
-          });
+          dispatch(incrementUnread(msg.chatId));
+          const stored = JSON.parse(localStorage.getItem('valhalla.unread') || '{}');
+          stored[msg.chatId] = (stored[msg.chatId] || 0) + 1;
+          localStorage.setItem('valhalla.unread', JSON.stringify(stored));
           if (isMentionOfMe) playMentionSound();
           else playChatSound();
         }
 
-        // Add to DM list if it's a new DM for me
         if (msg.chatId.startsWith('dm:') && !isFromMe) {
-           const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
-           const otherId = parts.find(id => id !== myId);
-           if (otherId) {
-             setDmUserIds(prev => {
-               if (prev.includes(otherId)) return prev;
-               const next = [...prev, otherId];
-               localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify(next));
-               return next;
-             });
-           }
+          const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
+          const otherId = parts.find(id => id !== myId);
+          if (otherId) {
+            dispatch(addDmUser(otherId));
+            const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(myId)) || '[]');
+            if (!stored.includes(otherId)) {
+              localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify([...stored, otherId]));
+            }
+          }
         }
       } catch (err) { console.error("WS Message Error", err); }
     };
@@ -467,26 +436,26 @@ export default function App() {
 
   useEffect(() => {
     if (chatOpen) {
-      setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+      dispatch(clearUnread(activeChatId));
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     }
   }, [chatOpen, activeChatId, chatMsgsByChat[activeChatId]?.length]);
 
   const handleChatInput = (value: string) => {
-    setChatInput(value);
+    dispatch(setChatInput(value));
     const atIdx = value.lastIndexOf('@');
     if (atIdx !== -1 && !value.slice(atIdx + 1).includes(' ')) {
-      setMentionFilter(value.slice(atIdx + 1).toLowerCase());
-      setShowMentionDrop(true);
+      dispatch(setMentionFilter(value.slice(atIdx + 1).toLowerCase()));
+      dispatch(setShowMentionDrop(true));
     } else {
-      setShowMentionDrop(false);
+      dispatch(setShowMentionDrop(false));
     }
   };
 
   const insertMention = (username: string) => {
     const atIdx = chatInput.lastIndexOf('@');
-    setChatInput(chatInput.slice(0, atIdx) + `@${username} `);
-    setShowMentionDrop(false);
+    dispatch(setChatInput(chatInput.slice(0, atIdx) + `@${username} `));
+    dispatch(setShowMentionDrop(false));
     chatInputRef.current?.focus();
   };
 
@@ -504,7 +473,7 @@ export default function App() {
       e.target.value = ''; return;
     }
     const reader = new FileReader();
-    reader.onload = ev => setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string });
+    reader.onload = ev => dispatch(setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string }));
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -512,18 +481,17 @@ export default function App() {
   const openDm = (target: UserOut) => {
     if (!user) return;
     const dmId = makeDmId(user.id, target.id);
-    setDmUserIds(prev => {
-      if (prev.includes(target.id)) return prev;
-      const next = [...prev, target.id];
-      localStorage.setItem(DM_LIST_KEY(user.id), JSON.stringify(next));
-      return next;
-    });
-    setActiveChatId(dmId);
-    setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+    dispatch(addDmUser(target.id));
+    const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]');
+    if (!stored.includes(target.id)) {
+      localStorage.setItem(DM_LIST_KEY(user.id), JSON.stringify([...stored, target.id]));
+    }
+    dispatch(setActiveChatId(dmId));
+    dispatch(clearUnread(dmId));
   };
 
-  const clearActiveChat = () => {
-    setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: [] }));
+  const handleClearActiveChat = () => {
+    dispatch(clearChat(activeChatId));
   };
 
   const getDmPartner = (chatId: string) => {
@@ -551,19 +519,12 @@ export default function App() {
       chatId: activeChatId, mentions,
       ...(pendingAttachment ? { attachment: pendingAttachment } : {})
     };
-    setChatMsgsByChat(prev => {
-      const list = prev[activeChatId] || [];
-      const next = [...list, msg].slice(-200);
-      return { ...prev, [activeChatId]: next };
-    });
-    
-    // Save to DB and broadcast via Backend
+    dispatch(upsertMessage(msg));
     postChatMessage(msg).catch(err => console.error("Chat Send Error", err));
-
-    setChatInput('');
-    setPendingAttachment(null);
-    setShowMentionDrop(false);
-  }, [chatInput, user, activeChatId, pendingAttachment]);
+    dispatch(setChatInput(''));
+    dispatch(setPendingAttachment(null));
+    dispatch(setShowMentionDrop(false));
+  }, [chatInput, user, activeChatId, pendingAttachment, dispatch]);
 
   if (showCinematic) {
     return <CinematicIntro onComplete={() => {
@@ -591,8 +552,8 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className={`theme-${scheme} ${scanlines ? 'scanlines' : ''}`} data-scheme={scheme} data-scan={scanlines ? 'on' : 'off'} style={{ 
-          height: '100vh', 
+      <div className={`theme-${scheme} ${scanlines ? 'scanlines' : ''}`} data-scheme={scheme} data-scan={scanlines ? 'on' : 'off'} style={{
+          height: '100vh',
           background: 'url("./bg-login.png") center/cover no-repeat, var(--bg-void)'
       }}>
         <SvgSymbols />
@@ -653,7 +614,7 @@ export default function App() {
 
 
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
-    <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => setView(id)}>
+    <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__icon-wrap">
         <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>
       </span>
@@ -672,7 +633,7 @@ export default function App() {
       <CssBaseline />
       <SvgSymbols />
       <div className={`app ${tvMode ? 'tv-mode' : ''}`}>
-        
+
         {!tvMode && (
         <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
           <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -711,10 +672,9 @@ export default function App() {
             <button
               onClick={() => {
                 if (!chatOpen) {
-                  // Al ABRIR: limpiar solo el canal activo
-                  setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+                  dispatch(clearUnread(activeChatId));
                 }
-                setChatOpen(v => !v);
+                dispatch(setChatOpen(!chatOpen));
               }}
               style={{
                 position: 'relative', display: 'flex', alignItems: 'center',
@@ -746,7 +706,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
+            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
               <style>{`
                 @keyframes pulse-red {
                   0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
@@ -767,10 +727,10 @@ export default function App() {
               `}</style>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={recentOpenTickets.length > 0 && !notifSeen ? "#FF3E3E" : "var(--signal)"} strokeWidth="2" style={{ filter: recentOpenTickets.length > 0 && !notifSeen ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               {recentOpenTickets.length > 0 && !notifSeen && (
-                <span style={{ 
-                  position: 'absolute', top: '-4px', right: '-4px', 
+                <span style={{
+                  position: 'absolute', top: '-4px', right: '-4px',
                   minWidth: '18px', height: '18px', padding: '0 4px',
-                  background: '#FF3E3E', color: '#fff', 
+                  background: '#FF3E3E', color: '#fff',
                   borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: '0 0 10px rgba(255,62,62,0.5)',
@@ -787,10 +747,10 @@ export default function App() {
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{user.username.toUpperCase()}</span>
                 <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
-              <div style={{ 
-                width: '28px', height: '28px', borderRadius: '50%', 
-                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '1px solid var(--signal-dim)',
                 overflow: 'hidden',
                 position: 'relative'
@@ -819,14 +779,14 @@ export default function App() {
                 <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
                 <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
                 <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>🎨 {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
-                <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}>👤 {t('profile_settings')}</button>
+                <button onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}>👤 {t('profile_settings')}</button>
                 {user?.role === 'admin' && (
-                  <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>⚙ {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
+                  <button onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>⚙ {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
                 )}
                 <div className="tactical-dropdown__divider" />
                 <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)', background: 'rgba(60,255,158,0.05)' }}>{t('language')}: {lang.toUpperCase()}</button>
                 <div className="tactical-dropdown__divider" />
-                <button onClick={logout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
+                <button onClick={handleLogout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
               </div>
             </div>
           </div>
@@ -855,13 +815,13 @@ export default function App() {
                     </div>
                     <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button 
-                        onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} 
+                      <button
+                        onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}
                         style={{ padding: '4px 8px', background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         {t('ir_to_workspace')}
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleAssignToMe(tk.id)}
                         style={{ padding: '4px 8px', background: 'rgba(51,204,255,0.1)', border: '1px solid rgba(51,204,255,0.3)', color: 'var(--cyan)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
@@ -873,7 +833,7 @@ export default function App() {
                   <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_recent_incidents')}</div>
                 )}
                 {incidentCount > 0 && (
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'var(--amber)', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <button onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'var(--amber)', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
                     {lang === 'es' ? 'VER TODOS LOS TICKETS' : 'VIEW ALL TICKETS'} ({incidentCount})
                   </button>
                 )}
@@ -900,7 +860,7 @@ export default function App() {
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
           {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
-          
+
           <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
           <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
             ROOT@VALHALLA:~#<br/>
@@ -935,14 +895,14 @@ export default function App() {
                 {view === 'threatmap' && <ThreatMapView lang={lang} />}
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
-                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
+                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} />}
                 {view === 'executive-report' && <ExecutiveReport lang={lang} />}
-                {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
+                {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
                 {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
-                    <button onClick={() => setView('overview')} style={{ padding: '8px 20px', background: 'rgba(60,255,158,0.1)', border: '1px solid var(--signal)', color: 'var(--signal)', cursor: 'pointer', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>← VOLVER A OVERVIEW</button>
+                    <button onClick={() => dispatch(setView('overview'))} style={{ padding: '8px 20px', background: 'rgba(60,255,158,0.1)', border: '1px solid var(--signal)', color: 'var(--signal)', cursor: 'pointer', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>← VOLVER A OVERVIEW</button>
                   </div>
                 )}
               </motion.div>
@@ -958,7 +918,7 @@ export default function App() {
               <label style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>ESQUEMA CROMÁTICO</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                  {['green', 'cyan', 'amber', 'purple'].map(s => (
-                   <button key={s} onClick={() => setScheme(s)} className="action-btn" style={{ color: scheme === s ? '#000' : 'var(--text)' }}>
+                   <button key={s} onClick={() => dispatch(setScheme(s))} className="action-btn" style={{ color: scheme === s ? '#000' : 'var(--text)' }}>
                      {scheme === s && <span style={{ position: 'absolute', inset: 0, background: 'var(--signal)', zIndex: -1 }} />}
                      {s.toUpperCase()}
                    </button>
@@ -967,8 +927,8 @@ export default function App() {
               <button onClick={toggleTheme} className="action-btn">
                 {theme === 'dark' ? '☀ MODO CLARO' : '🌑 MODO OSCURO'}
               </button>
-              <button onClick={() => setScanlines(!scanlines)} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
-              <button onClick={() => setTvMode(!tvMode)} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
+              <button onClick={() => dispatch(setScanlines(!scanlines))} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
+              <button onClick={() => dispatch(setTvMode(!tvMode))} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
               <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}>✕ CERRAR</button>
            </div>
         </div>
@@ -993,8 +953,8 @@ export default function App() {
                 }
               </span>
               <div className="chat-panel__head-actions">
-                <button className="chat-panel__action-btn" onClick={clearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}>🗑</button>
-                <button className="chat-panel__close" onClick={() => setChatOpen(false)}>✕</button>
+                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}>🗑</button>
+                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))}>✕</button>
               </div>
             </div>
 
@@ -1005,7 +965,7 @@ export default function App() {
                 <div className="chat-sidebar__label">CANALES</div>
                 <button
                   className={`chat-sidebar__item${activeChatId === 'global' ? ' active' : ''}`}
-                  onClick={() => { setActiveChatId('global'); setUnreadByChat(prev => ({ ...prev, global: 0 })); }}
+                  onClick={() => { dispatch(setActiveChatId('global')); dispatch(clearUnread('global')); }}
                 >
                   # EQUIPO
                   {(unreadByChat.global || 0) > 0 && (
@@ -1025,9 +985,8 @@ export default function App() {
                       key={uid}
                       className={`chat-sidebar__item${activeChatId === dmId ? ' active' : ''}`}
                       onClick={() => {
-                        // Historial se cargará automáticamente vía useEffect
-                        setActiveChatId(dmId);
-                        setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+                        dispatch(setActiveChatId(dmId));
+                        dispatch(clearUnread(dmId));
                       }}
                     >
                       @ {partner?.username?.toUpperCase() || `U${uid}`}
@@ -1107,7 +1066,7 @@ export default function App() {
                     ) : (
                       <span>📎 {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
                     )}
-                    <button className="chat-attachment-preview__remove" onClick={() => setPendingAttachment(null)}>✕</button>
+                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))}>✕</button>
                   </div>
                 )}
 
@@ -1146,7 +1105,7 @@ export default function App() {
                     onChange={e => handleChatInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
-                      if (e.key === 'Escape') setShowMentionDrop(false);
+                      if (e.key === 'Escape') dispatch(setShowMentionDrop(false));
                     }}
                     maxLength={500}
                     autoFocus
