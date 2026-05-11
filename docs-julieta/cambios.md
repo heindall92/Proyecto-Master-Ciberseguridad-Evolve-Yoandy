@@ -1,5 +1,37 @@
 # Registro de cambios - Julieta
 
+## 2026-05-11 (nueva exportación: PDF técnico narrativo)
+
+### Objetivo
+Añadir un segundo botón de exportación **"EXPORT PDF TÉCNICO"** en `ExecutiveReport.tsx` que genere un informe PDF orientado a perfiles técnicos (CISO, responsable de seguridad). A diferencia del PDF ejecutivo (visual, KPIs, gráficos de barras), el PDF técnico prioriza texto narrativo que explica el significado de los datos.
+
+### Plan de implementación
+
+**Archivo único:** `frontend/app/src/ui/ExecutiveReport.tsx`
+
+Se añade la función `exportTechnicalPDF()` y un nuevo botón en la barra superior. La función genera un PDF de 4–5 páginas con las siguientes secciones:
+
+| Página | Sección | Contenido adicional vs. PDF ejecutivo |
+|--------|---------|---------------------------------------|
+| 1 | Portada + Resumen ejecutivo | Narrativa completa del estado de seguridad; contexto del período |
+| 2 | Análisis MITRE ATT&CK | Tabla + párrafo analizando el patrón de ataques detectados y su implicación operativa |
+| 2 | Inteligencia Honeypot | Métricas + análisis narrativo de qué revelan las contraseñas capturadas sobre el perfil del atacante |
+| 3 | Origen geográfico | Barras + párrafo de contexto geopolítico por región |
+| 3 | Gestión de incidentes | KPIs + interpretación del MTTR y tasa de cierre |
+| 4 | Remediación detallada | Cada paso con estimación de tiempo, referencia normativa (NIST/ISO) y responsable sugerido |
+| 4 | Cumplimiento ISO 27001 | Score + párrafo narrativo por control con estado y gaps detectados |
+
+**Decisiones de diseño:**
+- Paleta sobria: fondo blanco, encabezado azul marino, texto negro/gris — mismo esquema que el PDF ejecutivo.
+- Fuente de texto de análisis: 9pt, interlineado amplio, ancho `col` con `splitTextToSize`.
+- No reutiliza `exportToPDF` — es una función separada para mantener ambos formatos independientes.
+- Nombre de archivo descargado: `valhalla-informe-tecnico-YYYY-MM-DD.pdf`.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — añadir `exportTechnicalPDF()` y botón "EXPORT PDF TÉCNICO"
+
+---
+
 ## 2026-05-07 (fix visual PDF: título, geo bars, márgenes)
 
 ### Problema
