@@ -939,7 +939,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
-      doc.text(mitreExplainedT[row.tactic] || "Actividad sospechosa", M + 132, y2 + 7);
+      doc.text(doc.splitTextToSize(mitreExplainedT[row.tactic] || "Actividad sospechosa", W - M - (M + 132))[0], M + 132, y2 + 7);
       y2 += 10;
     });
     y2 += 5;
@@ -995,8 +995,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         doc.setTextColor(...gray);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
-        doc.text(doc.splitTextToSize(g.desc, W - M - pX - 8)[0], W - M, y3 + 6, { align: "right" });
-        y3 += 13;
+        const descLines = doc.splitTextToSize(g.desc, W - M - pX - 8);
+        doc.text(descLines, W - M, y3 + 6, { align: "right" });
+        y3 += 18;
       });
     }
     y3 += 4;
@@ -1094,7 +1095,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "italic");
       doc.setFontSize(6.5);
-      doc.text(`Ref: ${meta.ref}  —  Responsable: ${meta.owner}`, M + 4, y4 + boxH - 2);
+      doc.text(doc.splitTextToSize(`Ref: ${meta.ref}  —  Responsable: ${meta.owner}`, col - 8)[0], M + 4, y4 + boxH - 2);
       y4 += boxH + 4;
     });
     y4 += 3;
@@ -1114,7 +1115,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...gray);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7);
-    doc.text(isoScore >= 80 ? "Cumplimiento satisfactorio" : isoScore >= 60 ? "Cumplimiento parcial" : "Incumplimiento significativo", M + 132, y4 + 9);
+    doc.text(doc.splitTextToSize(isoScore >= 80 ? "Cumplimiento satisfactorio" : isoScore >= 60 ? "Cumplimiento parcial" : "Incumplimiento significativo", W - M - (M + 132))[0], M + 132, y4 + 9);
     y4 += 16;
 
     const isoNarrative = isoScore >= 80
