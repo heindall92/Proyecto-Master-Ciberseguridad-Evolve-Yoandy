@@ -32,6 +32,22 @@ Se añade la función `exportTechnicalPDF()` y un nuevo botón en la barra super
 
 ---
 
+## 2026-05-12 (fix márgenes PDF técnico - segunda pasada)
+
+### Problema
+Audit completo de todos los `doc.text()` sin `splitTextToSize` en `exportTechnicalPDF`. Dos textos podían desbordar el margen derecho (`W-M = 190mm`):
+1. `step.action_cmd!` — comando de remediación sin límite de ancho, iniciando en `M+7`. Con `col=170`, el máximo seguro es `col - 16 = 154mm`.
+2. `g.country` — nombre de país sin límite de ancho, iniciando en `M=20`. La barra empieza en `bStart=M+28=48`, dejando solo `26mm` disponibles antes de solaparse.
+
+### Solución
+1. `doc.text(step.action_cmd!, M+7, ...)` → `doc.text(doc.splitTextToSize(step.action_cmd!, col-16)[0], M+7, ...)` — trunca a 154mm.
+2. `doc.text(g.country, M, ...)` → `doc.text(doc.splitTextToSize(g.country, bStart-M-2)[0], M, ...)` — trunca a 26mm (antes de la barra).
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — únicamente la función `exportTechnicalPDF`
+
+---
+
 ## 2026-05-07 (fix visual PDF: título, geo bars, márgenes)
 
 ### Problema

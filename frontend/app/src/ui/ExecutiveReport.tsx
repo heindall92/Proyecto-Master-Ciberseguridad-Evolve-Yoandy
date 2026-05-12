@@ -983,7 +983,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         doc.setTextColor(...black);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
-        doc.text(g.country, M, y3 + 6);
+        doc.text(doc.splitTextToSize(g.country, bStart - M - 2)[0], M, y3 + 6);
         doc.setFillColor(...lightgray);
         doc.roundedRect(bStart, y3, bMax, 7, 2, 2, "F");
         doc.setFillColor(...navy);
@@ -1090,7 +1090,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         doc.setTextColor(...gray);
         doc.setFont("courier", "normal");
         doc.setFontSize(7);
-        doc.text(step.action_cmd!, M + 7, y4 + 23);
+        doc.text(doc.splitTextToSize(step.action_cmd!, col - 16)[0], M + 7, y4 + 23);
       }
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "italic");
