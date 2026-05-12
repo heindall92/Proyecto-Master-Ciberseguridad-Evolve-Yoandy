@@ -1095,7 +1095,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "italic");
       doc.setFontSize(6.5);
-      doc.text(doc.splitTextToSize(`Ref: ${meta.ref}  —  Responsable: ${meta.owner}`, col - 8)[0], M + 4, y4 + boxH - 2);
+      doc.text(doc.splitTextToSize(`Ref: ${meta.ref}  —  Responsable: ${meta.owner}`, col - 10)[0], M + 4, y4 + boxH - 2);
       y4 += boxH + 4;
     });
     y4 += 3;
