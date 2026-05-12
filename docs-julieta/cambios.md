@@ -32,6 +32,28 @@ Se añade la función `exportTechnicalPDF()` y un nuevo botón en la barra super
 
 ---
 
+## 2026-05-12 (fix padding interno recuadros PDF técnico)
+
+### Problema
+Texto dentro de recuadros con borde azul en `exportTechnicalPDF` desbordaba visualmente hacia la derecha. La causa: el texto de "Ref + Responsable" dentro del box de remediación usaba `col - 8` como ancho máximo, que es menos restrictivo que la regla de padding interno (`col - 10`).
+
+### Regla aplicada
+Todo texto dentro de un recuadro debe usar `col - 10` como ancho máximo en `splitTextToSize` (no `col`), para respetar el padding interno del box.
+
+### Auditoría completa de boxes en `exportTechnicalPDF`
+| Línea | Box | Ancho anterior | Estado |
+|-------|-----|---------------|--------|
+| 802 | `analysisBox` (borde azul) | `col - 10` | ✓ ya correcto |
+| 1086 | Remediation step box | `col - 16` | ✓ OK |
+| 1093 | Sub-box action_cmd | `col - 16` | ✓ OK |
+| **1098** | **Remediation step box** | **`col - 8` → `col - 10`** | fix aplicado |
+| 1151 | ISO control box | `col - 30` | ✓ OK |
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — únicamente la función `exportTechnicalPDF`, línea 1098
+
+---
+
 ## 2026-05-12 (fix márgenes PDF técnico - segunda pasada)
 
 ### Problema
