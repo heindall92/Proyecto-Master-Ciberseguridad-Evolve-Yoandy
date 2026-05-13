@@ -945,10 +945,10 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     y2 += 5;
 
     const mitreConclusion = topTactic?.tactic === "Credential Access"
-      ? "RECOMENDACIÓN: La prevalencia de Credential Access indica campaña activa de robo de credenciales. Habilitar MFA en todos los accesos privilegiados, revisar políticas de contraseñas y activar alertas de acceso anómalo. Referencia: NIST SP 800-63B, ISO 27001 A.9.4."
+      ? "Activar MFA. Revisar contraseñas. Alertas de acceso anómalo. Ref: ISO 27001 A.9.4."
       : topTactic?.tactic === "Initial Access"
-      ? "RECOMENDACIÓN: El alto volumen de Initial Access indica reconocimiento perimetral activo. Revisar reglas de firewall, actualizar firmas IDS/IPS y aplicar threat hunting en sistemas expuestos. Referencia: MITRE D3FEND, ISO 27001 A.13.1."
-      : `RECOMENDACIÓN: La táctica dominante "${topTactic?.tactic ?? "detectada"}" requiere revisión de los controles asociados en la matriz MITRE ATT&CK y consulta de las mitigaciones recomendadas para esta categoría. Referencia: ISO 27001 A.12.4.`;
+      ? "Revisar firewall e IDS/IPS. Threat hunting en sistemas expuestos. Ref: ISO 27001 A.13.1."
+      : `Revisar mitigaciones para "${topTactic?.tactic ?? "táctica"}" en MITRE ATT&CK. Ref: ISO 27001 A.12.4.`;
     y2 = analysisBox(mitreConclusion, y2, col - 18);
     y2 += 4;
 
@@ -1040,7 +1040,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : mttr <= 60
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
-    const incidentAnalysis = `El MTTR de ${mttr} minutos ${mttrVerdict}. La tasa de cierre del ${closureRate}% ${closureVerdict}. Para el próximo período se recomienda establecer SLAs formales por severidad (P1: < 15 min, P2: < 30 min, P3: < 2 horas) y revisar los incidentes que superaron el MTTR para identificar cuellos de botella. Referencia: ISO 27001 A.16.1, NIST SP 800-61 Rev.2.`;
+    const incidentAnalysis = `MTTR: ${mttr} min. Cierre: ${closureRate}%. Tickets abiertos: ${pendingTickets}. Ref: ISO 27001 A.16.1, NIST SP 800-61.`;
     y3 = analysisBox(incidentAnalysis, y3, col - 18);
     pageFooter(3);
 
