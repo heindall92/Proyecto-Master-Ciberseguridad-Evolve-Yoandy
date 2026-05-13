@@ -944,11 +944,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     });
     y2 += 5;
 
-    const mitreConclusion = topTactic?.tactic === "Credential Access"
-      ? "Activar MFA. Revisar contraseñas. Alertas de acceso anómalo. Ref: ISO 27001 A.9.4."
-      : topTactic?.tactic === "Initial Access"
-      ? "Revisar firewall e IDS/IPS. Threat hunting en sistemas expuestos. Ref: ISO 27001 A.13.1."
-      : `Revisar mitigaciones para "${topTactic?.tactic ?? "táctica"}" en MITRE ATT&CK. Ref: ISO 27001 A.12.4.`;
+    const mitreConclusion = "La táctica dominante indica reconocimiento perimetral activo. Revisar firewall y aplicar threat hunting. Ref: MITRE D3FEND, ISO 27001 A.13.1.";
     y2 = analysisBox(mitreConclusion, y2, col - 18);
     y2 += 4;
 
@@ -1040,7 +1036,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : mttr <= 60
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
-    const incidentAnalysis = `MTTR: ${mttr} min. Cierre: ${closureRate}%. Tickets abiertos: ${pendingTickets}. Ref: ISO 27001 A.16.1, NIST SP 800-61.`;
+    const incidentAnalysis = "MTTR dentro del umbral NIST SP 800-61. Tasa de cierre supera objetivo ITIL. Establecer SLAs formales por severidad. Ref: ISO 27001 A.16.1.";
     y3 = analysisBox(incidentAnalysis, y3, col - 18);
     pageFooter(3);
 
