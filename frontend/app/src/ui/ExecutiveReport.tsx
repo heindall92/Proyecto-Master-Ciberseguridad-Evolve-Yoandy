@@ -797,9 +797,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       return y + lines.length * 4.5 + 2;
     };
 
-    const analysisBox = (text: string, y: number): number => {
+    const analysisBox = (text: string, y: number, maxW = col - 10): number => {
       doc.setFillColor(232, 239, 248);
-      const lines = doc.splitTextToSize(text, col - 10);
+      const lines = doc.splitTextToSize(text, maxW);
       const boxH = Math.max(16, lines.length * 4.5 + 8);
       doc.roundedRect(M, y, col, boxH, 2, 2, "F");
       doc.setDrawColor(...navy);
@@ -949,7 +949,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : topTactic?.tactic === "Initial Access"
       ? "RECOMENDACIÓN: El alto volumen de Initial Access indica reconocimiento perimetral activo. Revisar reglas de firewall, actualizar firmas IDS/IPS y aplicar threat hunting en sistemas expuestos. Referencia: MITRE D3FEND, ISO 27001 A.13.1."
       : `RECOMENDACIÓN: La táctica dominante "${topTactic?.tactic ?? "detectada"}" requiere revisión de los controles asociados en la matriz MITRE ATT&CK y consulta de las mitigaciones recomendadas para esta categoría. Referencia: ISO 27001 A.12.4.`;
-    y2 = analysisBox(mitreConclusion, y2);
+    y2 = analysisBox(mitreConclusion, y2, col - 18);
     y2 += 4;
 
     y2 = sectionTitle("4. INTELIGENCIA DE HONEYPOT COWRIE", y2);
@@ -1041,7 +1041,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
     const incidentAnalysis = `El MTTR de ${mttr} minutos ${mttrVerdict}. La tasa de cierre del ${closureRate}% ${closureVerdict}. Para el próximo período se recomienda establecer SLAs formales por severidad (P1: < 15 min, P2: < 30 min, P3: < 2 horas) y revisar los incidentes que superaron el MTTR para identificar cuellos de botella. Referencia: ISO 27001 A.16.1, NIST SP 800-61 Rev.2.`;
-    y3 = analysisBox(incidentAnalysis, y3);
+    y3 = analysisBox(incidentAnalysis, y3, col - 18);
     pageFooter(3);
 
     // ── PÁGINA 4: Remediación detallada + ISO 27001 ────────────────────────
