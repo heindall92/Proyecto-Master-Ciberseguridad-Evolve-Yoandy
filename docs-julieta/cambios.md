@@ -1,5 +1,23 @@
 # Registro de cambios - Julieta
 
+## 2026-05-13 (acortar strings mitreConclusion e incidentAnalysis - max 90 chars/línea)
+
+### Problema
+jsPDF no hace clip del texto: aunque `splitTextToSize` está configurado, si los strings son demasiado largos el texto visualmente desborda el recuadro. La solución real es reducir el contenido.
+
+### Cambios
+- `mitreConclusion` — las tres ramas del ternario reescritas para quedar ≤ 90 caracteres cada una:
+  - Credential Access: `"Activar MFA. Revisar contraseñas. Alertas de acceso anómalo. Ref: ISO 27001 A.9.4."` (83 chars)
+  - Initial Access: `"Revisar firewall e IDS/IPS. Threat hunting en sistemas expuestos. Ref: ISO 27001 A.13.1."` (90 chars)
+  - Default: `` `Revisar mitigaciones para "${táctica}" en MITRE ATT&CK. Ref: ISO 27001 A.12.4.` `` (≤ 87 chars)
+- `incidentAnalysis` — simplificado a una sola línea de métricas clave (≤ 90 chars con datos reales):
+  `` `MTTR: ${mttr} min. Cierre: ${closureRate}%. Tickets abiertos: ${pendingTickets}. Ref: ISO 27001 A.16.1, NIST SP 800-61.` ``
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — líneas 947–951 y 1043
+
+---
+
 ## 2026-05-13 (fix desbordamiento en boxes MITRE e incidentes - col-18)
 
 ### Problema
