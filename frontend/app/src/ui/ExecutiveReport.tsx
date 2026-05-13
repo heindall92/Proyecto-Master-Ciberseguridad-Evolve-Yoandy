@@ -809,11 +809,11 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...black);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
-      doc.save();
-      doc.rect(M, y, col, boxH, 'S');
+      doc.saveGraphicsState();
+      doc.rect(M + 2, y, col - 4, boxH);
       doc.clip();
       doc.text(lines, M + 8, y + 6);
-      doc.restore();
+      doc.restoreGraphicsState();
       return y + boxH + 4;
     };
 
