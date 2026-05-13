@@ -797,7 +797,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       return y + lines.length * 4.5 + 2;
     };
 
-    const analysisBox = (text: string, y: number, maxW = col - 10): number => {
+    const analysisBox = (text: string, y: number, maxW = 130): number => {
       doc.setFillColor(232, 239, 248);
       const lines = doc.splitTextToSize(text, maxW);
       const boxH = Math.max(16, lines.length * 4.5 + 8);
@@ -809,7 +809,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...black);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
-      doc.text(lines, M + 5, y + 6);
+      doc.text(lines, M + 8, y + 6);
       return y + boxH + 4;
     };
 
