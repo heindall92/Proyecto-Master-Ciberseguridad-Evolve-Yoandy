@@ -1,5 +1,25 @@
 # Registro de cambios - Julieta
 
+## 2026-05-13 (fix desbordamiento en boxes MITRE e incidentes - col-18)
+
+### Problema
+Dos recuadros con borde izquierdo azul en `exportTechnicalPDF` mostraban texto desbordando hacia la derecha:
+1. Box de RECOMENDACIÓN post tabla MITRE (`mitreConclusion`)
+2. Box de análisis bajo KPIs de gestión de incidentes (`incidentAnalysis`)
+
+Causa: el helper `analysisBox` tenía `col - 10` como ancho máximo fijo. Estos dos boxes requieren `col - 18` para compensar los +8mm de margen izquierdo visual del borde azul.
+
+### Solución
+- `analysisBox` ahora acepta un tercer parámetro `maxW` (default `col - 10`) para permitir anchos personalizados sin afectar otros boxes.
+- `analysisBox(mitreConclusion, y2, col - 18)` — box MITRE
+- `analysisBox(incidentAnalysis, y3, col - 18)` — box incidentes
+- Los otros dos boxes (`execAnalysis`, `honeypotConclusion`) conservan el default `col - 10`.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — helper `analysisBox` (firma) y dos llamadas
+
+---
+
 ## 2026-05-11 (nueva exportación: PDF técnico narrativo)
 
 ### Objetivo
