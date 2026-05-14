@@ -596,6 +596,10 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 
 ---
 
+*Proyecto académico desarrollado durante el Master en Ciberseguridad de [Evolve](https://evolve.es).*
+
+---
+
 ![footer](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=120&section=footer&animation=twinkling)
 
 <div align="center">
