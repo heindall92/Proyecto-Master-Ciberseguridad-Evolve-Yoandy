@@ -11,9 +11,9 @@ export default function CowrieView() {
   const fetchData = async () => {
     try {
       const [t, s, sess] = await Promise.all([
-        getCowrieTimeline(24, "1h"),
-        getCowrieStats(24),
-        getCowrieSessions(50, 24)
+        getCowrieTimeline(168, "6h"),
+        getCowrieStats(168),
+        getCowrieSessions(100, 168)
       ]);
       setTimeline(t);
       setStats(s);

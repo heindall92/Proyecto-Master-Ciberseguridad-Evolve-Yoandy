@@ -120,7 +120,7 @@ export default function App() {
   // ── Chat interno enterprise ──
   interface ChatAttachment { name: string; type: string; size: number; data: string; }
   interface ChatMessage {
-    id: string; userId: number; username: string; rank: string;
+    id: string; userId: number; username: string; security_rank: string;
     text: string; timestamp: string; chatId: string;
     mentions: string[]; attachment?: ChatAttachment;
   }
@@ -223,7 +223,7 @@ export default function App() {
         setIsOffline(true);
         alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
         setToken("offline-mode-token");
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
+        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", security_rank: "L3 Blue Team" });
         setView("overview");
         setLoading(false);
       } else {
@@ -270,7 +270,7 @@ export default function App() {
     }
     if (token === "offline-mode-token") {
         setIsOffline(true);
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", rank: "L3 Blue Team" });
+        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", security_rank: "L3 Blue Team" });
         setLoading(false);
         return;
     }
@@ -546,7 +546,7 @@ export default function App() {
     const mentions = Array.from(chatInput.matchAll(/@(\w+)/g)).map(m => m[1]);
     const msg: ChatMessage = {
       id: Date.now().toString(), userId: user.id,
-      username: user.username, rank: user.rank || 'ANALISTA',
+      username: user.username, security_rank: user.security_rank || 'ANALISTA',
       text: chatInput.trim(), timestamp: new Date().toISOString(),
       chatId: activeChatId, mentions,
       ...(pendingAttachment ? { attachment: pendingAttachment } : {})
@@ -785,7 +785,7 @@ export default function App() {
             <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'none', border: 'none', padding: '4px 8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{user.username.toUpperCase()}</span>
-                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.rank?.toUpperCase() || 'ANALISTA'}</span>
+                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.security_rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
               <div style={{ 
                 width: '28px', height: '28px', borderRadius: '50%', 

@@ -184,7 +184,7 @@ async def on_startup():
     # Defaults
     async with SessionLocal() as db:
         if not (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none():
-            db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin", rank="Commander"))
+            db.add(User(username="admin", password_hash=get_password_hash("admin"), role="admin", security_rank="Commander"))
         
         if not (await db.execute(select(Monitor))).scalars().first():
             db.add(Monitor(name="SSH Bruteforce", threshold=5, severity_floor="high", rule_id_pattern="5710,5712"))
@@ -271,7 +271,7 @@ async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), cu
         email=req.email,
         password_hash=get_password_hash(req.password),
         role=req.role,
-        rank=req.rank
+        security_rank=req.security_rank
     )
     db.add(new_user)
     await db.commit()
@@ -287,7 +287,7 @@ async def update_user_ep(user_id: int, req: UserUpdate, db: AsyncSession = Depen
     if req.username: u.username = req.username
     if req.email: u.email = req.email
     if req.role and current.role == "admin": u.role = req.role
-    if req.rank: u.rank = req.rank
+    if req.security_rank: u.security_rank = req.security_rank
     if req.avatar_url is not None: u.avatar_url = req.avatar_url
     if req.password: u.password_hash = get_password_hash(req.password)
     
@@ -508,12 +508,93 @@ async def agent_scan(agent_id: str, _=Depends(get_current_user)):
     return res
 
 @app.get("/api/wazuh/recent-alerts")
-async def recent_alerts(limit: int = 50, hours: int = 24, _=Depends(get_current_user)):
+async def recent_alerts(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_recent_alerts(limit, hours)
 
 @app.get("/api/wazuh/top-attackers")
 async def top_attackers(limit: int = 10, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_top_attackers(limit, hours)
+
+@app.get("/api/wazuh/alert-volume")
+async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_current_user)):
+    return await osc.get_alert_volume(hours, interval)
+
+@app.get("/api/wazuh/mitre")
+async def mitre_coverage(hours: int = 168, _=Depends(get_current_user)):
+    return await osc.get_mitre_stats(hours)
+
+@app.get("/api/wazuh/cowrie-stats")
+async def cowrie_stats_ep(hours: int = 168, _=Depends(get_current_user)):
+    return await osc.get_cowrie_stats(hours)
+
+@app.get("/api/wazuh/cowrie-sessions")
+async def cowrie_sessions_ep(limit: int = 100, hours: int = 168, _=Depends(get_current_user)):
+    return await osc.get_cowrie_sessions(limit, hours)
+
+@app.get("/api/wazuh/cowrie-timeline")
+async def cowrie_timeline_ep(hours: int = 168, interval: str = "1h", _=Depends(get_current_user)):
+    return await osc.get_cowrie_timeline(hours, interval)
+
+@app.get("/api/threat-map")
+async def threat_map_ep(hours: int = 168, _=Depends(get_current_user)):
+    return await osc.get_threat_map(hours)
+
+@app.get("/api/wazuh/services")
+async def wazuh_services(_=Depends(get_current_user)):
+    # Mocking status since manager might not be fully reachable in all setups
+    try:
+        manager_status = await wazuh.get_manager_status()
+    except:
+        manager_status = {"status": "disconnected", "error": "Unable to reach manager"}
+    return manager_status
+
+@app.get("/api/dashboard")
+async def dashboard_summary(hours: int = 24, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    try:
+        stats = await osc.get_dashboard_stats(hours)
+    except Exception as e:
+        logger.error(f"Dashboard stats error: {e}")
+        stats = {}
+    tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status != "closed"))).scalar() or 0
+    
+    return {
+        "status": "operational",
+        "metrics": {
+            "total_alerts_24h": stats.get("total_alerts_24h", 0),
+            "critical_alerts": stats.get("critical_alerts", 0),
+            "high_alerts": stats.get("high_alerts", 0),
+            "unique_agents": stats.get("unique_agents", 0),
+            "unique_attackers": stats.get("unique_attackers", 0),
+            "tickets_open": tickets_open
+        }
+    }
+
+from fastapi import Header
+
+@app.get("/api/virustotal/ip/{ip}")
+async def vt_check_ip_ep(ip: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
+    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
+    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
+    res = await vt.check_ip(ip, api_key)
+    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
+    return res
+
+@app.get("/api/virustotal/hash/{file_hash}")
+async def vt_check_hash_ep(file_hash: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
+    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
+    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
+    res = await vt.check_hash(file_hash, api_key)
+    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
+    return res
+
+@app.get("/api/virustotal/domain/{domain}")
+async def vt_check_domain_ep(domain: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
+    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
+    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
+    res = await vt.check_domain(domain, api_key)
+    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
+    return res
+
 
 # USERS
 @app.get("/api/users", response_model=list[UserOut])
@@ -525,6 +606,21 @@ async def list_users(db: AsyncSession = Depends(get_db), _=Depends(get_current_u
 async def list_audit(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403)
     return (await db.execute(select(AuditLog).order_by(desc(AuditLog.timestamp)))).scalars().all()
+
+# MONITORS
+@app.get("/api/monitors")
+async def list_monitors(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    return (await db.execute(select(Monitor))).scalars().all()
+
+@app.put("/api/monitors/{monitor_id}")
+async def update_monitor(monitor_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin": raise HTTPException(403)
+    m = (await db.execute(select(Monitor).where(Monitor.id == monitor_id))).scalar_one_or_none()
+    if not m: raise HTTPException(404, "Monitor not found")
+    if "enabled" in req: m.enabled = req["enabled"]
+    if "threshold" in req: m.threshold = req["threshold"]
+    await db.commit()
+    return m
 
 # REPORTS
 @app.get("/api/reports/executive")
@@ -585,7 +681,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
                 "key_finding": ai_summary
             },
             "wazuh_metrics": {
-                "total_alerts": stats.get("total_alerts", 0),
+                "total_alerts": stats.get("total_alerts_24h", 0),
                 "critical_alerts": stats.get("critical_alerts", 0),
                 "top_affected_assets": [
                     {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245}, 
@@ -615,6 +711,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
     except Exception as e:
         logger.error(f"Error generando informe ejecutivo: {e}")
         raise HTTPException(500, f"Error interno: {str(e)}")
+
 
 # FORENSICS
 @app.get("/api/forensics/attack-path/{ip}")
@@ -667,32 +764,7 @@ async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), _=D
         raise HTTPException(401, "API Key inválida")
     return {"status": "ok", "message": "API Key válida"}
 
-@app.get("/api/virustotal/ip/{ip}")
-async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
-    return await vt.check_ip(ip, key)
 
-@app.get("/api/virustotal/hash/{file_hash}")
-async def vt_scan_hash(file_hash: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
-    return await vt.check_hash(file_hash, key)
-
-@app.get("/api/virustotal/domain/{domain}")
-async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
-    return await vt.check_domain(domain, key)
 
 # HEALTH INTEGRATIONS
 @app.get("/api/health/integrations")

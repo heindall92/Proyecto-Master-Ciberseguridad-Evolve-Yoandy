@@ -13,6 +13,7 @@ from fastapi import HTTPException, Request, Depends
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.logger import logger
+from app.settings import settings
 
 # ============================================================================
 # RATE LIMITING & BRUTE FORCE PROTECTION
@@ -283,7 +284,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if not csrf_token:
             csrf_token = secrets.token_urlsafe(32)
             
-        if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        if settings.csrf_enabled and request.method in ["POST", "PUT", "DELETE", "PATCH"]:
             # Bypass CSRF for login and external integrations (webhooks)
             if request.url.path not in ["/api/auth/login", "/api/webhook/wazuh", "/health"]:
                 header_csrf = request.headers.get("x-csrf-token")

@@ -34,7 +34,7 @@ export type UserOut = {
   is_active: boolean;
   is_superuser: boolean;
   role: string;
-  rank: string;
+  security_rank: string;
 };
 
 export type AgentOut = {
@@ -323,7 +323,7 @@ export function purgeResolvedTickets(days = 30) {
 }
 
 // Wazuh Telemetry & Analytics
-export function getTopAttackers(limit = 20, hours = 24) {
+export function getTopAttackers(limit = 20, hours = 168) {
   return http<any[]>(`/api/wazuh/top-attackers?limit=${limit}&hours=${hours}`);
 }
 
@@ -331,27 +331,27 @@ export function getMitreCoverage(hours = 168) {
   return http<any[]>(`/api/wazuh/mitre?hours=${hours}`);
 }
 
-export function getCowrieTimeline(hours = 24, interval = "1h") {
+export function getCowrieTimeline(hours = 168, interval = "1h") {
   return http<any[]>(`/api/wazuh/cowrie-timeline?hours=${hours}&interval=${interval}`);
 }
 
-export function getCowrieStats(hours = 24) {
+export function getCowrieStats(hours = 168) {
   return http<any>(`/api/wazuh/cowrie-stats?hours=${hours}`);
 }
 
-export function getCowrieSessions(limit = 100, hours = 24) {
+export function getCowrieSessions(limit = 100, hours = 168) {
   return http<any[]>(`/api/wazuh/cowrie-sessions?limit=${limit}&hours=${hours}`);
 }
 
-export function getAlertVolume(hours = 24, interval = "1h") {
+export function getAlertVolume(hours = 168, interval = "6h") {
   return http<any[]>(`/api/wazuh/alert-volume?hours=${hours}&interval=${interval}`);
 }
 
-export function getRecentAlerts(limit = 100, hours = 24) {
+export function getRecentAlerts(limit = 200, hours = 168) {
   return http<any[]>(`/api/wazuh/recent-alerts?limit=${limit}&hours=${hours}`);
 }
 
-export function getAlertLevels(hours = 24) {
+export function getAlertLevels(hours = 168) {
   return http<any>(`/api/wazuh/alert-levels?hours=${hours}`);
 }
 
@@ -472,7 +472,7 @@ export interface ThreatMapData {
   total_attacks: number;
 }
 
-export function getThreatMap(hours: number = 24) {
+export function getThreatMap(hours: number = 168) {
   return http<ThreatMapData>(`/api/threat-map?hours=${hours}`);
 }
 

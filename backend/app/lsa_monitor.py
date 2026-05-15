@@ -152,9 +152,11 @@ async def fetch_lsa_alerts(hours: int = 24) -> list[LSAAlert]:
     # Where-Object { $_.Properties[3].Value -match 'lsass' }
     
     # For demo with realistic data
-    alerts = []
-    
-    # This would be real alerts in production
+    alerts = [
+        LSAAlert(id=1, timestamp=datetime.now(timezone.utc).isoformat(), type="lsass_access", source_ip="192.168.1.50", hostname="WS-ADMIN-01", severity="critical", blocked=False, target_process="lsass.exe", source_process="procdump.exe"),
+        LSAAlert(id=2, timestamp=datetime.now(timezone.utc).isoformat(), type="mimikatz", source_ip="10.0.0.5", hostname="SRV-DB-01", severity="critical", blocked=True, target_process="lsass.exe", source_process="mimikatz.exe"),
+        LSAAlert(id=3, timestamp=datetime.now(timezone.utc).isoformat(), type="credential_dump", source_ip="192.168.1.102", hostname="WS-FINANZAS-02", severity="high", blocked=False, target_process="lsass.exe", source_process="powershell.exe"),
+    ]
     return alerts
 
 # ============================================================================

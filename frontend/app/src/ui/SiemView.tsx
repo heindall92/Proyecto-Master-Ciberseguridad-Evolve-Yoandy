@@ -231,12 +231,12 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
         <div ref={tableRef} style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div style={{
             display: "grid",
-            gridTemplateColumns: "56px 72px 130px 1fr 100px",
+            gridTemplateColumns: "56px 72px 110px 130px 1fr 100px",
             padding: "6px 16px", gap: 8,
             borderBottom: "1px solid var(--line-faint)",
             background: "rgba(0,0,0,0.2)",
           }}>
-            {["SEV", t('time'), t('agents'), t('description'), ""].map((h, idx) => (
+            {["SEV", t('time'), t('ip'), t('agents'), t('description'), ""].map((h, idx) => (
               <span key={idx} style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px", fontWeight: 700 }}>{h.toUpperCase()}</span>
             ))}
           </div>
@@ -264,7 +264,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                     onMouseLeave={() => setHoveredId(null)}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "56px 72px 130px 1fr 100px",
+                      gridTemplateColumns: "56px 72px 110px 130px 1fr 100px",
                       padding: "8px 16px", gap: 8,
                       alignItems: "center",
                       borderBottom: "1px solid var(--line-faint)",
@@ -290,6 +290,10 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
 
                     <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--mono)" }}>
                       {fmtTime(al.timestamp)}
+                    </span>
+
+                    <span style={{ fontSize: 11, color: "var(--cyan)", fontFamily: "var(--mono)", fontWeight: 600 }}>
+                      {al.source_ip || "—"}
                     </span>
 
                     <span style={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
