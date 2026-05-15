@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
+import "./light-theme-overrides.css";
 import { getAudioContext, playNotificationSound, playResolvedSound, playChatSound, playMentionSound } from "./audio";
 
 import {
@@ -207,11 +208,17 @@ export default function App() {
   useEffect(() => {
     const handleNavigateIntel = (e: any) => dispatch(navigateToIntel(e.detail.ip));
     const handleNavigateWorkspace = (e: any) => dispatch(navigateToWorkspace(e.detail));
+    const handleNavigateView = (e: Event) => {
+      const viewId = (e as CustomEvent<{ view: string }>).detail?.view;
+      if (viewId) dispatch(setView(viewId));
+    };
     window.addEventListener('navigate-to-intel', handleNavigateIntel);
     window.addEventListener('navigate-to-workspace', handleNavigateWorkspace);
+    window.addEventListener('navigate-to-view', handleNavigateView);
     return () => {
       window.removeEventListener('navigate-to-intel', handleNavigateIntel);
       window.removeEventListener('navigate-to-workspace', handleNavigateWorkspace);
+      window.removeEventListener('navigate-to-view', handleNavigateView);
     };
   }, []);
 
@@ -675,7 +682,10 @@ export default function App() {
       <div className={`app ${tvMode ? 'tv-mode' : ''} ${sidebarCollapsed && !tvMode ? 'sidebar-collapsed' : ''}`}>
 
         {!tvMode && (
-        <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
+        <header
+          className="topbar"
+          style={theme === 'dark' ? { background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' } : undefined}
+        >
           <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div className="topbar__logo" style={{ width: '32px', height: '32px', background: 'rgba(60,255,158,0.05)', border: '1px solid var(--signal)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'rotate(45deg)', boxShadow: '0 0 10px var(--signal-glow)', marginRight: '8px' }}>
                <div style={{ transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -685,31 +695,32 @@ export default function App() {
             <div className="glitch-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', cursor: 'default' }}>
                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                  <AlexanaWord word="VALHALLA" height="18px" />
-                 <AlexanaWord word="SOC" height="12px" color="var(--signal)" />
-                 <AlexanaWord word="PRO" height="12px" color="rgba(255,255,255,0.5)" />
+                 <AlexanaWord word="SOC" height="12px" color={theme === 'light' ? '#d8f3dc' : 'var(--signal)'} />
+                 <AlexanaWord word="PRO" height="12px" color={theme === 'light' ? 'rgba(240,247,244,0.65)' : 'rgba(255,255,255,0.5)'} />
                </div>
                <div className="topbar__sub" style={{ fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>BLUE TEAM · WAZUH 4.9.5 · CLASSIFIED // EYES ONLY</div>
             </div>
           </div>
 
           <div className="status-chips">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{t('status')}</span>
-                <span style={{ color: 'var(--signal)', fontWeight: 600 }}>{t('operative')}</span>
+            <div className="topbar-stat-group">
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{t('status')}</span>
+                <span className="topbar-stat__value topbar-stat__value--ok">{t('operative')}</span>
               </div>
-              <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{incidentHeaderLabel}</span>
-                <span style={{ color: incidentCount > 0 ? 'var(--danger)' : 'var(--signal)', fontWeight: 600 }}>{incidentCount}</span>
+              <div className="topbar-stat__divider" aria-hidden="true" />
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{incidentHeaderLabel}</span>
+                <span className={`topbar-stat__value${incidentCount > 0 ? ' topbar-stat__value--warn' : ' topbar-stat__value--ok'}`}>{incidentCount}</span>
               </div>
-              <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{t('alerts_24h')}</span>
-                <span style={{ color: stats?.metrics?.total_alerts_24h > 0 ? 'var(--danger)' : 'var(--text-dim)', fontWeight: 600 }}>{stats?.metrics?.total_alerts_24h || 0}</span>
+              <div className="topbar-stat__divider" aria-hidden="true" />
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{t('alerts_24h')}</span>
+                <span className={`topbar-stat__value${(stats?.metrics?.total_alerts_24h || 0) > 0 ? ' topbar-stat__value--warn' : ''}`}>{stats?.metrics?.total_alerts_24h || 0}</span>
               </div>
             </div>
             <button
+              className="topbar-icon-btn"
               onClick={() => {
                 if (!chatOpen) {
                   dispatch(clearUnread(activeChatId));
@@ -746,7 +757,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
+            <button className="topbar-icon-btn" onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
               <style>{`
                 @keyframes pulse-red {
                   0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
@@ -815,6 +826,9 @@ export default function App() {
                 <div className="tactical-dropdown__header-rank">{user.rank?.toUpperCase() || 'ANALISTA'} · {user.role?.toUpperCase()}</div>
               </div>
               <div style={{ padding: '4px 0' }}>
+                <button onClick={() => { setShowCinematic(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)' }}>
+                  {lang === 'es' ? '▶ INTRO HYPERFRAME' : '▶ HYPERFRAME INTRO'}
+                </button>
                 <button onClick={() => window.location.reload()} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>{t('sync')}</button>
                 <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
                 <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
@@ -835,9 +849,9 @@ export default function App() {
         {notifMenuOpen && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setNotifMenuOpen(false)}>
             <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 60, width: '320px', maxHeight: '450px', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)', display: 'flex', justifyContent: 'space-between' }}>
+              <div className="notif-panel__head" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
                 <span>{t('notifications')}</span>
-                <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
+                <span>{incidentCount} {incidentText}</span>
               </div>
               <div style={{ padding: '4px 0' }}>
                 <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '10px', color: 'var(--text-dim)' }}>
@@ -846,24 +860,26 @@ export default function App() {
                   </a>
                 </div>
                 {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => (
-                  <div key={tk.id} style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
+                  <div key={tk.id} className="notif-ticket-card" style={{ padding: '10px 12px', position: 'relative' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{ fontSize: '9px', color: tk.severity === 'critical' ? 'var(--danger)' : tk.severity === 'high' ? 'var(--amber)' : 'var(--cyan)', fontWeight: 'bold' }}>
                         {tk.severity.toUpperCase()}
                       </span>
                       <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>ID: {tk.id}</span>
                     </div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
+                    <div className="notif-title" style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
+                        className="notif-btn-forest"
                         onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}
-                        style={{ padding: '4px 8px', background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         {t('ir_to_workspace')}
                       </button>
                       <button
+                        className="notif-btn-outline"
                         onClick={() => handleAssignToMe(tk.id)}
-                        style={{ padding: '4px 8px', background: 'rgba(51,204,255,0.1)', border: '1px solid rgba(51,204,255,0.3)', color: 'var(--cyan)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         {t('assign_to_me')}
                       </button>
@@ -873,7 +889,7 @@ export default function App() {
                   <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_recent_incidents')}</div>
                 )}
                 {incidentCount > 0 && (
-                  <button onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'var(--amber)', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <button className="notif-footer-btn" onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', border: 'none', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
                     {lang === 'es' ? 'VER TODOS LOS TICKETS' : 'VIEW ALL TICKETS'} ({incidentCount})
                   </button>
                 )}
@@ -914,7 +930,7 @@ export default function App() {
 
           {/* Collapse Button */}
           <button 
-            className="navbtn collapse-btn" 
+            className={`navbtn collapse-btn${sidebarCollapsed ? ' collapse-btn--active' : ''}`}
             onClick={() => {
               const newVal = !sidebarCollapsed;
               setSidebarCollapsed(newVal);
@@ -979,8 +995,7 @@ export default function App() {
               <label style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>ESQUEMA CROMÁTICO</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                  {['green', 'cyan', 'amber', 'purple'].map(s => (
-                   <button key={s} onClick={() => dispatch(setScheme(s))} className="action-btn" style={{ color: scheme === s ? '#000' : 'var(--text)' }}>
-                     {scheme === s && <span style={{ position: 'absolute', inset: 0, background: 'var(--signal)', zIndex: -1 }} />}
+                   <button key={s} onClick={() => dispatch(setScheme(s))} className={`action-btn ${scheme === s ? 'active' : ''}`}>
                      {s.toUpperCase()}
                    </button>
                  ))}

@@ -143,19 +143,11 @@ async def fetch_endpoint_status(hostname: str) -> EndpointStatus:
     )
 
 async def fetch_lsa_alerts(hours: int = 24) -> list[LSAAlert]:
-    """
-    Fetch real LSA alerts from Windows Event Viewer via Sysmon
-    In production, this queries Microsoft-Windows-Sysmon/Operational log
-    """
-    # In production, this would query:
-    # Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational'; Id=10}
-    # Where-Object { $_.Properties[3].Value -match 'lsass' }
-    
-    # For demo with realistic data
-    alerts = []
-    
-    # This would be real alerts in production
-    return alerts
+    """Alertas LSA/credenciales desde índice Wazuh (OpenSearch)."""
+    from app import opensearch_client as osc
+
+    raw = await osc.get_lsa_security_alerts(hours=hours, limit=50)
+    return [LSAAlert(**a) for a in raw]
 
 # ============================================================================
 # API ENDPOINTS

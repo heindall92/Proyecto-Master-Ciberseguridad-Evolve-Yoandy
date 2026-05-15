@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
-import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
+import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC, setMyVtApiKey, getVtKeyStatus } from "../lib/api";
 
 export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
   const [query, setQuery] = useState("");
@@ -23,6 +23,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
   useEffect(() => {
     loadWatchlist();
+    getVtKeyStatus().then(s => {
+      if (s.configured) setApiKey("••••••••••••••••");
+    }).catch(() => {});
     const savedKey = localStorage.getItem("vt_api_key");
     if (savedKey) setApiKey(savedKey);
     
@@ -37,10 +40,19 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
     }
   }, [initialIp]);
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem("vt_api_key", apiKey);
-    alert("API Key de VirusTotal guardada en la sesión actual.");
-    setShowConfig(false);
+  const handleSaveApiKey = async () => {
+    if (!apiKey || apiKey.startsWith("••")) {
+      alert(lang === "es" ? "Ingrese una API Key válida" : "Enter a valid API Key");
+      return;
+    }
+    try {
+      await setMyVtApiKey(apiKey);
+      localStorage.setItem("vt_api_key", apiKey);
+      alert(lang === "es" ? "API Key guardada en su perfil de operador (servidor)." : "API Key saved to your operator profile.");
+      setShowConfig(false);
+    } catch (e: any) {
+      alert(e?.message || "Error al guardar API Key");
+    }
   };
 
   const testApiKey = async () => {
@@ -125,10 +137,29 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
         status: "blocked",
         vt_report: result
       });
-      alert(lang === 'es' ? "Indicador BLOQUEADO en el sistema SOC." : "Indicator BLOCKED in SOC system.");
+      alert(lang === 'es' ? "Indicador BLOQUEADO en el registro IOC del SOC." : "Indicator BLOCKED in SOC IOC registry.");
       loadWatchlist();
     } catch (e) {
       alert(lang === 'es' ? "Error al bloquear (quizás ya existe)." : "Error blocking (maybe already exists).");
+    }
+  };
+
+  const handleWhitelist = async () => {
+    if (!result) return;
+    try {
+      await addIOC({
+        value: query,
+        ioc_type: type,
+        malicious_score: result.malicious || 0,
+        total_engines: result.total || 0,
+        tags: [...(result.tags || []), "whitelist-manual"],
+        status: "whitelist",
+        vt_report: result,
+      });
+      alert(lang === "es" ? "Indicador en LISTA BLANCA (excluido de bloqueos automáticos)." : "Indicator WHITELISTED.");
+      loadWatchlist();
+    } catch (e) {
+      alert(lang === "es" ? "Error al añadir a lista blanca." : "Error whitelisting.");
     }
   };
 
@@ -153,14 +184,14 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
   };
 
   const DetailRow = ({ label, value, color, mono }: { label: string; value: React.ReactNode; color?: string; mono?: boolean }) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '15px', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: '12px' }}>
-      <div style={{ color: 'var(--text-dim)' }}>{label}</div>
-      <div style={{ color: color || 'var(--text-bright)', wordBreak: 'break-all', fontFamily: mono ? 'var(--mono)' : 'inherit' }}>{value || "-"}</div>
+    <div className="ti-detail-row">
+      <div className="ti-detail-row__label">{label}</div>
+      <div className="ti-detail-row__value" style={{ color: color || undefined, fontFamily: mono ? 'var(--mono)' : undefined }}>{value || "-"}</div>
     </div>
   );
 
   return (
-    <div className="view" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '16px', height: '100%', overflow: 'hidden' }}>
+    <div className="view threat-intel-view" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '16px', height: '100%', overflow: 'hidden' }}>
 
       {/* Main Analysis Panel */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -277,10 +308,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ AÑADIR A WATCHLIST</button>
-                    {result.malicious > 0 && (
-                        <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR EN FIREWALL' : 'BLOCK IN FIREWALL'}</button>
-                    )}
+                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ {lang === "es" ? "WATCHLIST" : "WATCHLIST"}</button>
+                    <button onClick={handleWhitelist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%', borderColor: 'var(--signal)' }}>✓ {lang === "es" ? "LISTA BLANCA" : "WHITELIST"}</button>
+                    <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR IOC' : 'BLOCK IOC'}</button>
                 </div>
               </div>
 

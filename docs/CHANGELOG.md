@@ -40,6 +40,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ---
 
+## [Unreleased] — 2026-05-15
+
+### Documentación
+- **Nuevo** `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — auditoría OWASP/API (hallazgos críticos a altos).
+- **Nuevo** `docs/INFORME_MEJORAS_UI_TEMAS_2026-05-15.md` — multitema, formularios, threat map, runbooks, honeypot.
+
+### UI / UX
+- Sistema multitema GREEN / CYAN / AMBER / PURPLE en modo oscuro y claro (`light-theme-overrides.css`).
+- Formularios y modales alineados al esquema activo (fix bordes/hover verdes en CYAN+).
+- Workspace: modal crear incidente, drawer, filtros y stats con clases HUD.
+- Intro cinemática, Cowrie, Threat Map, SIEM i18n, Monitores, Perfil — cohesionados al HUD.
+
+### Backend / Ops
+- Threat map geo desde OpenSearch; seed de runbooks; sync alertas Wazuh.
+- Contenedor atacante Kali (`attack-loop.sh`, perfil `labs` en compose).
+
+### Seguridad (pendiente remediación)
+- Ver informe ciber — Fase 1: auth en LSA/webhook/WS, admin bootstrap, offline mode.
+
+---
+
 ## [Unreleased] — Fase 1: Hardening de Backend
 
 ### Planeado
