@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { listTickets, createTicket, updateTicket, listUsers, TicketOut, UserOut, vtCheckIp } from "../lib/api";
+import { listTickets, createTicket, updateTicket, deleteTicket, listUsers, TicketOut, UserOut, vtCheckIp } from "../lib/api";
+import { useAppSelector } from "../store/hooks";
 
 const SLA_LIMITS: Record<string, number> = {
   critical: 1 * 60 * 60 * 1000, // 1h
@@ -16,6 +17,7 @@ export default function IncidentsView() {
   const [selectedTicket, setSelectedTicket] = useState<TicketOut | null>(null);
   const [vtResults, setVtResults] = useState<any>(null);
   const [vtLoading, setVtLoading] = useState(false);
+  const currentUser = useAppSelector((s) => s.auth.user);
 
   useEffect(() => {
     Promise.all([listTickets(), listUsers()])
@@ -128,7 +130,25 @@ export default function IncidentsView() {
           <div className="panel" style={{ flex: 1 }}>
             <div className="panel__head">
               <span className="panel__title">Detalle de Incidente #{selectedTicket.id}</span>
-              <button className="action-btn" onClick={() => setSelectedTicket(null)}>✕ CERRAR</button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    className="action-btn" 
+                    onClick={async () => {
+                      if (!window.confirm(`¿Eliminar este ticket permanentemente? Esta acción no se puede deshacer.`)) return;
+                      try {
+                        await deleteTicket(selectedTicket.id);
+                        setSelectedTicket(null);
+                        handleRefresh();
+                      } catch (e) { alert("Error al eliminar el incidente."); }
+                    }}
+                    style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                  >
+                    🗑 ELIMINAR
+                  </button>
+                )}
+                <button className="action-btn" onClick={() => setSelectedTicket(null)}>✕ CERRAR</button>
+              </div>
             </div>
             <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
               

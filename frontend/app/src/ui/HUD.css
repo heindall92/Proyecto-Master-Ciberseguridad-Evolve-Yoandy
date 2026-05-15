@@ -147,7 +147,7 @@ body[data-scan="on"]::after {
 /* ======== LAYOUT ======== */
 .app {
   display: grid;
-  grid-template-columns: 270px 1fr;
+  grid-template-columns: 240px 1fr;
   grid-template-rows: 64px 1fr;
   height: 100vh;
   gap: 8px;
@@ -156,6 +156,7 @@ body[data-scan="on"]::after {
     radial-gradient(ellipse at 20% 0%, rgba(60,255,158,0.04), transparent 55%),
     radial-gradient(ellipse at 85% 100%, rgba(74,227,255,0.03), transparent 55%),
     var(--bg-void);
+  transition: grid-template-columns 0.3s ease;
 }
 .app.tv-mode {
   grid-template-columns: 1fr;
@@ -163,6 +164,34 @@ body[data-scan="on"]::after {
   gap: 0;
   padding: 0;
 }
+.app.sidebar-collapsed {
+  grid-template-columns: 76px 1fr;
+}
+.app.sidebar-collapsed .navbtn__main,
+.app.sidebar-collapsed .navbtn__sub,
+.app.sidebar-collapsed .navbtn__badge,
+.app.sidebar-collapsed .sidenav__label {
+  display: none !important;
+}
+.app.sidebar-collapsed .navbtn {
+  grid-template-columns: 1fr;
+  padding: 9px 8px;
+  justify-items: center;
+}
+.app.sidebar-collapsed .navbtn::before {
+  clip-path: polygon(
+    6px 0%, 100% 0%, 100% 20%, 100% 20%,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0% calc(100% - 8px), 0% 6px
+  );
+}
+.app.sidebar-collapsed .navbtn::after {
+  display: none;
+}
+.app.sidebar-collapsed .navbtn__icon-wrap {
+  margin: 0 auto;
+}
+
 
 /* ======== TOPBAR ======== */
 .topbar {
@@ -278,6 +307,8 @@ body[data-scan="on"]::after {
   font-size: 9px; letter-spacing: 2.5px;
   color: var(--text-faint); padding: 10px 10px 4px;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .navbtn {
@@ -301,6 +332,8 @@ body[data-scan="on"]::after {
   text-transform: uppercase;
   transition: all 0.2s ease;
   width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .navbtn::before {
@@ -354,7 +387,7 @@ body[data-scan="on"]::after {
   text-transform: uppercase; line-height: 1; padding-top: 2px;
 }
 .navbtn__badge {
-  position: absolute; top: 4px; right: 8px;
+  position: absolute; top: 50%; right: 16px; transform: translateY(-50%);
   font-family: var(--mono); font-size: 8px;
   color: var(--signal-dim); letter-spacing: 1px; z-index: 2;
 }

@@ -60,9 +60,10 @@ export type AgentEnrollOut = {
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
 const fallbackApiBase =
   typeof window !== "undefined" && window.location.protocol !== "file:"
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    ? `${window.location.protocol}//${window.location.host}`
     : "http://localhost:8000";
-const API_BASE = envApiBase || fallbackApiBase;
+/** Base URL vacía en build prod → mismo origen (nginx gateway HTTPS). */
+export const API_BASE = envApiBase || fallbackApiBase;
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -318,6 +319,7 @@ export function deleteTicket(ticketId: number) {
   return http<{ ok: boolean }>(`/api/tickets/${ticketId}`, { method: "DELETE" });
 }
 
+
 export function purgeResolvedTickets(days = 30) {
   return http<{ deleted: number; cutoff_days: number }>(`/api/tickets/purge/resolved?days=${days}`, { method: "DELETE" });
 }
@@ -486,7 +488,23 @@ export function postChatMessage(msg: any) {
 }
 
 export const getChatWsUrl = () => {
-  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  if (typeof window === "undefined") return "ws://localhost:8000/ws/chat";
+  const useSameOrigin = !envApiBase;
+  if (useSameOrigin) {
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${window.location.host}/ws/chat`;
+  }
+  const wsProto = API_BASE.startsWith("https") ? "wss:" : "ws:";
   const host = API_BASE.replace(/^https?:\/\//, "");
   return `${wsProto}//${host}/ws/chat`;
 };
+
+export function logout() {
+  return http<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+}
+
+export function getMySession() {
+  return http<{ username: string; ip: string; user_agent: string; expires_minutes: number }>(
+    "/api/auth/me/session"
+  );
+}
