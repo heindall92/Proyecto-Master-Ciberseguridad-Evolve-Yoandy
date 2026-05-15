@@ -5,7 +5,7 @@ Bienvenido a la plataforma Valhalla SOC. Este documento detalla los procedimient
 ## 1. Acceso Inicial
 Por seguridad, las credenciales por defecto se han movido a este manual.
 - **Usuario:** `admin`
-- **Contraseña:** `Valhalla2026!`
+- **Contraseña:** `admin`
 
 > [!IMPORTANT]
 > Se recomienda encarecidamente cambiar la contraseña del administrador inmediatamente después del primer acceso desde el perfil de usuario.

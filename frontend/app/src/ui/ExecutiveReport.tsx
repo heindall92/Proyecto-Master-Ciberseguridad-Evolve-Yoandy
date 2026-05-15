@@ -104,49 +104,46 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
+      
+      // Mapeamos los datos del backend a la estructura del informe
       const structured: ValhallaReportJSON = {
         report_metadata: {
-          report_id: `VHL-2026-XQ7`,
-          generation_date: new Date().toISOString().split('T')[0],
-          analyst_name: "Y. RAMIREZ",
-          company_name: companyName,
-          period: "ABRIL 2026"
+          report_id: raw.report_metadata?.report_id || `VHL-2026-RT${Math.floor(Math.random()*1000)}`,
+          generation_date: raw.report_metadata?.generation_date || new Date().toISOString().split('T')[0],
+          analyst_name: raw.report_metadata?.analyst_name || "SISTEMA",
+          company_name: companyName || raw.report_metadata?.company_name || "VALHALLA SOC",
+          period: raw.report_metadata?.period || "PERÍODO ACTUAL"
         },
         executive_summary: {
-          status: raw.riskScore < 40 ? "Operativo" : "Alerta",
-          health_score: 100 - raw.riskScore,
-          key_finding: "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
+          status: raw.executive_summary?.status || (raw.riskScore < 40 ? "Operativo" : "Alerta"),
+          health_score: raw.executive_summary?.health_score || (100 - raw.riskScore),
+          key_finding: raw.executive_summary?.key_finding || raw.executiveSummary || "No se han detectado anomalías críticas en el sistema."
         },
         wazuh_metrics: {
-          total_alerts: 42890,
-          critical_alerts: 145,
-          top_affected_assets: [
+          total_alerts: raw.wazuh_metrics?.total_alerts || raw.metrics?.total_alerts_24h || 0,
+          critical_alerts: raw.wazuh_metrics?.critical_alerts || raw.metrics?.critical_alerts || 0,
+          top_affected_assets: raw.wazuh_metrics?.top_affected_assets || [
             { name: "SRV-SAP-PROD", ip: "10.0.1.5", alerts: 1245 },
-            { name: "GW-FIREWALL-01", ip: "10.0.1.1", alerts: 840 },
-            { name: "WS-ADMIN-01", ip: "10.0.2.15", alerts: 620 }
+            { name: "GW-FIREWALL-01", ip: "10.0.1.1", alerts: 840 }
           ]
         },
-        mitre_coverage: [
+        mitre_coverage: raw.mitre_coverage || [
           { tactic: "Initial Access", count: 120, level: "High", icon: "📥" },
-          { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" },
-          { tactic: "Persistence", count: 12, level: "Medium", icon: "🛡️" },
-          { tactic: "Credential Access", count: 85, level: "Critical", icon: "🔑" },
-          { tactic: "Lateral Movement", count: 4, level: "High", icon: "↗️" }
+          { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" }
         ],
         honeypot_intel: {
-          unique_attackers: 1438,
-          top_passwords_captured: ["admin123", "root", "Valhalla@123"],
-          malware_samples_collected: 12
+          unique_attackers: raw.honeypot_intel?.unique_attackers || 0,
+          top_passwords_captured: raw.honeypot_intel?.top_passwords_captured || [],
+          malware_samples_collected: raw.honeypot_intel?.malware_samples_collected || 0
         },
         incident_management: {
-          total_tickets: 45,
-          closed_tickets: 42,
-          avg_resolution_time_min: 18
+          total_tickets: raw.incident_management?.total_tickets || 0,
+          closed_tickets: raw.incident_management?.closed_tickets || 0,
+          avg_resolution_time_min: raw.incident_management?.avg_resolution_time_min || 0
         },
-        remediation_steps: [
-          { task: "Bloqueo de IPs persistentes en el firewall core.", action_cmd: "iptables -A INPUT -s 185.x.x.x -j DROP" },
-          { task: "Actualización de parches en activos críticos.", action_cmd: "apt update && apt upgrade -y" },
-          { task: "Refuerzo de política MFA para el grupo de Administradores." }
+        remediation_steps: raw.remediation_steps || [
+          { task: "Actualización de parches en activos críticos." },
+          { task: "Bloqueo de IPs persistentes en el firewall." }
         ],
         iso27001: {
           overall: raw.iso27001?.overall ?? 73,

@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import os
+import platform
 
 # Add backend to path to import models
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "backend"))
@@ -11,7 +12,7 @@ from app.auth import get_password_hash
 from sqlalchemy import select
 
 async def reset_admin():
-    new_pass = "Valhalla2026!"
+    new_pass = "admin"
     if len(sys.argv) > 1:
         new_pass = sys.argv[1]
         
@@ -25,4 +26,6 @@ async def reset_admin():
             print("❌ Admin user not found.")
 
 if __name__ == "__main__":
+    if platform.system() == "Windows":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(reset_admin())

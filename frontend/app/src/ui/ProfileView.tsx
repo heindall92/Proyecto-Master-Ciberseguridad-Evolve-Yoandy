@@ -132,7 +132,7 @@ export default function ProfileView({
                 <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-bright)', fontFamily: 'var(--ff-mono)' }}>{user.username.toUpperCase()}</div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
                   <span style={{ padding: '2px 8px', background: 'rgba(60,255,158,0.1)', color: 'var(--signal)', fontSize: '10px', border: '1px solid var(--signal-dim)', fontFamily: 'var(--ff-mono)' }}>
-                    {user.rank?.toUpperCase() || 'L1 ANALYST'}
+                    {user.security_rank?.toUpperCase() || 'L1 ANALYST'}
                   </span>
                   <span style={{ padding: '2px 8px', background: 'rgba(0,255,255,0.1)', color: 'var(--cyan)', fontSize: '10px', border: '1px solid rgba(0,255,255,0.3)', fontFamily: 'var(--ff-mono)' }}>
                     ID: {user.id.toString().padStart(5, '0')}

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # ── Ollama (local AI) ────────────────────────────────────────────────────
     ollama_base_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen2.5-coder:7b"
+    ollama_model: str = "qwen2.5:3b-instruct"
     ollama_temperature: float = 0.0
     ollama_timeout_seconds: float = 45.0
 

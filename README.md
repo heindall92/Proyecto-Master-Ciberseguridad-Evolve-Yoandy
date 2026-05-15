@@ -404,7 +404,7 @@ python setup_reports.py
 
 | Servicio | URL | Credenciales |
 |---|---|---|
-| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | admin / Valhalla2026! (por defecto) |
+| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | admin / admin (por defecto) |
 | 📊 Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
 | 🔌 Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
 | 🗄️ OpenSearch | `https://localhost:9200` | admin / admin |

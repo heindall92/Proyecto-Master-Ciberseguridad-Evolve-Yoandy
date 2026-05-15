@@ -19,8 +19,8 @@ export default function MonitorsView({ lang }: { lang: 'en' | 'es' }) {
 
     const loadMonitors = async () => {
         try {
-            const res = await fetchAuth("/api/monitors");
-            if (res.ok) setMonitors(await res.json());
+            const data = await fetchAuth<MonitorOut[]>("/api/monitors");
+            setMonitors(data);
         } catch (err) {
             console.error("Failed to load monitors", err);
         } finally {

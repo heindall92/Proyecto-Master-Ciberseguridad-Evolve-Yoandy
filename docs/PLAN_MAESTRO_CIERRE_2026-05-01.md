@@ -25,7 +25,7 @@
 ### 0.2. Lo que NO está terminado (BRECHAS REALES)
 
 #### Brechas estéticas
-1. Login muestra credenciales por defecto en pantalla (`admin / Valhalla2026!`) — UI fingerprinting + invitación a fuerza bruta.
+1. Login muestra credenciales por defecto en pantalla (`admin / admin`) — UI fingerprinting + invitación a fuerza bruta.
 2. `DashboardTest.tsx` huérfano (componente sin uso).
 3. Inline styles masivos en `AppCore.tsx` (>500 props inline) — deuda visual y mantenibilidad.
 4. `z-index: 2147483647` (max int32) en menús — síntoma de hacks de stacking.
@@ -160,7 +160,7 @@
 
 | Acción | Detalle | Criterio |
 |---|---|---|
-| 3.1 Eliminar credenciales por defecto en pantalla de login | AppCore.tsx líneas 305–307 | UI no revela `admin / Valhalla2026!`. Reemplazar por enlace "¿Primer login? Consultar manual" |
+| 3.1 Eliminar credenciales por defecto en pantalla de login | AppCore.tsx líneas 305–307 | UI no revela `admin / admin`. Reemplazar por enlace "¿Primer login? Consultar manual" |
 | 3.2 Migrar inline styles a CSS modules / clases en `HUD.css` | `AppCore.tsx`, `DashboardSuperFinal.tsx` | < 50 inline style props en todo el frontend (medido con `grep -c "style={{"`) |
 | 3.3 Reemplazar `AlexanaLetter/Word` por componente `<BrandLogo />` con SVG paths optimizados o web font | nuevo `frontend/app/src/ui/BrandLogo.tsx` | Render < 16ms, 1 sola SVG por instancia |
 | 3.4 Skeleton loaders consistentes | nueva `<Skeleton variant="card\|row\|chart" />` | Cada vista muestra skeleton durante fetch en lugar de "CARGANDO..." |

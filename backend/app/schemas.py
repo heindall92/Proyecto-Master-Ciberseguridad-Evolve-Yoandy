@@ -70,7 +70,7 @@ class AnalysisOut(BaseModel):
 class UserBase(BaseModel):
     username: str
     role: str = "analista"
-    rank: str = "L1 Analyst"
+    security_rank: str = "L1 Analyst"
     email: str | None = None
     avatar_url: str | None = None
 
@@ -81,7 +81,7 @@ class UserUpdate(BaseModel):
     username: str | None = None
     email: str | None = None
     role: str | None = None
-    rank: str | None = None
+    security_rank: str | None = None
     password: str | None = None
     avatar_url: str | None = None
 

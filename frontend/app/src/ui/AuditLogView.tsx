@@ -26,9 +26,7 @@ export default function AuditLogView({ lang }: { lang: 'en' | 'es' }) {
             if (filterUser) url += `&user=${encodeURIComponent(filterUser)}`;
             if (filterAction) url += `&action=${encodeURIComponent(filterAction)}`;
             
-            const res = await fetchAuth(url);
-            if (!res.ok) throw new Error("Failed to fetch");
-            const data = await res.json();
+            const data = await fetchAuth<AuditLogOut[]>(url);
             setLogs(data);
         } catch (err) {
             console.error("Error loading audit logs:", err);

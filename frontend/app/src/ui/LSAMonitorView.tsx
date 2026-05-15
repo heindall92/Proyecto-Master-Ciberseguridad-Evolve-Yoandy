@@ -42,8 +42,8 @@ export default function LSAMonitorView() {
     try {
       // Fetch real data from API
       const [endpointsRes, alertsRes] = await Promise.all([
-        fetch('/api/lsa/endpoints').then(r => r.json()).catch(() => []),
-        fetch('/api/lsa/alerts?hours=24').then(r => r.json()).catch(() => [])
+        fetchAuth<EndpointStatus[]>('/api/lsa/endpoints').catch(() => []),
+        fetchAuth<LSAAlert[]>('/api/lsa/alerts?hours=24').catch(() => [])
       ]);
       setEndpoints(endpointsRes);
       setAlerts(alertsRes);
