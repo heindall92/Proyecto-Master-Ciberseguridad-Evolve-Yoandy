@@ -16,7 +16,8 @@ import {
   UserOut,
   getChatHistory,
   postChatMessage,
-  getChatWsUrl
+  getChatWsUrl,
+  logout as apiLogout,
 } from "../lib/api";
 
 import { useAppDispatch, useAppSelector } from "../store/hooks";
@@ -159,7 +160,10 @@ export default function App() {
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
-  const [showCinematic, setShowCinematic] = useState(() => !sessionStorage.getItem('valhalla_intro_played'));
+  const [showCinematic, setShowCinematic] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('valhalla_sidebar_collapsed') === 'true';
+  });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +237,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    apiLogout().catch(() => {});
     dispatch(logout());
     dispatch(setProfilePic(null));
     setIsLocked(true);
@@ -380,11 +385,32 @@ export default function App() {
     }).catch(() => {});
 
     const wsUrl = getChatWsUrl();
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket;
+    let reconnectDelay = 1000;
+    let disposed = false;
+    let pingInterval: ReturnType<typeof setInterval>;
 
-    ws.onmessage = (e) => {
+    const connect = () => {
+      if (disposed) return;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        reconnectDelay = 1000;
+      };
+
+      ws.onmessage = (e) => {
       try {
-        const msg: ChatMessage = JSON.parse(e.data);
+        const payload = JSON.parse(e.data);
+        if (payload?.type === "NEW_ALERT") {
+          const sev = payload.data?.severity || "medium";
+          if (sev === "critical" || sev === "high") {
+            playNotificationSound();
+          }
+          dispatch(setNotifSeen(false));
+          return;
+        }
+
+        const msg: ChatMessage = payload;
 
         dispatch(upsertMessage(msg));
 
@@ -423,14 +449,28 @@ export default function App() {
             }
           }
         }
-      } catch (err) { console.error("WS Message Error", err); }
+      } catch (err) {
+        if (import.meta.env.DEV) console.error("WS Message Error", err);
+      }
     };
 
-    const pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 30000);
+      ws.onclose = () => {
+        if (disposed) return;
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      };
+
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      }, 30000);
+    };
+
+    connect();
 
     return () => {
+      disposed = true;
       clearInterval(pingInterval);
-      ws.close();
+      ws?.close();
     };
   }, [user?.id, activeChatId, chatOpen]);
 
@@ -588,7 +628,7 @@ export default function App() {
               <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                    <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('user_id')}</label>
-                   <input name="u" placeholder="admin" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} autoFocus />
+                   <input name="u" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} autoFocus />
                  </div>
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                    <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('password')}</label>
@@ -632,7 +672,7 @@ export default function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <SvgSymbols />
-      <div className={`app ${tvMode ? 'tv-mode' : ''}`}>
+      <div className={`app ${tvMode ? 'tv-mode' : ''} ${sidebarCollapsed && !tvMode ? 'sidebar-collapsed' : ''}`}>
 
         {!tvMode && (
         <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
@@ -843,8 +883,8 @@ export default function App() {
         )}
 
         {!tvMode && (
-        <aside className="sidenav">
-          <div className="sidenav__label">{t('modules')}</div>
+        <aside className={`sidenav ${sidebarCollapsed ? 'collapsed' : ''}`}>
+          {!sidebarCollapsed && <div className="sidenav__label">{t('modules')}</div>}
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
@@ -861,13 +901,34 @@ export default function App() {
           {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
 
-          <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
-          <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
-            ROOT@VALHALLA:~#<br/>
-            SID: 0x7A4F · L3<br/>
-            {t('operator')}: {user.username.toUpperCase()}
-          </div>
+          {!sidebarCollapsed && (
+            <>
+              <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
+              <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
+                ROOT@VALHALLA:~#<br/>
+                SID: 0x7A4F · L3<br/>
+                {t('operator')}: {user.username.toUpperCase()}
+              </div>
+            </>
+          )}
+
+          {/* Collapse Button */}
+          <button 
+            className="navbtn collapse-btn" 
+            onClick={() => {
+              const newVal = !sidebarCollapsed;
+              setSidebarCollapsed(newVal);
+              localStorage.setItem('valhalla_sidebar_collapsed', String(newVal));
+            }}
+            style={{ marginTop: sidebarCollapsed ? 'auto' : '15px' }}
+          >
+            <span className="navbtn__icon-wrap" style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>
+              <svg className="navbtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+            </span>
+            {!sidebarCollapsed && <span className="navbtn__main">Colapsar Sidebar</span>}
+          </button>
         </aside>
+
         )}
 
         <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', gridRow: tvMode ? '1 / -1' : 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

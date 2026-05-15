@@ -577,6 +577,7 @@ export default function AnalystWorkspace({
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
+                      flexShrink: 0,
                       opacity: draggedId === ticket.id ? 0.5 : 1,
                     }}
                     onMouseEnter={e => {
@@ -618,10 +619,16 @@ export default function AnalystWorkspace({
                         {currentUser?.role === 'admin' && (
                           <button
                             title="Eliminar Incidente"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.stopPropagation();
                                 if (window.confirm(`¿Estás seguro de que deseas eliminar el incidente #${ticket.id} permanentemente?`)) {
-                                  deleteTicket(ticket.id).then(() => fetchData());
+                                  try {
+                                    await deleteTicket(ticket.id);
+                                    await fetchData();
+                                  } catch (err: any) {
+                                    alert('Error al eliminar: ' + (err?.message || String(err)));
+                                    logger.error('deleteTicket error:', err);
+                                  }
                                 }
                             }}
                             style={{
@@ -671,9 +678,9 @@ export default function AnalystWorkspace({
                     </div>
 
                     {/* Bottom Section: Progress + Avatars */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', flexWrap: 'wrap' }}>
                       {/* Progress Bar */}
-                      <div style={{ width: '40%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ flex: 1, minWidth: '60px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{
                           width: `${ticket.progress}%`,
                           height: '100%',
@@ -683,7 +690,7 @@ export default function AnalystWorkspace({
                       </div>
 
                       {/* Quick Move Menu */}
-                      <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                         {getColumns(t).filter(c => c.id !== ticket.status).map(c => (
                           <button
                             key={c.id}
@@ -708,7 +715,7 @@ export default function AnalystWorkspace({
 
                       {/* Assignee */}
                       {ticket.assignee_username ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                            <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 600 }}>{ticket.assignee_username.toUpperCase()}</span>
                            <div title={`Assigned to ${ticket.assignee_username}`} style={{
                              width: '24px',
@@ -726,7 +733,7 @@ export default function AnalystWorkspace({
                         </div>
                       ) : (
                         <div title="Unassigned" style={{
-                          display: 'flex', alignItems: 'center', gap: '6px'
+                          display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0
                         }}>
                            <span style={{ fontSize: '10px', color: 'var(--danger)', fontWeight: 600 }}>UNASSIGNED</span>
                            <div style={{
@@ -795,7 +802,10 @@ export default function AnalystWorkspace({
                       await deleteTicket(selectedTicket.id);
                       setSelectedTicket(null);
                       await fetchData();
-                    } catch (e) { logger.error(e); }
+                    } catch (err: any) {
+                      alert('Error al eliminar: ' + (err?.message || String(err)));
+                      logger.error('deleteTicket drawer error:', err);
+                    }
                   }}
                   style={{ background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.4)', color: '#FF4D4D', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}
                 >

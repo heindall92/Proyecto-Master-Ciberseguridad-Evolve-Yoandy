@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { UserOut, updateUser, uploadMyAvatar } from "../lib/api";
+import { useState, useEffect } from "react";
+import { UserOut, updateUser, uploadMyAvatar, getMySession } from "../lib/api";
 import { translations } from "./translations";
 
 export default function ProfileView({ 
@@ -27,6 +27,17 @@ export default function ProfileView({
     login: true,
     reports: false
   });
+  const [sessionInfo, setSessionInfo] = useState<{
+    ip: string;
+    user_agent: string;
+    expires_minutes: number;
+  } | null>(null);
+
+  useEffect(() => {
+    getMySession()
+      .then((s) => setSessionInfo({ ip: s.ip, user_agent: s.user_agent, expires_minutes: s.expires_minutes }))
+      .catch(() => {});
+  }, []);
 
   const passwordsMatch = password && password === confirmPassword;
   const passwordError = password && confirmPassword && password !== confirmPassword;
@@ -223,19 +234,25 @@ export default function ProfileView({
           <div className="panel__body" style={{ fontSize: '11px', lineHeight: '1.6' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-dim)' }}>IP_SOURCE:</span>
-              <span style={{ color: 'var(--cyan)' }}>192.168.1.52</span>
+              <span style={{ color: 'var(--cyan)' }}>{sessionInfo?.ip || '—'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-dim)' }}>OS_AGENT:</span>
-              <span style={{ color: 'var(--text-bright)' }}>Windows 11 / Chrome 124</span>
+              <span style={{ color: 'var(--text-dim)' }}>AGENT:</span>
+              <span style={{ color: 'var(--text-bright)', maxWidth: '60%', textAlign: 'right', wordBreak: 'break-word' }}>
+                {sessionInfo?.user_agent?.slice(0, 48) || '—'}
+              </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-dim)' }}>LOC_GEO:</span>
-              <span style={{ color: 'var(--text-bright)' }}>Madrid, ES</span>
+              <span style={{ color: 'var(--text-dim)' }}>TTL:</span>
+              <span style={{ color: 'var(--text-bright)' }}>
+                {sessionInfo ? `${sessionInfo.expires_minutes} min` : '—'}
+              </span>
             </div>
-            <button style={{ width: '100%', marginTop: '15px', padding: '8px', background: 'rgba(255,77,77,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontSize: '10px', cursor: 'pointer' }}>
-               {lang === 'es' ? 'CERRAR OTRAS SESIONES' : 'TERMINATE OTHER SESSIONS'}
-            </button>
+            <p style={{ marginTop: '12px', fontSize: '9px', color: 'var(--text-faint)', lineHeight: 1.5 }}>
+              {lang === 'es'
+                ? 'Sesión JWT stateless. Cierre de sesión desde el menú superior.'
+                : 'Stateless JWT session. Sign out from the top menu.'}
+            </p>
           </div>
         </div>
 

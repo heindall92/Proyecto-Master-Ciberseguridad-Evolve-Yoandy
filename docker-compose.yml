@@ -324,6 +324,24 @@ services:
     networks:
       - valhalla-net
 
+  # HTTPS gateway — VM / exposición: docker compose --profile prod up -d
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: valhalla-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_HTTP_PORT:-8080}:80"
+      - "${GATEWAY_HTTPS_PORT:-8443}:443"
+    depends_on:
+      - backend
+    networks:
+      - valhalla-net
+    profiles: ["prod"]
+
 volumes:
   wazuh-indexer-data:
   wazuh-manager-data:

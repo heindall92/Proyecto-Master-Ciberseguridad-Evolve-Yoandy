@@ -280,12 +280,20 @@ export default function CinematicIntro({ onComplete }: Props) {
                 </div>
             </div>
 
-            <div id="c-title" className={`cinematic-act ${chromaFilter ? 'c-chroma' : ''}`} style={{ opacity: titleState === 1 ? 1 : 0, transition: 'opacity 1s cubic-bezier(0.16, 1, 0.3, 1)', filter: 'drop-shadow(0 0 16px rgba(0,255,136,0.25))' }}>
+            <div id="c-title" className={`cinematic-act ${chromaFilter ? 'c-chroma' : ''}`} style={{ opacity: titleState === 1 ? 1 : 0, transition: 'opacity 1s cubic-bezier(0.16, 1, 0.3, 1)', filter: 'drop-shadow(0 0 25px rgba(0,255,136,0.4))' }}>
+                <div className="hyperframe-border-top" />
                 <AnimatedWord word="VALHALLA" sz={bigSz} clr="#ffffff" dots={true} reveal={valReveal > 0} />
-                <div style={{ gap: 10, marginTop: 4 }}>
+                <div style={{ gap: 10, marginTop: 4, display: 'flex', alignItems: 'center' }}>
+                    <div className="hyperframe-line" />
                     <AnimatedWord word="SOC PRO" sz={midSz} clr="#00e878" dots={false} reveal={socReveal > 0} />
+                    <div className="hyperframe-line" />
                 </div>
-                <div id="c-tag" style={{ opacity: tagOpacity }}>PLATAFORMA DE MONITORIZACIÓN Y RESPUESTA TÁCTICA CON IA</div>
+                <div id="c-tag" style={{ opacity: tagOpacity, letterSpacing: '0.4em', marginTop: '15px' }}>
+                    <span className="hyperframe-bracket">[</span> 
+                    PLATAFORMA DE MONITORIZACIÓN Y RESPUESTA TÁCTICA CON IA 
+                    <span className="hyperframe-bracket">]</span>
+                </div>
+                <div className="hyperframe-border-bottom" />
             </div>
 
             <div id="c-lf" style={{ opacity: flareOpacity, transition: flareOpacity ? 'opacity .35s ease' : 'opacity .9s ease' }} />

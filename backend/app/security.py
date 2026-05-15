@@ -13,6 +13,7 @@ from fastapi import HTTPException, Request, Depends
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.logger import logger
+from app.settings import settings
 
 # ============================================================================
 # RATE LIMITING & BRUTE FORCE PROTECTION
@@ -284,12 +285,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             csrf_token = secrets.token_urlsafe(32)
             
         if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-            # Bypass CSRF for login and external integrations (webhooks)
-            if request.url.path not in ["/api/auth/login", "/api/webhook/wazuh", "/health"]:
+            bypass_paths = ["/api/auth/login", "/api/webhook/wazuh", "/health"]
+            csrf_check_needed = (
+                settings.csrf_enabled
+                and request.url.path not in bypass_paths
+            )
+            if csrf_check_needed:
                 header_csrf = request.headers.get("x-csrf-token")
                 if not header_csrf or header_csrf != csrf_token:
-                    # In a real scenario we'd return a 403 Response directly,
-                    # but with BaseHTTPMiddleware we can return a JSONResponse
                     from fastapi.responses import JSONResponse
                     return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
         
@@ -305,8 +308,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             key="csrf_token",
             value=csrf_token,
             httponly=False,
-            secure=True,
-            samesite="strict"
+            secure=settings.session_cookie_secure,
+            samesite=settings.session_cookie_samesite
         )
         
         # Additional security headers

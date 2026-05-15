@@ -157,3 +157,40 @@
 .c-chroma {
   filter: url(#chroma-filter);
 }
+
+.hyperframe-border-top, .hyperframe-border-bottom {
+  width: 120px;
+  height: 2px;
+  background: var(--signal);
+  box-shadow: 0 0 15px var(--signal);
+  margin: 20px 0;
+  position: relative;
+}
+
+.hyperframe-border-top::before, .hyperframe-border-top::after,
+.hyperframe-border-bottom::before, .hyperframe-border-bottom::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--signal);
+}
+
+.hyperframe-border-top::before { top: -10px; left: -10px; border-right: 0; border-bottom: 0; }
+.hyperframe-border-top::after { top: -10px; right: -10px; border-left: 0; border-bottom: 0; }
+.hyperframe-border-bottom::before { bottom: -10px; left: -10px; border-right: 0; border-top: 0; }
+.hyperframe-border-bottom::after { bottom: -10px; right: -10px; border-left: 0; border-top: 0; }
+
+.hyperframe-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--signal), transparent);
+  min-width: 50px;
+}
+
+.hyperframe-bracket {
+  color: var(--signal);
+  font-weight: bold;
+  text-shadow: 0 0 10px var(--signal);
+  margin: 0 10px;
+}

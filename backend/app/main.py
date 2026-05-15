@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import json
+import secrets
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,44 +99,85 @@ app.include_router(health_router)
 
 # --- BACKGROUND TASKS ---
 
+async def _sync_wazuh_alerts_to_tickets(hours: int = 1) -> dict[str, Any]:
+    """Crea tickets desde alertas Wazuh high/critical no duplicadas."""
+    alerts = await osc.get_recent_alerts(limit=50, hours=hours)
+    created = 0
+    skipped = 0
+    error: str | None = None
+    try:
+        async with SessionLocal() as db:
+            admin_res = await db.execute(select(User).where(User.username == "admin"))
+            admin = admin_res.scalar_one_or_none()
+            if not admin:
+                return {"created": 0, "skipped": 0, "error": "Usuario admin no encontrado"}
+            for alert in alerts:
+                alert_id = alert.get("rule_id")
+                if not alert_id:
+                    skipped += 1
+                    continue
+                if alert.get("severity") not in ("high", "critical"):
+                    skipped += 1
+                    continue
+                existing = (
+                    await db.execute(
+                        select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id))
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    skipped += 1
+                    continue
+                db.add(
+                    Ticket(
+                        title=f"Wazuh: {alert.get('description', 'Alert')}",
+                        description=alert.get("description", ""),
+                        severity=alert.get("severity"),
+                        category="wazuh-detected",
+                        source_ip=alert.get("source_ip"),
+                        affected_asset=alert.get("agent_name") or "Manager",
+                        wazuh_alert_id=str(alert_id),
+                        reporter_id=admin.id,
+                        status="open",
+                    )
+                )
+                created += 1
+            if created:
+                await db.commit()
+                logger.info(f"Wazuh sync: created {created} tickets")
+    except Exception as e:
+        error = str(e)
+        logger.warning(f"Wazuh sync failed: {e}")
+    return {"created": created, "skipped": skipped, "error": error}
+
+
 async def _auto_sync_loop():
     """Background task: sync Wazuh alerts every 2 minutes."""
     await asyncio.sleep(30)
     while True:
-        try:
-            alerts = await osc.get_recent_alerts(limit=50, hours=1)
-            async with SessionLocal() as db:
-                admin_res = await db.execute(select(User).where(User.username == "admin"))
-                admin = admin_res.scalar_one_or_none()
-                if admin:
-                    created = 0
-                    for alert in alerts:
-                        alert_id = alert.get("rule_id")
-                        if not alert_id: continue
-                        if alert.get("severity") not in ("high", "critical"): continue
-                        
-                        existing = (await db.execute(select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id)))).scalar_one_or_none()
-                        if existing: continue
-                        
-                        ticket = Ticket(
-                            title=f"Wazuh: {alert.get('description', 'Alert')}",
-                            description=alert.get("description", ""),
-                            severity=alert.get("severity"),
-                            category="wazuh-detected",
-                            source_ip=alert.get("source_ip"),
-                            affected_asset=alert.get("agent_name") or "Manager",
-                            wazuh_alert_id=str(alert_id),
-                            reporter_id=admin.id,
-                            status="open"
-                        )
-                        db.add(ticket)
-                        created += 1
-                    if created:
-                        await db.commit()
-                        logger.info(f"Auto-sync: created {created} tickets")
-        except Exception as e:
-            logger.warning(f"Auto-sync failed: {e}")
+        await _sync_wazuh_alerts_to_tickets(hours=1)
         await asyncio.sleep(120)
+
+
+def _can_access_ticket(user: User, ticket: Ticket) -> bool:
+    if user.role in ("admin", "analyst", "reporter"):
+        return True
+    if user.role == "viewer":
+        return ticket.assigned_to_id == user.id or ticket.reporter_id == user.id
+    return False
+
+
+def _require_ticket_access(user: User, ticket: Ticket) -> None:
+    if not _can_access_ticket(user, ticket):
+        raise HTTPException(403, "No tienes permiso para acceder a este ticket")
+
+
+def _safe_evidence_filename(raw: str) -> str:
+    base = os.path.basename(raw or "file")
+    base = _re.sub(r"[^\w.\-]", "_", base)
+    return base[:200] or "evidence.bin"
+
+
+ALLOWED_EVIDENCE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".txt", ".log", ".json", ".csv", ".pcap", ".zip"}
 
 @app.on_event("startup")
 async def on_startup():
@@ -167,7 +209,8 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: Any):
         if not isinstance(message, str):
@@ -211,8 +254,45 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
         raise HTTPException(401, "Credenciales inválidas")
     
     access_token = create_access_token(data={"sub": user.username})
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="strict")
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+        max_age=settings.access_token_expire_minutes * 60,
+    )
+    csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf,
+        httponly=False,
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+    )
     return Token(access_token=access_token)
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response, _=Depends(get_current_user_optional)):
+    response.delete_cookie("access_token")
+    response.delete_cookie("csrf_token")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me/session")
+async def my_session(request: Request, current: User = Depends(get_current_user)):
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    return {
+        "username": current.username,
+        "ip": client_ip,
+        "user_agent": request.headers.get("User-Agent", "unknown"),
+        "expires_minutes": settings.access_token_expire_minutes,
+    }
+
 
 @app.get("/api/users", response_model=list[UserOut])
 async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
@@ -313,19 +393,24 @@ async def list_tickets(db: AsyncSession = Depends(get_db), _=Depends(get_current
     return rows
 
 @app.get("/api/tickets/{ticket_id}", response_model=TicketOut)
-async def get_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def get_ticket(
+    ticket_id: int,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
     from sqlalchemy.orm import selectinload
     t = (await db.execute(select(Ticket).options(
         selectinload(Ticket.assignee), 
         selectinload(Ticket.reporter), 
         selectinload(Ticket.evidence)
     ).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
-    
-    # Asegurar que los nombres de usuario se pueblen para el frontend
-    if t.assignee: t.assignee_username = t.assignee.username
-    if t.reporter: t.reporter_username = t.reporter.username
-    
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    if t.assignee:
+        t.assignee_username = t.assignee.username
+    if t.reporter:
+        t.reporter_username = t.reporter.username
     return t
 
 @app.post("/api/tickets", response_model=TicketOut)
@@ -349,7 +434,9 @@ async def create_ticket(req: dict, db: AsyncSession = Depends(get_db), current: 
 @app.put("/api/tickets/{ticket_id}", response_model=TicketOut)
 async def update_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
     
     # Update fields if provided
     if "title" in req: t.title = req["title"]
@@ -367,7 +454,9 @@ async def update_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends
 @app.post("/api/tickets/{ticket_id}/assign", response_model=TicketOut)
 async def assign_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
     t.assigned_to_id = req.get("assigned_to_id")
     await db.commit()
     return await get_ticket(t.id, db, current)
@@ -375,7 +464,9 @@ async def assign_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends
 @app.post("/api/tickets/{ticket_id}/resolve", response_model=TicketOut)
 async def resolve_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
     t.status = "resolved"
     t.resolution_notes = req.get("resolution_notes")
     t.resolved_at = datetime.now(timezone.utc)
@@ -384,8 +475,11 @@ async def resolve_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depend
 
 @app.delete("/api/tickets/{ticket_id}")
 async def delete_ticket_ep(ticket_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403, "Solo admin o analista puede eliminar tickets")
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
     await db.delete(t)
     await db.commit()
     return {"ok": True}
@@ -397,19 +491,36 @@ async def upload_evidence(
     db: AsyncSession = Depends(get_db), 
     current: User = Depends(get_current_user)
 ):
-    upload_dir = "uploads/evidence"
+    t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+
+    upload_dir = os.path.abspath(settings.evidence_dir)
     os.makedirs(upload_dir, exist_ok=True)
-    
-    file_path = os.path.join(upload_dir, f"{ticket_id}_{file.filename}")
+    safe_name = _safe_evidence_filename(file.filename or "file")
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext not in ALLOWED_EVIDENCE_EXT:
+        raise HTTPException(400, f"Tipo de archivo no permitido: {ext}")
+
     file_content = await file.read()
-    file_size = len(file_content)
-    with open(file_path, "wb") as buffer:
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(file_content) > max_bytes:
+        raise HTTPException(400, f"Archivo supera {settings.max_upload_size_mb} MB")
+
+    file_path = os.path.join(upload_dir, f"{ticket_id}_{safe_name}")
+    real_path = os.path.realpath(file_path)
+    if not real_path.startswith(upload_dir):
+        raise HTTPException(400, "Ruta de archivo inválida")
+
+    with open(real_path, "wb") as buffer:
         buffer.write(file_content)
+    file_size = len(file_content)
     
     evidence = Evidence(
         ticket_id=ticket_id,
-        filename=file.filename,
-        file_path=file_path,
+        filename=safe_name,
+        file_path=real_path,
         file_size=file_size,
         content_type=file.content_type
     )
@@ -475,10 +586,40 @@ async def recent_alerts(limit: int = 50, hours: int = 24, _=Depends(get_current_
 async def top_attackers(limit: int = 10, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_top_attackers(limit, hours)
 
-# USERS
-@app.get("/api/users", response_model=list[UserOut])
-async def list_users(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return (await db.execute(select(User))).scalars().all()
+@app.get("/api/wazuh/cowrie-stats")
+async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
+    return await osc.get_cowrie_stats(hours)
+
+@app.get("/api/wazuh/cowrie-sessions")
+async def cowrie_sessions(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
+    return await osc.get_cowrie_sessions(limit, hours)
+
+@app.get("/api/wazuh/sync-alerts")
+async def sync_alerts_manual(hours: int = 1, _=Depends(get_current_user)):
+    return await _sync_wazuh_alerts_to_tickets(hours=hours)
+
+
+@app.get("/api/dashboard")
+async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    wazuh_stats = await osc.get_dashboard_stats(24)
+    tickets_open = (
+        await db.execute(
+            select(func.count(Ticket.id)).where(
+                Ticket.status.in_(["open", "in_progress", "escalated"])
+            )
+        )
+    ).scalar() or 0
+    tickets_total = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
+
+    return {
+        "metrics": {
+            "alerts": wazuh_stats.get("total_alerts_24h", 0),
+            "tickets_open": tickets_open,
+            "tickets_total": tickets_total,
+            **wazuh_stats,
+        },
+        "status": "operational",
+    }
 
 # AUDIT
 @app.get("/api/audit")
@@ -647,27 +788,6 @@ async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depen
         if not s: raise HTTPException(404, "API Key no configurada")
         key = decrypt_secret(s.value)
     return await vt.check_domain(domain, key)
-
-# HEALTH INTEGRATIONS
-@app.get("/api/health/integrations")
-async def health_integrations(_=Depends(get_current_user)):
-    # Verificamos Wazuh y OpenSearch (ahora que el indexer está activo)
-    wazuh_status = "online"
-    try:
-        await wazuh.get_agents()
-    except: wazuh_status = "offline"
-    
-    os_status = "online"
-    try:
-        await osc.get_recent_alerts(limit=1)
-    except: os_status = "offline"
-
-    return [
-        {"name": "Wazuh Manager", "status": wazuh_status, "latency": "12ms"},
-        {"name": "OpenSearch Indexer", "status": os_status, "latency": "5ms"},
-        {"name": "PostgreSQL DB", "status": "online", "latency": "1ms"},
-        {"name": "Ollama AI", "status": "online", "latency": "450ms"}
-    ]
 
 # CHAT PERSISTENCE
 @app.get("/api/chat/{chat_id}")
