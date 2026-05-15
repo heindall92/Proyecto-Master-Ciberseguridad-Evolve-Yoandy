@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import logger from "../lib/logger";
 import { getRecentAlerts, getMitreCoverage, getTopAttackers, createTicket } from "../lib/api";
+import { translateAlertDescription } from "../lib/alertTranslations";
 import { translations } from "./translations";
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const CHIPS = [
 
 export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
+  const alertLabel = (d: string) => translateAlertDescription(d, lang);
   const [alerts, setAlerts]           = useState<any[]>([]);
   const [mitre, setMitre]             = useState<any[]>([]);
   const [topAttackers, setTopAttackers] = useState<any[]>([]);
@@ -69,20 +71,30 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
   const tableRef = useRef<HTMLDivElement>(null);
 
   const fetchData = async () => {
-    try {
-      const [a, m, t] = await Promise.all([
-        getRecentAlerts(200),
-        getMitreCoverage(),
-        getTopAttackers(10),
-      ]);
-      setAlerts(a || []);
-      setMitre(m || []);
-      setTopAttackers(t || []);
-    } catch (err) {
-      logger.error("SIEM fetch error:", err);
-    } finally {
-      setLoading(false);
+    const [alertsRes, mitreRes, attackersRes] = await Promise.allSettled([
+      getRecentAlerts(200),
+      getMitreCoverage(),
+      getTopAttackers(10),
+    ]);
+    if (alertsRes.status === "fulfilled") {
+      setAlerts(alertsRes.value || []);
+    } else {
+      logger.error("SIEM alerts fetch error:", alertsRes.reason);
+      setAlerts([]);
     }
+    if (mitreRes.status === "fulfilled") {
+      setMitre(mitreRes.value || []);
+    } else {
+      logger.error("SIEM MITRE fetch error:", mitreRes.reason);
+      setMitre([]);
+    }
+    if (attackersRes.status === "fulfilled") {
+      setTopAttackers(attackersRes.value || []);
+    } else {
+      logger.error("SIEM top attackers fetch error:", attackersRes.reason);
+      setTopAttackers([]);
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -153,13 +165,12 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
   );
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 0, overflow: "hidden" }}>
+    <div className="siem-view" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 0, overflow: "hidden" }}>
       {toast && <Toast msg={toast.msg} ok={toast.ok} onDone={() => setToast(null)} />}
 
       {/* ── Header bar ─────────────────────────────────────────────────── */}
-      <div style={{
+      <div className="siem-toolbar" style={{
         display: "flex", alignItems: "center", gap: 16, padding: "10px 20px",
-        background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)",
         borderBottom: "1px solid var(--line-faint)", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
@@ -174,6 +185,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
             return (
               <button
                 key={c.id}
+                className={`siem-chip${active ? ' active' : ''}`}
                 onClick={() => setFilter(c.id)}
                 style={{
                   padding: "3px 10px", borderRadius: 3, fontSize: 10, fontWeight: 700,
@@ -207,9 +219,10 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t('filter_placeholder')}
+            className="siem-search-input"
             style={{
               width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid var(--line)",
-              color: "#fff", padding: "5px 8px 5px 28px", borderRadius: 4, fontSize: 11,
+              color: "var(--text-bright)", padding: "5px 8px 5px 28px", borderRadius: 4, fontSize: 11,
               outline: "none", boxSizing: "border-box",
             }}
           />
@@ -229,15 +242,14 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: selected ? "1fr 380px" : "1fr 320px", gap: 1, overflow: "hidden" }}>
 
         <div ref={tableRef} style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          <div style={{
+          <div className="siem-table-head-row" style={{
             display: "grid",
             gridTemplateColumns: "56px 72px 130px 1fr 100px",
             padding: "6px 16px", gap: 8,
             borderBottom: "1px solid var(--line-faint)",
-            background: "rgba(0,0,0,0.2)",
           }}>
             {["SEV", t('time'), t('agents'), t('description'), ""].map((h, idx) => (
-              <span key={idx} style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px", fontWeight: 700 }}>{h.toUpperCase()}</span>
+              <span key={idx} className="siem-table-head-cell" style={{ fontSize: 9, letterSpacing: "1px", fontWeight: 700 }}>{h.toUpperCase()}</span>
             ))}
           </div>
 
@@ -259,6 +271,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                 return (
                   <div
                     key={`${key}-${i}`}
+                    className="siem-alert-row"
                     onClick={() => setSelected(isSelected ? null : al)}
                     onMouseEnter={() => setHoveredId(key)}
                     onMouseLeave={() => setHoveredId(null)}
@@ -268,11 +281,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                       padding: "8px 16px", gap: 8,
                       alignItems: "center",
                       borderBottom: "1px solid var(--line-faint)",
-                      background: isSelected
-                        ? SEV_BG[sev]
-                        : isHovered
-                        ? "rgba(255,255,255,0.03)"
-                        : "transparent",
+                      background: isSelected ? SEV_BG[sev] : undefined,
                       cursor: "pointer",
                       transition: "background 0.1s",
                     }}
@@ -292,12 +301,12 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                       {fmtTime(al.timestamp)}
                     </span>
 
-                    <span style={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span className="siem-col-agent" style={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {al.agent_name}
                     </span>
 
-                    <div style={{ fontSize: 11, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {al.description}
+                    <div className="siem-col-desc" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {alertLabel(al.description)}
                       {al.count > 1 && (
                         <span style={{ background: 'var(--line)', color: 'var(--text-bright)', fontSize: '9px', padding: '1px 5px', borderRadius: '10px', fontWeight: 'bold' }}>
                           x{al.count}
@@ -331,9 +340,9 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
         </div>
 
         {/* Sidebar */}
-        <div style={{ borderLeft: "1px solid var(--line-faint)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div className="siem-sidebar" style={{ borderLeft: "1px solid var(--line-faint)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {selected ? (
-            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div className="siem-detail-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line-faint)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", color: SEV_COLOR[selected.severity] }}>
                   DETALLE · {selected.severity?.toUpperCase()}
@@ -342,10 +351,10 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px", marginBottom: 4 }}>DESCRIPCIÓN</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>{selected.description}</div>
+                  <div className="siem-detail-label" style={{ fontSize: 9, letterSpacing: "1px", marginBottom: 4 }}>DESCRIPCIÓN</div>
+                  <div className="siem-detail-desc" style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>{alertLabel(selected.description)}</div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="siem-detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {[
                     ["REGLA", selected.rule_id],
                     ["NIVEL", selected.rule_level],
@@ -354,9 +363,9 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                     ["HORA", fmtTime(selected.timestamp)],
                     ["SEVERIDAD", selected.severity?.toUpperCase()],
                   ].map(([k, v]) => (
-                    <div key={k} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 4, padding: "8px 10px" }}>
-                      <div style={{ fontSize: 8, color: "var(--text-faint)", letterSpacing: "1px", marginBottom: 2 }}>{k}</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--mono)", color: "var(--text-bright)" }}>{v}</div>
+                    <div key={k} className="siem-detail-cell" style={{ borderRadius: 4, padding: "8px 10px" }}>
+                      <div className="siem-detail-label" style={{ fontSize: 8, letterSpacing: "1px", marginBottom: 2 }}>{k}</div>
+                      <div className="siem-detail-value" style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--mono)" }}>{v}</div>
                     </div>
                   ))}
                 </div>
@@ -376,9 +385,9 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                       EXPANDIR [+]
                     </button>
                   </div>
-                  <pre style={{
-                    fontSize: 10, color: "#3cf",
-                    background: "rgba(0,0,0,0.4)", borderRadius: 4, padding: 10,
+                  <pre className="siem-raw-log" style={{
+                    fontSize: 10,
+                    borderRadius: 4, padding: 10,
                     overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",
                     maxHeight: 150, overflowY: "auto",
                   }}>

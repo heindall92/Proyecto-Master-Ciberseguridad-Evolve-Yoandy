@@ -9,20 +9,15 @@ export default function CowrieView() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-    try {
-      const [t, s, sess] = await Promise.all([
-        getCowrieTimeline(24, "1h"),
-        getCowrieStats(24),
-        getCowrieSessions(50, 24)
-      ]);
-      setTimeline(t);
-      setStats(s);
-      setSessions(sess);
-    } catch (err) {
-      logger.error("Error fetching Cowrie data", err);
-    } finally {
-      setLoading(false);
-    }
+    const [tRes, sRes, sessRes] = await Promise.allSettled([
+      getCowrieTimeline(24, "1h"),
+      getCowrieStats(24),
+      getCowrieSessions(50, 24),
+    ]);
+    if (tRes.status === "fulfilled") setTimeline(tRes.value || []);
+    if (sRes.status === "fulfilled") setStats(sRes.value);
+    if (sessRes.status === "fulfilled") setSessions(sessRes.value || []);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -44,9 +39,16 @@ export default function CowrieView() {
 
   if (loading) return <div className="panel" style={{ padding: '20px', color: 'var(--signal)' }}>CONECTANDO CON SEÑUELOS COWRIE...</div>;
 
+  const honeypotActive = (stats?.total ?? 0) > 0 || sessions.length > 0;
+
   return (
-    <div className="view" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'auto 1fr', gap: '16px', height: '100%', overflow: 'hidden' }}>
-      
+    <div className="view" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'auto auto 1fr', gap: '16px', height: '100%', overflow: 'hidden' }}>
+      <div className={`panel cowrie-status-banner ${honeypotActive ? '' : 'inactive'}`} style={{ gridColumn: '1 / -1', padding: '12px 16px' }}>
+        <div className="cowrie-status-text" style={{ fontSize: '11px', fontWeight: 700 }}>
+          {honeypotActive ? '● COWRIE ACTIVO — telemetría en Wazuh/OpenSearch' : '○ Sin eventos Cowrie (24h) — ejecute: docker compose --profile labs up -d attacker'}
+        </div>
+      </div>
+
       {/* Cowrie Stats KPIs */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         <div className="panel" style={{ padding: '16px', textAlign: 'center', borderLeft: '4px solid var(--signal)' }}>
@@ -69,7 +71,7 @@ export default function CowrieView() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', gridRow: '2', gridColumn: '1', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', gridRow: '3', gridColumn: '1', overflow: 'hidden' }}>
          {/* Top Credentials */}
          <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="panel__head"><span className="panel__title">Top Credenciales (Brute Force)</span></div>
@@ -94,8 +96,8 @@ export default function CowrieView() {
          </div>
 
          {/* Cyber Deception Intel */}
-         <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '15px', background: 'rgba(74,227,255,0.03)' }}>
-            <h4 style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--cyan)' }}>🛡️ ESTRATEGIA DE DECEPCIÓN</h4>
+         <div className="panel cowrie-deception" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '15px' }}>
+            <h4 style={{ margin: '0 0 10px', fontSize: '12px' }}>🛡️ ESTRATEGIA DE DECEPCIÓN</h4>
             <p style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
               El honeypot Cowrie está operando como un señuelo SSH/Telnet. Los datos mostrados son <strong>telemetría real</strong> de ataques en curso.
               Las IPs marcadas en el TTY feed pueden ser bloqueadas directamente desde el módulo de <em>Threat Intel</em>.
@@ -107,7 +109,7 @@ export default function CowrieView() {
       </div>
 
       {/* Main Terminal Feed */}
-      <div className="panel" style={{ gridColumn: '2 / 4', gridRow: '2', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="panel cowrie-tty" style={{ gridColumn: '2 / 4', gridRow: '3', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">TTY INTERACTIVE FEED · COMANDOS REALES</span>
           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>AUTO-REFRESH: 10S</span>

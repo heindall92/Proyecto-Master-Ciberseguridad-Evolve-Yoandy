@@ -29,11 +29,17 @@ services:
     hostname: attacker
     tty: true
     stdin_open: true
-    command: /bin/bash
+    command: ["/bin/bash", "/root/attack-loop.sh"]
     restart: unless-stopped
     profiles: ["labs"]
+    environment:
+      - COWRIE_HOST=cowrie
+      - COWRIE_SSH_PORT=2222
+      - COWRIE_TELNET_PORT=2223
+      - ATTACK_INTERVAL_SEC=900
     volumes:
       - attacker-home:/root/workspace
+      - ./attacker/attack-loop.sh:/root/attack-loop.sh:ro
     cap_add:
       - NET_ADMIN
       - NET_RAW

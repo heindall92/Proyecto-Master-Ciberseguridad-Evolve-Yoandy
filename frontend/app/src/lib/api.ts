@@ -361,23 +361,37 @@ export function getWazuhServices() {
   return http<any>("/api/wazuh/services");
 }
 
-// VirusTotal
-export function vtCheckIp(ip: string) {
+// VirusTotal — clave por operador (servidor) o localStorage como respaldo
+function vtHeaders(): Record<string, string> | undefined {
   const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/ip/${ip}`, { headers });
+  return key ? { "X-VT-API-Key": key } : undefined;
+}
+
+export function getVtKeyStatus() {
+  return http<{ configured: boolean }>("/api/users/me/vt-api-key");
+}
+
+export function setMyVtApiKey(api_key: string) {
+  return http<{ status: string; configured: boolean }>("/api/users/me/vt-api-key", {
+    method: "PUT",
+    body: JSON.stringify({ api_key }),
+  });
+}
+
+export function deleteMyVtApiKey() {
+  return http<{ ok: boolean }>("/api/users/me/vt-api-key", { method: "DELETE" });
+}
+
+export function vtCheckIp(ip: string) {
+  return http<any>(`/api/virustotal/ip/${ip}`, { headers: vtHeaders() });
 }
 
 export function vtCheckHash(hash: string) {
-  const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/hash/${hash}`, { headers });
+  return http<any>(`/api/virustotal/hash/${hash}`, { headers: vtHeaders() });
 }
 
 export function vtCheckDomain(domain: string) {
-  const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/domain/${domain}`, { headers });
+  return http<any>(`/api/virustotal/domain/${domain}`, { headers: vtHeaders() });
 }
 
 // Ollama Status

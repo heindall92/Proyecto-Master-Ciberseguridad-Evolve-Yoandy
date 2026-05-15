@@ -39,14 +39,28 @@ async def check_indexer() -> dict:
 
 async def check_dashboard() -> dict:
     start = time.time()
-    try:
-        async with asyncio.timeout(3):
-            async with httpx.AsyncClient(verify=False) as client:
-                # Dashboard is usually at wazuh.dashboard:443 in this setup
-                res = await client.get("https://wazuh.dashboard:443/api/status")
-                return {"status": "ok" if res.status_code == 200 else "warning", "latency_ms": int((time.time() - start)*1000), "error": None}
-    except Exception as e:
-        return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}
+    urls = (
+        "https://wazuh.dashboard:443/",
+        "https://wazuh.dashboard:443/api/status",
+        "https://wazuh.dashboard:443/app/login",
+    )
+    last_err: str | None = None
+    for url in urls:
+        try:
+            async with asyncio.timeout(3):
+                async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
+                    res = await client.get(url)
+                    latency = int((time.time() - start) * 1000)
+                    if res.status_code < 500:
+                        return {"status": "ok", "latency_ms": latency, "error": None}
+                    last_err = f"HTTP {res.status_code}"
+        except Exception as e:
+            last_err = str(e)
+    return {
+        "status": "warning",
+        "latency_ms": int((time.time() - start) * 1000),
+        "error": last_err or "No responde — UI en https://localhost:443",
+    }
 
 async def check_postgres(db: AsyncSession) -> dict:
     start = time.time()
@@ -71,7 +85,11 @@ async def check_vt() -> dict:
     start = time.time()
     try:
         if not settings.virustotal_api_key:
-             return {"status": "warning", "latency_ms": 0, "error": "Not configured"}
+            return {
+                "status": "info",
+                "latency_ms": 0,
+                "error": "Opcional — configure VIRUSTOTAL_API_KEY o Threat Intel",
+            }
         return {"status": "ok", "latency_ms": 0, "error": None}
     except Exception as e:
         return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}

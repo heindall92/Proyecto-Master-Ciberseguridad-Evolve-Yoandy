@@ -178,34 +178,34 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
               <div className="panel__body">
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>OPERADOR_ID</label>
-                       <input 
-                        type="text" 
-                        value={username} 
-                        onChange={e => setUsername(e.target.value)} 
-                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }} 
+                    <div className="users-form-field">
+                       <label className="users-form-label">OPERADOR_ID</label>
+                       <input
+                        type="text"
+                        className="users-form-input"
+                        value={username}
+                        onChange={e => setUsername(e.target.value)}
                         placeholder="Ej: admin_neo"
                        />
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>COM_LINK (EMAIL)</label>
-                       <input 
-                        type="email" 
-                        value={email} 
-                        onChange={e => setEmail(e.target.value)} 
-                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }} 
+                    <div className="users-form-field">
+                       <label className="users-form-label">COM_LINK (EMAIL)</label>
+                       <input
+                        type="email"
+                        className="users-form-input"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
                         placeholder="neo@valhalla.soc"
                        />
                     </div>
 
-                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>RANGO_OPERATIVO (RANK)</label>
-                       <select 
-                        value={rank} 
-                        onChange={e => setRank(e.target.value)} 
-                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
+                     <div className="users-form-field">
+                       <label className="users-form-label">RANGO_OPERATIVO (RANK)</label>
+                       <select
+                        className="users-form-select"
+                        value={rank}
+                        onChange={e => setRank(e.target.value)}
                        >
                          <option value="L1 Analyst">L1 ANALYST</option>
                          <option value="L2 Responder">L2 RESPONDER</option>
@@ -214,12 +214,12 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
                        </select>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>NIVEL_ACCESO (ROL)</label>
-                       <select 
-                        value={role} 
-                        onChange={e => setRole(e.target.value)} 
-                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
+                    <div className="users-form-field">
+                       <label className="users-form-label">NIVEL_ACCESO (ROL)</label>
+                       <select
+                        className="users-form-select"
+                        value={role}
+                        onChange={e => setRole(e.target.value)}
                        >
                          <option value="analyst">ANALISTA</option>
                          <option value="admin">ADMINISTRADOR</option>
@@ -227,13 +227,13 @@ export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
                        </select>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                       <label style={{ fontSize: '10px', color: 'var(--signal)' }}>{editingUserId ? 'ACTUALIZAR LLAVE_ACCESO (OPCIONAL)' : 'LLAVE_ACCESO (PASSWORD)'}</label>
-                       <input 
-                        type="password" 
-                        value={password} 
-                        onChange={e => setPassword(e.target.value)} 
-                        style={{ background: '#000', border: '1px solid var(--line)', color: 'var(--signal)', padding: '10px', fontFamily: 'var(--ff-mono)', outline: 'none' }} 
+                    <div className="users-form-field">
+                       <label className="users-form-label">{editingUserId ? 'ACTUALIZAR LLAVE_ACCESO (OPCIONAL)' : 'LLAVE_ACCESO (PASSWORD)'}</label>
+                       <input
+                        type="password"
+                        className="users-form-input"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
                         placeholder={editingUserId ? "Dejar en blanco para mantener" : "********"}
                        />
                     </div>

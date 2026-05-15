@@ -67,4 +67,7 @@ echo "  Honeypot objetivo: cowrie:2222 (SSH) | cowrie:2223 (Telnet)"\n\
 echo "  Workspace persistente: /root/workspace"\n\
 echo ""\n' >> /root/.bashrc
 
-CMD ["/bin/bash"]
+COPY attack-loop.sh /root/attack-loop.sh
+RUN sed -i 's/\r$//' /root/attack-loop.sh && chmod +x /root/attack-loop.sh
+
+CMD ["/bin/bash", "/root/attack-loop.sh"]

@@ -41,6 +41,8 @@ from app.ollama_client import analyze_alert, generate_executive_summary
 from app import virustotal_client as vt
 from app.lsa_monitor import router as lsa_router
 from app.health import router as health_router
+from app.threat_map import get_threat_map_data
+from app.runbooks_seed import seed_runbooks_if_empty
 
 # --- MIDDLEWARES ---
 
@@ -190,9 +192,19 @@ async def on_startup():
             db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin", rank="Commander"))
         
         if not (await db.execute(select(Monitor))).scalars().first():
-            db.add(Monitor(name="SSH Bruteforce", threshold=5, severity_floor="high", rule_id_pattern="5710,5712"))
-            db.add(Monitor(name="Web Attack", threshold=1, severity_floor="high", rule_id_pattern="31103,31106"))
-            
+            defaults = [
+                ("SSH Bruteforce", "Intentos masivos SSH — reglas 5710/5712", 5, "high", "5710,5712"),
+                ("Cowrie Honeypot", "Eventos en señuelo Cowrie", 10, "medium", "cowrie"),
+                ("Web Attack", "Inyección SQL/XSS en aplicaciones", 1, "high", "31103,31106"),
+                ("Privilege Escalation", "Escalada de privilegios", 3, "critical", "550,551"),
+                ("Malware Detection", "Ejecutables o scripts sospechosos", 1, "critical", "554,750"),
+            ]
+            for name, desc, thr, sev, pat in defaults:
+                db.add(Monitor(
+                    name=name, description=desc, threshold=thr,
+                    severity_floor=sev, rule_id_pattern=pat, enabled=True,
+                ))
+        await seed_runbooks_if_empty(db)
         await db.commit()
     
     asyncio.create_task(_auto_sync_loop())
@@ -586,6 +598,14 @@ async def recent_alerts(limit: int = 50, hours: int = 24, _=Depends(get_current_
 async def top_attackers(limit: int = 10, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_top_attackers(limit, hours)
 
+@app.get("/api/wazuh/alert-volume")
+async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_current_user)):
+    return await osc.get_alert_volume(hours, interval)
+
+@app.get("/api/wazuh/mitre")
+async def mitre_coverage(hours: int = 168, _=Depends(get_current_user)):
+    return await osc.get_mitre_coverage(hours)
+
 @app.get("/api/wazuh/cowrie-stats")
 async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_stats(hours)
@@ -593,6 +613,81 @@ async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
 @app.get("/api/wazuh/cowrie-sessions")
 async def cowrie_sessions(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_sessions(limit, hours)
+
+@app.get("/api/wazuh/cowrie-timeline")
+async def cowrie_timeline(hours: int = 24, interval: str = "1h", _=Depends(get_current_user)):
+    return await osc.get_cowrie_timeline(hours, interval)
+
+
+async def _tcp_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+    try:
+        async with asyncio.timeout(timeout):
+            _r, w = await asyncio.open_connection(host, port)
+            w.close()
+            await w.wait_closed()
+            return True
+    except Exception:
+        return False
+
+
+@app.get("/api/wazuh/services")
+async def wazuh_services(_=Depends(get_current_user)):
+    """Estado del stack para el widget Salud del Stack (dashboard)."""
+    manager_status = "disconnected"
+    try:
+        agents = await wazuh.get_agents()
+        manager_status = "active" if agents is not None else "disconnected"
+    except Exception as e:
+        logger.debug("Wazuh manager check failed: %s", e)
+
+    indexer_status = "disconnected"
+    try:
+        import httpx
+        async with asyncio.timeout(3):
+            async with httpx.AsyncClient(verify=False) as client:
+                res = await client.get(
+                    f"{settings.opensearch_url}/",
+                    auth=(settings.opensearch_user, settings.opensearch_pass),
+                )
+                indexer_status = "active" if res.status_code == 200 else "disconnected"
+    except Exception as e:
+        logger.debug("Indexer check failed: %s", e)
+
+    cowrie_host = os.getenv("COWRIE_HOST", "cowrie")
+    cowrie_ssh = int(os.getenv("COWRIE_SSH_PORT", "2222"))
+    cowrie_events = 0
+    try:
+        stats = await osc.get_cowrie_stats(24)
+        cowrie_events = int(stats.get("total") or 0)
+    except Exception:
+        pass
+
+    cowrie_port_up = await _tcp_reachable(cowrie_host, cowrie_ssh)
+    if cowrie_port_up:
+        cowrie_status = "active" if cowrie_events > 0 else "warning"
+    elif cowrie_events > 0:
+        cowrie_status = "active"
+    else:
+        cowrie_status = "disconnected"
+
+    attacker_host = os.getenv("ATTACKER_HOST", "attacker")
+    attacker_up = await _tcp_reachable(attacker_host, 22, timeout=1.5)
+
+    return {
+        "status": manager_status,
+        "manager": manager_status,
+        "indexer": indexer_status,
+        "api": "active",
+        "cowrie": cowrie_status,
+        "honeypot": cowrie_status,
+        "cowrie_events_24h": cowrie_events,
+        "attacker": "active" if attacker_up else "disconnected",
+    }
+
+
+@app.get("/api/threat-map")
+async def threat_map(hours: int = 24, _=Depends(get_current_user)):
+    return await get_threat_map_data(hours)
 
 @app.get("/api/wazuh/sync-alerts")
 async def sync_alerts_manual(hours: int = 1, _=Depends(get_current_user)):
@@ -621,11 +716,56 @@ async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_curren
         "status": "operational",
     }
 
+# MONITORS (reglas SOC configurables)
+@app.get("/api/monitors", response_model=list[MonitorOut])
+async def list_monitors(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403, "Solo admin puede ver monitores")
+    return (await db.execute(select(Monitor).order_by(Monitor.name))).scalars().all()
+
+@app.put("/api/monitors/{monitor_id}", response_model=MonitorOut)
+async def update_monitor_ep(
+    monitor_id: int,
+    payload: MonitorUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role != "admin":
+        raise HTTPException(403, "Solo admin puede editar monitores")
+    m = (await db.execute(select(Monitor).where(Monitor.id == monitor_id))).scalar_one_or_none()
+    if not m:
+        raise HTTPException(404, "Monitor no encontrado")
+    if payload.enabled is not None:
+        m.enabled = payload.enabled
+    if payload.threshold is not None:
+        m.threshold = payload.threshold
+    if payload.severity_floor is not None:
+        m.severity_floor = payload.severity_floor
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(m)
+    return m
+
 # AUDIT
 @app.get("/api/audit")
-async def list_audit(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role != "admin": raise HTTPException(403)
-    return (await db.execute(select(AuditLog).order_by(desc(AuditLog.timestamp)))).scalars().all()
+async def list_audit(
+    page: int = 1,
+    size: int = 50,
+    user: str | None = None,
+    action: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role != "admin":
+        raise HTTPException(403)
+    q = select(AuditLog).order_by(desc(AuditLog.timestamp))
+    if user:
+        q = q.where(AuditLog.username.ilike(f"%{user}%"))
+    if action:
+        q = q.where(AuditLog.action.ilike(f"%{action}%"))
+    offset = max(0, (page - 1) * size)
+    q = q.offset(offset).limit(min(size, 200))
+    return (await db.execute(q)).scalars().all()
 
 # REPORTS
 @app.get("/api/reports/executive")
@@ -742,51 +882,134 @@ async def update_ai_settings(data: dict, db: AsyncSession = Depends(get_db), _=D
                 s.value = str(data[key])
     await db.commit()
     return {"status": "updated"}
-@app.get("/api/runbooks")
+@app.get("/api/runbooks", response_model=list[RunbookOut])
 async def list_runbooks(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return (await db.execute(select(Runbook))).scalars().all()
+    return (await db.execute(select(Runbook).where(Runbook.is_active == True).order_by(Runbook.category))).scalars().all()
+
+@app.post("/api/runbooks", response_model=RunbookOut)
+async def create_runbook_ep(payload: RunbookIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403, "Solo admin o analista")
+    rb = Runbook(**payload.model_dump(), created_by_id=current.id, is_active=True)
+    db.add(rb)
+    await db.commit()
+    await db.refresh(rb)
+    return rb
+
+@app.put("/api/runbooks/{runbook_id}", response_model=RunbookOut)
+async def update_runbook_ep(
+    runbook_id: int,
+    payload: RunbookIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403)
+    rb = (await db.execute(select(Runbook).where(Runbook.id == runbook_id))).scalar_one_or_none()
+    if not rb:
+        raise HTTPException(404, "Runbook no encontrado")
+    for k, v in payload.model_dump().items():
+        setattr(rb, k, v)
+    await db.commit()
+    await db.refresh(rb)
+    return rb
+
+@app.delete("/api/runbooks/{runbook_id}")
+async def delete_runbook_ep(runbook_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403)
+    rb = (await db.execute(select(Runbook).where(Runbook.id == runbook_id))).scalar_one_or_none()
+    if not rb:
+        raise HTTPException(404, "Runbook no encontrado")
+    rb.is_active = False
+    await db.commit()
+    return {"ok": True}
+
+@app.post("/api/runbooks/seed")
+async def seed_runbooks_ep(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403)
+    n = await seed_runbooks_if_empty(db)
+    await db.commit()
+    return {"seeded": n, "message": f"{n} runbooks creados" if n else "Ya existían runbooks"}
+
+async def _resolve_vt_api_key(request: Request, db: AsyncSession, user: User) -> str:
+    key = request.headers.get("X-VT-API-Key")
+    if key:
+        return key
+    user_key = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"vt_api_key_user_{user.id}")
+        )
+    ).scalar_one_or_none()
+    if user_key:
+        return decrypt_secret(user_key.value)
+    global_key = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+    if global_key:
+        return decrypt_secret(global_key.value)
+    if settings.virustotal_api_key:
+        return settings.virustotal_api_key
+    raise HTTPException(404, "API Key de VirusTotal no configurada. Añádala en Threat Intel.")
+
+@app.get("/api/users/me/vt-api-key")
+async def get_my_vt_key_status(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    row = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"vt_api_key_user_{current.id}")
+        )
+    ).scalar_one_or_none()
+    return {"configured": row is not None}
+
+@app.put("/api/users/me/vt-api-key")
+async def set_my_vt_key(data: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = (data.get("api_key") or "").strip()
+    if not key:
+        raise HTTPException(400, "api_key requerida")
+    setting_key = f"vt_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    enc = encrypt_secret(key)
+    if row:
+        row.value = enc
+        row.is_sensitive = True
+    else:
+        db.add(SystemSetting(key=setting_key, value=enc, is_sensitive=True))
+    await db.commit()
+    test = await vt.check_ip("8.8.8.8", key)
+    if "error" in test and ("401" in str(test["error"]) or "Forbidden" in str(test["error"])):
+        raise HTTPException(401, "API Key inválida")
+    return {"status": "ok", "configured": True}
+
+@app.delete("/api/users/me/vt-api-key")
+async def delete_my_vt_key(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    setting_key = f"vt_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        await db.commit()
+    return {"ok": True}
 
 # VIRUSTOTAL
 @app.get("/api/virustotal/check-key")
-async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    # Check header first (for testing from frontend)
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
-    
-    # Ping simple a Google DNS para validar key
+async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
     res = await vt.check_ip("8.8.8.8", key)
-    if "error" in res and ("401" in res["error"] or "Forbidden" in res["error"]):
+    if "error" in res and ("401" in str(res["error"]) or "Forbidden" in str(res["error"])):
         raise HTTPException(401, "API Key inválida")
     return {"status": "ok", "message": "API Key válida"}
 
 @app.get("/api/virustotal/ip/{ip}")
-async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
+async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
     return await vt.check_ip(ip, key)
 
 @app.get("/api/virustotal/hash/{file_hash}")
-async def vt_scan_hash(file_hash: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
+async def vt_scan_hash(file_hash: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
     return await vt.check_hash(file_hash, key)
 
 @app.get("/api/virustotal/domain/{domain}")
-async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
+async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
     return await vt.check_domain(domain, key)
 
 # CHAT PERSISTENCE
@@ -903,8 +1126,20 @@ async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSessio
 @app.post("/api/ioc")
 async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     existing = (await db.execute(select(IOC).where(IOC.value == req.get("value")))).scalar_one_or_none()
-    if existing: raise HTTPException(400, "IOC ya existe en la lista")
-    
+    if existing:
+        if req.get("status"):
+            existing.status = req["status"]
+            if req.get("tags"):
+                existing.tags = list(set((existing.tags or []) + req.get("tags", [])))
+            if req.get("vt_report"):
+                existing.vt_report = req["vt_report"]
+            if req.get("malicious_score") is not None:
+                existing.malicious_score = req["malicious_score"]
+            await db.commit()
+            await db.refresh(existing)
+            return existing
+        raise HTTPException(400, "IOC ya existe en la lista")
+
     ioc = IOC(
         value=req.get("value"),
         ioc_type=req.get("ioc_type"),

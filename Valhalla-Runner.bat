@@ -2,8 +2,8 @@
 title Valhalla SOC Runner
 cd /d "%~dp0"
 
-echo Levantando stack Docker (Wazuh, Cowrie)...
-docker compose up -d
+echo Levantando stack Docker (Wazuh, Cowrie, simulador de ataques labs)...
+docker compose --profile labs up -d
 
 echo Iniciando Backend...
 start "Valhalla Backend" /MIN cmd /c "cd /d "%~dp0backend" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"

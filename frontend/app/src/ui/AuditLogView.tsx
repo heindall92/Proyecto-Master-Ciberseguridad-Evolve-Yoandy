@@ -67,6 +67,16 @@ export default function AuditLogView({ lang }: { lang: 'en' | 'es' }) {
 
     return (
         <div className="view" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 8px 8px 0', gap: '16px' }}>
+            <div className="panel" style={{ padding: '14px 18px', borderLeft: '3px solid var(--signal)', background: 'var(--bg-panel)' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--signal)', marginBottom: 6 }}>
+                    {lang === 'es' ? '¿Para qué sirve Auditoría?' : 'What is Audit for?'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                    {lang === 'es'
+                        ? 'Registro inmutable de acciones en la plataforma (login, tickets, IOC, settings). Solo administradores. Úsalo para cumplimiento ISO 27001, investigación de abuso interno y trazabilidad forense.'
+                        : 'Immutable log of platform actions. Admins only. Use for compliance, insider investigations and forensic traceability.'}
+                </div>
+            </div>
             <div className="panel" style={{ display: 'flex', gap: '15px', padding: '15px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                     <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{lang === 'es' ? 'USUARIO' : 'USER'}</label>

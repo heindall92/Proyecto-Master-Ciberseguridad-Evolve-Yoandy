@@ -226,6 +226,30 @@ export default function ProfileView({
       {/* Right Column: Activity & Sessions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
+        {/* Quick navigation */}
+        <div className="panel">
+          <div className="panel__head">
+            <span className="panel__title">{lang === 'es' ? 'ACCESOS RÁPIDOS' : 'QUICK ACCESS'}</span>
+          </div>
+          <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {[
+              { view: 'threat', label: lang === 'es' ? 'Threat Intel — API VirusTotal' : 'Threat Intel — VirusTotal API' },
+              { view: 'workspace', label: lang === 'es' ? 'Workspace de incidentes' : 'Incident workspace' },
+              { view: 'runbooks', label: lang === 'es' ? 'Runbooks / playbooks' : 'Runbooks / playbooks' },
+              { view: 'cowrie', label: lang === 'es' ? 'Honeypot Cowrie' : 'Cowrie honeypot' },
+            ].map((link) => (
+              <button
+                key={link.view}
+                type="button"
+                className="profile-quick-link"
+                onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-view', { detail: { view: link.view } }))}
+              >
+                → {link.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Active Session Info */}
         <div className="panel">
           <div className="panel__head">

@@ -339,7 +339,7 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
     return result
 
 async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
-    """Extrae comandos reales y sesiones de Cowrie."""
+    """Extrae comandos y sesiones Cowrie (comandos, logins, conexiones)."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": limit,
@@ -348,12 +348,18 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"match": {"rule.groups": "cowrie"}},
-                    {"exists": {"field": "data.input"}}
+                    {"bool": {"should": [
+                        {"match": {"rule.groups": "cowrie"}},
+                        {"match": {"decoder.name": "cowrie"}},
+                    ]}},
                 ]
             }
         },
-        "_source": ["@timestamp", "data.srcip", "data.session", "data.input", "data.geoip.country_code2"]
+        "_source": [
+            "@timestamp", "data.srcip", "data.session", "data.input",
+            "data.username", "data.password", "rule.description",
+            "data.geoip.country_code2",
+        ]
     }
     resp = await _search(body)
     hits = resp.get("hits", {}).get("hits", [])
@@ -361,14 +367,71 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
     for h in hits:
         src = h.get("_source", {})
         data = src.get("data", {})
+        rule_desc = src.get("rule", {}).get("description", "")
+        cmd = data.get("input") or ""
+        if not cmd and data.get("username"):
+            cmd = f"login attempt: {data.get('username')}/{data.get('password', '***')}"
+        if not cmd:
+            cmd = rule_desc or "session event"
         result.append({
             "timestamp": src.get("@timestamp", ""),
             "ip": data.get("srcip", "unknown"),
             "geo": data.get("geoip", {}).get("country_code2", "XX"),
             "session": data.get("session", "unknown"),
-            "command": data.get("input", "")
+            "command": cmd,
         })
     return result
+
+
+async def get_lsa_security_alerts(hours: int = 24, limit: int = 50) -> list[dict]:
+    """Alertas Wazuh relacionadas con LSA, credenciales o dumping."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": limit,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {
+            "bool": {
+                "must": [{"range": {"@timestamp": {"gte": since}}}],
+                "should": [
+                    {"wildcard": {"rule.description": "*lsass*"}},
+                    {"wildcard": {"rule.description": "*mimikatz*"}},
+                    {"wildcard": {"rule.description": "*credential*"}},
+                    {"wildcard": {"rule.description": "*Sysmon*"}},
+                    {"match": {"rule.groups": "windows"}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "_source": ["@timestamp", "rule.description", "rule.level", "agent.name", "data.srcip"],
+    }
+    resp = await _search(body)
+    hits = resp.get("hits", {}).get("hits", [])
+    out = []
+    for i, h in enumerate(hits):
+        src = h.get("_source", {})
+        rule = src.get("rule", {})
+        level = int(rule.get("level", 0))
+        sev = "critical" if level >= 12 else "high" if level >= 9 else "medium"
+        desc = (rule.get("description") or "").lower()
+        alert_type = "lsass_access"
+        if "mimikatz" in desc:
+            alert_type = "mimikatz"
+        elif "credential" in desc:
+            alert_type = "credential_dump"
+        elif "sysmon" in desc:
+            alert_type = "sysmon_id10"
+        out.append({
+            "id": i + 1,
+            "timestamp": src.get("@timestamp", ""),
+            "type": alert_type,
+            "source_ip": src.get("data", {}).get("srcip", ""),
+            "hostname": src.get("agent", {}).get("name", "unknown"),
+            "severity": sev,
+            "blocked": False,
+            "target_process": "lsass.exe" if "lsass" in desc else "N/A",
+            "source_process": rule.get("description", ""),
+        })
+    return out
 
 async def get_mitre_stats(hours: int = 24) -> list[dict]:
     """Agrega alertas por tactica MITRE."""
