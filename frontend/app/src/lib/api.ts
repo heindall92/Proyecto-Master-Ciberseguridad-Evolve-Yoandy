@@ -65,15 +65,34 @@ const fallbackApiBase =
 /** Base URL vacía en build prod → mismo origen (nginx gateway HTTPS). */
 export const API_BASE = envApiBase || fallbackApiBase;
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function http<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> || {}),
   };
 
-  // Add CSRF token if available
   if (typeof document !== "undefined") {
-    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    const match = document.cookie.match(new RegExp("(^| )csrf_token=([^;]+)"));
     if (match) {
       headers["X-CSRF-Token"] = match[2];
     }
@@ -85,9 +104,16 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: "include",
   });
 
-  if (res.status === 401 && !path.includes("/auth/login")) {
-    localStorage.removeItem("token");
-    // No reloading — let callers handle the 401 via .catch()
+  if (
+    res.status === 401 &&
+    !retried &&
+    !path.includes("/auth/login") &&
+    !path.includes("/auth/refresh")
+  ) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      return http<T>(path, init, true);
+    }
   }
 
   if (!res.ok) {
@@ -175,6 +201,10 @@ export async function login(username: string, password: string) {
 
 export function getCurrentUser() {
   return http<UserOut>("/api/auth/me");
+}
+
+export function refreshSession() {
+  return http<{ access_token: string }>("/api/auth/refresh", { method: "POST" });
 }
 
 export async function uploadMyAvatar(file: File): Promise<{avatar_url: string}> {
@@ -286,10 +316,17 @@ export interface EvidenceOut {
   created_at: string;
 }
 
-export function listTickets(status?: string, severity?: string, limit = 50, offset = 0) {
+export function listTickets(
+  status?: string,
+  severity?: string,
+  limit = 50,
+  offset = 0,
+  activeOnly = false
+) {
   let url = `/api/tickets?limit=${limit}&offset=${offset}`;
-  if (status) url += `&status=${status}`;
-  if (severity) url += `&severity=${severity}`;
+  if (status) url += `&status=${encodeURIComponent(status)}`;
+  if (severity) url += `&severity=${encodeURIComponent(severity)}`;
+  if (activeOnly) url += `&active_only=true`;
   return http<TicketOut[]>(url);
 }
 
@@ -361,12 +398,7 @@ export function getWazuhServices() {
   return http<any>("/api/wazuh/services");
 }
 
-// VirusTotal — clave por operador (servidor) o localStorage como respaldo
-function vtHeaders(): Record<string, string> | undefined {
-  const key = localStorage.getItem("vt_api_key");
-  return key ? { "X-VT-API-Key": key } : undefined;
-}
-
+// VirusTotal — clave almacenada cifrada en el servidor por operador
 export function getVtKeyStatus() {
   return http<{ configured: boolean }>("/api/users/me/vt-api-key");
 }
@@ -383,15 +415,15 @@ export function deleteMyVtApiKey() {
 }
 
 export function vtCheckIp(ip: string) {
-  return http<any>(`/api/virustotal/ip/${ip}`, { headers: vtHeaders() });
+  return http<any>(`/api/virustotal/ip/${ip}`);
 }
 
 export function vtCheckHash(hash: string) {
-  return http<any>(`/api/virustotal/hash/${hash}`, { headers: vtHeaders() });
+  return http<any>(`/api/virustotal/hash/${hash}`);
 }
 
 export function vtCheckDomain(domain: string) {
-  return http<any>(`/api/virustotal/domain/${domain}`, { headers: vtHeaders() });
+  return http<any>(`/api/virustotal/domain/${domain}`);
 }
 
 // Ollama Status

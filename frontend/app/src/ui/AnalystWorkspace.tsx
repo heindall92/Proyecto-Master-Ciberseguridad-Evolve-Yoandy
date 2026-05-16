@@ -134,15 +134,9 @@ export default function AnalystWorkspace({
 
       // Llamadas independientes - si una falla, las demás continúan
       try {
-        const allTickets = await listTickets();
-        // Filtrado multi-sesión: 
-        // Los analistas solo ven sus propios tickets. Los admins ven todo.
-        if (currentUser.role === 'admin') {
-          ticketsData = allTickets;
-        } else {
-          ticketsData = allTickets.filter(t => t.assigned_to_id === currentUser.id);
-        }
-        logger.log('[Workspace] Tickets filtered for session:', ticketsData.length);
+        const allTickets = await listTickets(undefined, undefined, 500, 0, false);
+        ticketsData = allTickets;
+        logger.log('[Workspace] Tickets loaded:', ticketsData.length);
       } catch(e) {
         logger.error('[Workspace] Error loading tickets:', e);
       }

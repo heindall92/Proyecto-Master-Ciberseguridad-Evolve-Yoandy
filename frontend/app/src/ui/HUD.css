@@ -889,34 +889,268 @@ body[data-theme="light"] .view {
 
 
 
-/* ======== CYBER LOGIN PANEL ======== */
+/* ======== LOGIN — foto de fondo oficial: /bg-login.png (copia en app/public; origen raíz repo) ======== */
+.login-screen {
+  --login-brand-text: #fff;
+  --login-pro-muted: rgba(255, 255, 255, 0.55);
+  --login-tagline: var(--text-dim);
+  --login-welcome: #fff;
+  --login-label: rgba(255, 255, 255, 0.78);
+  --login-input-bg: rgba(0, 0, 0, 0.32);
+  --login-input-border: rgba(255, 255, 255, 0.18);
+  --login-input-fg: #fff;
+  --login-input-placeholder: rgba(255, 255, 255, 0.45);
+  --login-footer-muted: rgba(255, 255, 255, 0.52);
+  --login-panel-icon-bg: linear-gradient(145deg, color-mix(in srgb, var(--signal) 15%, transparent), rgba(0, 0, 0, 0.4));
+  --login-panel-icon-border: color-mix(in srgb, var(--signal) 40%, transparent);
+  --login-panel-icon-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 0 12px color-mix(in srgb, var(--signal) 10%, transparent);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: var(--bg-void);
+  /* Capas encima de la foto: no sustituir bg-login.png */
+  background-image:
+    radial-gradient(ellipse 110% 75% at 50% 125%, color-mix(in srgb, var(--signal) 42%, transparent) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 45% at 12% 28%, color-mix(in srgb, var(--signal) 22%, transparent) 0%, transparent 48%),
+    radial-gradient(ellipse 45% 38% at 92% 22%, color-mix(in srgb, var(--signal) 18%, transparent) 0%, transparent 42%),
+    linear-gradient(168deg, rgba(0, 0, 0, 0.5) 0%, transparent 42%, rgba(0, 0, 0, 0.6) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 220' preserveAspectRatio='none'%3E%3Cpath fill='%23000' fill-opacity='0.4' d='M0 140 L120 95 L220 125 L340 75 L460 115 L600 55 L740 105 L860 70 L980 120 L1100 85 L1200 100 L1200 220 L0 220Z'/%3E%3Cpath fill='%23000' fill-opacity='0.22' d='M0 175 L200 140 L350 130 L520 155 L720 120 L920 150 L1200 125 L1200 220 L0 220Z'/%3E%3C/svg%3E"),
+    url('/bg-login.png');
+  background-size: auto, auto, auto, auto, 100% min(38vh, 260px), cover;
+  background-position: center, center, center, center, center bottom, center;
+  background-repeat: no-repeat;
+}
+
+/* Silueta SVG retirada: el fondo del login es solo bg-login.png + overlays suaves */
+.login-screen::before {
+  display: none;
+}
+
+/* Aurora / bruma ligera encima del fondo (sin figura extra) */
+.login-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 55% 40% at 72% 8%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 60%),
+    radial-gradient(ellipse 40% 35% at 18% 18%, color-mix(in srgb, var(--signal) 10%, transparent), transparent 55%);
+  mix-blend-mode: screen;
+}
+
+.login-screen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.login-layout {
+  display: flex;
+  height: 100%;
+}
+
+.login-hero-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 60px;
+}
+
+.login-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.login-logo-tile {
+  width: 64px;
+  height: 64px;
+  background: var(--signal);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 20px var(--signal-glow);
+}
+
+.login-brand-words {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.login-brand-sub {
+  display: flex;
+  gap: 15px;
+}
+
+.login-tagline {
+  margin: 10px 0 0 5px;
+  font-size: 13px;
+  color: var(--login-tagline);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-family: var(--mono);
+}
+
+.login-form-col {
+  width: 450px;
+  display: flex;
+  align-items: center;
+  margin-right: 200px;
+}
+
+.login-panel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.login-panel-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  border: 1px solid var(--login-panel-icon-border);
+  display: grid;
+  place-items: center;
+  background: var(--login-panel-icon-bg);
+  box-shadow: var(--login-panel-icon-shadow);
+}
+
+.login-welcome {
+  margin: 0;
+  font-size: 22px;
+  font-family: var(--sans);
+  font-weight: 500;
+  color: var(--login-welcome);
+  letter-spacing: 0.5px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-label {
+  font-size: 12px;
+  color: var(--login-label);
+  font-family: var(--sans);
+}
+
+.login-input {
+  background: var(--login-input-bg);
+  border: 1px solid var(--login-input-border);
+  color: var(--login-input-fg);
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-family: var(--sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.login-input::placeholder {
+  color: var(--login-input-placeholder);
+}
+
+.login-input:focus {
+  border-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.2),
+    0 0 0 2px var(--signal-glow);
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--login-footer-muted);
+  font-family: var(--sans);
+}
+
+.login-manual-link {
+  color: var(--signal);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-manual-link:hover {
+  text-decoration: underline;
+}
+
+.login-lang-wrap {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.login-lang-btn {
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal) 32%, transparent);
+  color: var(--signal);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.login-lang-btn:hover {
+  background: color-mix(in srgb, var(--signal) 18%, transparent);
+}
+
+/* ======== CYBER LOGIN PANEL (cristal: refleja el fondo y el color del esquema) ======== */
 .cyber-panel-wrap {
   width: 100%;
-  filter: drop-shadow(0 30px 60px rgba(0,0,0,0.9)) drop-shadow(0 0 2px rgba(60,255,158,0.4));
+  /* Sin filter en el padre: si no, backdrop-filter del hijo no “ve” el fondo vikingo */
 }
 
 .cyber-panel {
   width: 100%;
   padding: 60px 40px;
-  background: linear-gradient(135deg, rgba(8, 22, 16, 0.85), rgba(0, 0, 0, 0.65));
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--bg-panel-deep) 38%, transparent),
+    color-mix(in srgb, var(--signal) 10%, rgba(0, 0, 0, 0.42))
+  );
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, transparent);
+  box-shadow:
+    0 28px 56px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--signal) 14%, transparent) inset,
+    0 0 40px color-mix(in srgb, var(--signal) 16%, transparent);
   clip-path: polygon(
-    0% 0%, 
-    80% 0%, 100% 15%, 
-    100% 100%, 
-    25% 100%, 0% 82%, 
+    0% 0%,
+    80% 0%, 100% 15%,
+    100% 100%,
+    25% 100%, 0% 82%,
     0% 55%, 5% 50%, 5% 40%, 0% 35%
   );
   display: flex;
   flex-direction: column;
 }
 
-/* Fix para Firefox: El bug de Gecko oculta elementos con backdrop-filter si el padre tiene drop-shadow */
 @-moz-document url-prefix() {
   .cyber-panel {
     backdrop-filter: none;
-    background: linear-gradient(135deg, rgba(8, 22, 16, 0.98), rgba(0, 0, 0, 0.9));
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--bg-panel-deep) 72%, transparent),
+      color-mix(in srgb, var(--signal) 18%, rgba(0, 0, 0, 0.7))
+    );
   }
 }
 

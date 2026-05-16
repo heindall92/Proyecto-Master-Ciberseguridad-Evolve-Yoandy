@@ -11,13 +11,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
     # ── Core ──────────────────────────────────────────────────────────────────
-    database_url: str
+    database_url: str = "postgresql+psycopg://valhalla:valhalla@postgres:5432/valhalla"
     cors_origins: str = "http://localhost:3000"
     env: str = "development"
     log_level: str = "INFO"
@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     # ── Auth / JWT (NO default for secret_key in production) ─────────────────
     secret_key: str = "DEV-ONLY-valhalla-insecure-key-replace-in-prod"  # DEV ONLY
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 480
+    access_token_expire_minutes: int = 120
+    refresh_token_expire_minutes: int = 10080  # 7 días
+    admin_password: str = ""  # Obligatorio para crear usuario admin en primer arranque
+    webhook_secret: str = ""  # Token compartido con integración Wazuh (header X-Valhalla-Webhook-Token)
 
     # ── Wazuh Manager API ────────────────────────────────────────────────────
     wazuh_api: str = "https://wazuh.manager:55000"
@@ -36,6 +39,9 @@ class Settings(BaseSettings):
     opensearch_url: str = "https://wazuh.indexer:9200"
     opensearch_user: str = "admin"
     opensearch_pass: str = "admin"  # DEV ONLY
+    # TLS: false en dev (certificados autofirmados Wazuh); true + TLS_CA_BUNDLE en prod
+    tls_verify_ssl: bool = False
+    tls_ca_bundle: str = ""
 
     # ── Ollama (local AI) ────────────────────────────────────────────────────
     ollama_base_url: str = "http://ollama:11434"
@@ -59,9 +65,14 @@ class Settings(BaseSettings):
     geo_cache_ttl_days: int = 30
 
     # ── Session / Cookie security ────────────────────────────────────────────
-    session_cookie_secure: bool = True
-    session_cookie_samesite: str = "strict"
+    # False por defecto: http://localhost sin TLS. En prod: SESSION_COOKIE_SECURE=true
+    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
     csrf_enabled: bool = True
+
+    # Tickets desde Wazuh: desactivado por defecto (instalación limpia; activar en .env si se desea)
+    auto_sync_wazuh_tickets: bool = False
+    auto_create_webhook_tickets: bool = False
 
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -69,18 +80,38 @@ class Settings(BaseSettings):
 
 def _validate_production_secrets(s: Settings) -> None:
     """Fail fast if critical secrets are missing in production."""
-    if s.env.lower() == "production":
-        critical = {
-            "secret_key": s.secret_key,
-            "database_url": s.database_url,
-        }
-        for name, value in critical.items():
-            if not value or "DEV-ONLY" in value or "change-me" in value.lower():
-                raise RuntimeError(
-                    f"CRITICAL: '{name}' is not set or uses a dev-only default. "
-                    f"Set it in .env before running in production."
-                )
+    if s.env.lower() != "production":
+        return
+
+    weak_markers = ("dev-only", "change-me", "replace-in-prod", "valhalla:valhalla@")
+
+    def _reject(name: str, value: str, *, min_len: int = 16) -> None:
+        v = (value or "").strip()
+        low = v.lower()
+        if not v or len(v) < min_len or any(m in low for m in weak_markers):
+            raise RuntimeError(
+                f"CRITICAL: '{name}' is missing, too short (<{min_len}), or uses a dev default. "
+                "Set strong values in .env before ENV=production."
+            )
+
+    _reject("secret_key", s.secret_key, min_len=32)
+    _reject("webhook_secret", s.webhook_secret, min_len=24)
+    _reject("database_url", s.database_url, min_len=20)
+
+    if "valhalla:valhalla@" in s.database_url.lower():
+        raise RuntimeError(
+            "CRITICAL: DATABASE_URL must not use default postgres credentials in production."
+        )
+
+    if not s.session_cookie_secure:
+        raise RuntimeError(
+            "CRITICAL: SESSION_COOKIE_SECURE must be true when ENV=production."
+        )
 
 
 settings = Settings()  # type: ignore[call-arg]
+
+if settings.env.lower() == "production" and not settings.session_cookie_secure:
+    settings.session_cookie_secure = True
+
 _validate_production_secrets(settings)

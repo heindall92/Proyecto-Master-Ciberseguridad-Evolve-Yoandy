@@ -4,8 +4,11 @@ import { Provider } from "react-redux";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { store } from "./store";
+import { ensureFreshClientStorage } from "./lib/clientStorage";
 import AppCore from "./ui/AppCore";
 import ExecutiveReport from "./ui/ExecutiveReport";
+
+ensureFreshClientStorage();
 
 const theme = createTheme({
   palette: { mode: "dark" },

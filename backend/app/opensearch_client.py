@@ -6,24 +6,69 @@ event types, Cowrie timeline, and alert volume over time.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 
 from app.settings import settings
+from app.http_tls import httpx_verify
 
 logger = logging.getLogger("valhalla.opensearch")
 
 INDEX = "wazuh-alerts-*"
 COWRIE_INDEX = "wazuh-alerts-*"
 
+_COWRIE_IP_IN_DESC = re.compile(r"from (\d{1,3}(?:\.\d{1,3}){3})")
+
+
+def _cowrie_query_clause() -> dict[str, Any]:
+    """Filtro fiable para alertas Cowrie en Wazuh Indexer."""
+    return {
+        "bool": {
+            "should": [
+                {"term": {"rule.groups": "cowrie"}},
+                {"wildcard": {"rule.description": "Cowrie:*"}},
+                {"term": {"data.log_type": "cowrie"}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def _cowrie_src_ip(data: dict[str, Any], rule_desc: str = "") -> str:
+    ip = (data.get("src_ip") or data.get("srcip") or "").strip()
+    if ip:
+        return ip
+    if rule_desc:
+        m = _COWRIE_IP_IN_DESC.search(rule_desc)
+        if m:
+            return m.group(1)
+    return "unknown"
+
+
+def _cowrie_session_id(data: dict[str, Any]) -> str:
+    return str(data.get("session") or data.get("session_id") or "unknown")
+
+
+def _cowrie_command_text(data: dict[str, Any], rule_desc: str = "") -> str:
+    cmd = (data.get("input") or data.get("command") or "").strip()
+    if cmd:
+        return cmd
+    if data.get("username"):
+        pwd = data.get("password", "***")
+        return f"login attempt: {data.get('username')}/{pwd}"
+    if rule_desc:
+        return rule_desc
+    return "session event"
+
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=settings.opensearch_url,
         auth=(settings.opensearch_user, settings.opensearch_pass),
-        verify=False,
+        verify=httpx_verify(),
         timeout=15.0,
     )
 
@@ -170,11 +215,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"bool": {"should": [
-                        {"match": {"rule.groups": "cowrie"}},
-                        {"match": {"decoder.name": "cowrie"}},
-                        {"match": {"data.program": "cowrie"}},
-                    ]}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
@@ -191,7 +232,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
                 }
             },
             "total_events": {"value_count": {"field": "@timestamp"}},
-            "unique_ips": {"cardinality": {"field": "data.srcip"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
             "event_types": {"terms": {"field": "rule.description", "size": 10}}
         }
     }
@@ -217,16 +258,14 @@ async def get_cowrie_stats(hours: int = 24) -> dict:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"bool": {"should": [
-                        {"match": {"rule.groups": "cowrie"}},
-                        {"match": {"decoder.name": "cowrie"}},
-                    ]}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
         "aggs": {
             "total": {"value_count": {"field": "@timestamp"}},
-            "unique_ips": {"cardinality": {"field": "data.srcip"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
+            "unique_ips_legacy": {"cardinality": {"field": "data.srcip"}},
             "event_types": {"terms": {"field": "rule.description", "size": 10}}
         }
     }
@@ -236,9 +275,13 @@ async def get_cowrie_stats(hours: int = 24) -> dict:
         {"type": b["key"], "count": b["doc_count"]}
         for b in aggs.get("event_types", {}).get("buckets", [])
     ]
+    uniq = max(
+        aggs.get("unique_ips", {}).get("value", 0) or 0,
+        aggs.get("unique_ips_legacy", {}).get("value", 0) or 0,
+    )
     return {
         "total": aggs.get("total", {}).get("value", 0),
-        "unique_ips": aggs.get("unique_ips", {}).get("value", 0),
+        "unique_ips": uniq,
         "event_types": types,
     }
 
@@ -348,16 +391,13 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"bool": {"should": [
-                        {"match": {"rule.groups": "cowrie"}},
-                        {"match": {"decoder.name": "cowrie"}},
-                    ]}},
+                    _cowrie_query_clause(),
                 ]
             }
         },
         "_source": [
-            "@timestamp", "data.srcip", "data.session", "data.input",
-            "data.username", "data.password", "rule.description",
+            "@timestamp", "data.src_ip", "data.srcip", "data.session", "data.input",
+            "data.username", "data.password", "data.eventid", "rule.description",
             "data.geoip.country_code2",
         ]
     }
@@ -368,17 +408,13 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
         src = h.get("_source", {})
         data = src.get("data", {})
         rule_desc = src.get("rule", {}).get("description", "")
-        cmd = data.get("input") or ""
-        if not cmd and data.get("username"):
-            cmd = f"login attempt: {data.get('username')}/{data.get('password', '***')}"
-        if not cmd:
-            cmd = rule_desc or "session event"
         result.append({
             "timestamp": src.get("@timestamp", ""),
-            "ip": data.get("srcip", "unknown"),
+            "ip": _cowrie_src_ip(data, rule_desc),
             "geo": data.get("geoip", {}).get("country_code2", "XX"),
-            "session": data.get("session", "unknown"),
-            "command": cmd,
+            "session": _cowrie_session_id(data),
+            "command": _cowrie_command_text(data, rule_desc),
+            "eventid": data.get("eventid", ""),
         })
     return result
 
@@ -458,12 +494,12 @@ async def get_honeypot_stats(hours: int = 24) -> dict:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"match": {"rule.groups": "cowrie"}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
         "aggs": {
-            "unique_ips": {"cardinality": {"field": "data.srcip.keyword"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
             "top_passwords": {
                 "terms": {"field": "data.password.keyword", "size": 5}
             }
@@ -486,7 +522,10 @@ async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"match": {"data.srcip": ip}}
+                    {"bool": {"should": [
+                        {"term": {"data.src_ip.keyword": ip}},
+                        {"term": {"data.srcip.keyword": ip}},
+                    ], "minimum_should_match": 1}}
                 ]
             }
         },

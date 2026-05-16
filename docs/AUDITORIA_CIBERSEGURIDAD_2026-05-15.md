@@ -3,7 +3,7 @@
 **Fecha:** 2026-05-15  
 **Alcance:** Backend FastAPI, frontend React/TypeScript, Docker Compose, nginx, integraciones Wazuh / Cowrie / OpenSearch / Ollama  
 **Metodología:** Revisión estática de código, configuración de despliegue, modelo de amenazas (OWASP API Security Top 10, ASVS v4)  
-**Estado del código auditado:** Rama `fix/dashboard-soc-cierre` (pre-remediación de hallazgos críticos)
+**Estado del código auditado:** Rama `fix/dashboard-soc-cierre` — **Fases 1–3 cerradas (2026-05-16)**
 
 ---
 
@@ -182,43 +182,80 @@ Internet → Gateway :8443 (recomendado único punto de entrada prod)
 
 ## 9. Plan de remediación priorizado
 
-### Fase 1 — 24–48 h (bloqueantes producción)
+**Resumen de fases:** hay **3 fases** de remediación en este informe. **Las 3 están cerradas** (2026-05-16).
 
-1. Eliminar contraseña admin hardcodeada.
-2. Autenticar: LSA, webhook, WebSocket, avatares, informe ejecutivo.
-3. Desactivar `loginOffline` en builds de producción.
-4. Rotar secretos; cerrar puertos 9200/5432 al exterior.
-5. Registrar rate limit global + brute-force en login.
+| Fase | Plazo orientativo | Estado | Ítems |
+|------|-------------------|--------|-------|
+| **Fase 1** | 24–48 h | ✅ **Cerrada** | 5/5 |
+| **Fase 2** | ~1 semana | ✅ **Cerrada** | 5/5 |
+| **Fase 3** | 2–4 semanas | ✅ **Cerrada** | 5/5 |
 
-### Fase 2 — 1 semana
+### Fase 1 — 24–48 h (bloqueantes producción) ✅
 
-6. Corregir IDOR en tickets, chat, usuarios.
-7. Pydantic estricto en endpoints con `dict`.
-8. Eliminar JWT y VT de localStorage.
-9. TLS con verificación de certificados.
-10. Webhook con HMAC.
+| # | Acción | Estado |
+|---|--------|--------|
+| 1 | Eliminar contraseña admin hardcodeada; `ADMIN_PASSWORD` en `.env` | ✅ |
+| 2 | Autenticar LSA, webhook (token), WebSocket, avatares, informe ejecutivo | ✅ |
+| 3 | Desactivar `loginOffline` salvo `DEV` + `VITE_ALLOW_OFFLINE_DEMO=true` | ✅ |
+| 4 | Asistente `scripts/setup_env.py`; puertos 5432/9200 no expuestos por defecto | ✅ |
+| 5 | Rate limit global + `check_user_blocked` en login | ✅ |
 
-### Fase 3 — 2–4 semanas
+### Fase 2 — 1 semana ✅
 
-11. JWT corto + refresh + revocación.
-12. CSP sin unsafe-inline; DOMPurify donde aplique.
-13. Suite de tests de seguridad automatizados.
-14. `pip-audit` / `npm audit` en CI.
-15. Deshabilitar `/docs` en producción.
+| # | Acción | Estado |
+|---|--------|--------|
+| 6 | IDOR tickets, chat, usuarios (`_tickets_assignee_filter`, `_require_chat_access`, `list_users` admin) | ✅ |
+| 7 | Pydantic estricto tickets, IOC, chat, ajustes IA (`TicketCreate`, `IocCreate`, etc.) | ✅ |
+| 8 | JWT y VT fuera de localStorage (cookie httpOnly; VT solo en servidor) | ✅ |
+| 9 | TLS configurable (`TLS_VERIFY_SSL`, `TLS_CA_BUNDLE`, `http_tls.py`) | ✅ |
+| 10 | Webhook HMAC-SHA256 + token (`X-Valhalla-Signature`) | ✅ |
+
+### Fase 3 — 2–4 semanas ✅
+
+| # | Acción | Estado |
+|---|--------|--------|
+| 11 | JWT access 120 min + refresh 7 días + denylist `revoked_tokens` + `/api/auth/refresh` | ✅ |
+| 12 | CSP nginx sin `unsafe-inline`; `sanitize.ts` + DOMPurify en chat | ✅ |
+| 13 | Tests ampliados (refresh, logout revoca, jti) — 12 tests | ✅ |
+| 14 | CI `.github/workflows/security.yml` (`pip-audit`, `npm audit`, pytest) | ✅ |
+| 15 | `/docs` deshabilitado con `ENV=production` | ✅ |
 
 ---
 
-## 10. Conclusión
+## 10. Onboarding — configuración inicial documentada
 
-Valhalla SOC muestra **madurez parcial** en logging, CSRF y gestión de evidencias, pero presenta **brechas críticas** en autorización de APIs de integración (LSA, webhook, WebSocket), credenciales por defecto y modelo de confianza del frontend (modo offline). La remediación de la Fase 1 es **prerrequisito** para cualquier exposición en entorno real o demostración académica con datos sensibles.
+Para facilitar el uso tras clonar el repositorio **sin depender del mantenedor**:
+
+| Recurso | Descripción |
+|---------|-------------|
+| [`docs/INSTALACION_PRIMERA_VEZ.md`](INSTALACION_PRIMERA_VEZ.md) | Guía paso a paso (secretos, Docker, login, Wazuh) |
+| [`README.md`](../README.md) § Guía de Puesta en Marcha | Inicio rápido con enlace al asistente |
+| `scripts/setup_env.py` | Genera `.env` con `SECRET_KEY`, `WEBHOOK_SECRET`, `ADMIN_PASSWORD` |
+| `setup.bat` / `Valhalla-Runner.bat` | Windows: setup automático antes del arranque |
+| `make setup` / `make docker-up` | Linux/Mac: mismo flujo vía Makefile |
+
+Variables críticas generadas en el primer arranque:
+
+- `SECRET_KEY` — firma JWT y sesión  
+- `WEBHOOK_SECRET` — integración Wazuh (`custom-valhalla.py`)  
+- `ADMIN_PASSWORD` — usuario `admin` del SOC  
+
+Copia de respaldo local: `.env.setup-backup` (en `.gitignore`).
 
 ---
 
-## 11. Referencias
+## 11. Conclusión
+
+Valhalla SOC muestra **madurez parcial** en logging, CSRF y gestión de evidencias. Las **tres fases** del plan están aplicadas: integraciones autenticadas, onboarding automatizado, Pydantic/TLS/HMAC, JWT con refresh y revocación, CSP endurecida, DOMPurify y CI de auditoría. Para **producción en Internet** siguen siendo obligatorios: `ENV=production`, TLS real, rotación de credenciales de infraestructura y revisión periódica de hallazgos `pip-audit` / `npm audit`.
+
+---
+
+## 12. Referencias
 
 - [OWASP API Security Top 10](https://owasp.org/API-Security/)
 - [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/)
 - Auditoría técnica previa: `docs/AUDITORIA_2026-04-19.md`
+- Instalación primera vez: `docs/INSTALACION_PRIMERA_VEZ.md`
 - Variables de entorno: `.env.example`
 
 ---

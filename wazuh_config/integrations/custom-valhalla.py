@@ -14,13 +14,17 @@ The alert_file contains the full JSON alert from Wazuh.
 
 import sys
 import json
+import hmac
+import hashlib
 import requests
 import os
 from datetime import datetime
 
-# Read arguments from Wazuh
+# Read arguments from Wazuh (api_key from integration XML or WEBHOOK_SECRET en el manager)
 alert_file = sys.argv[1]
-api_key = sys.argv[2] if len(sys.argv) > 2 else ""
+api_key = (sys.argv[2] if len(sys.argv) > 2 else "").strip()
+if not api_key:
+    api_key = os.environ.get("WEBHOOK_SECRET", "").strip()
 hook_url = sys.argv[3] if len(sys.argv) > 3 else "http://backend:8000/api/webhook/wazuh"
 
 # Log file for debugging
@@ -48,13 +52,24 @@ def main():
     # The alert_data is already in Wazuh format — send it directly
     # Our backend expects this exact format
     try:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Wazuh-Integration": "valhalla-soc",
+        }
+        if api_key:
+            headers["X-Valhalla-Webhook-Token"] = api_key
+            body = json.dumps(alert_data, separators=(",", ":")).encode("utf-8")
+            headers["X-Valhalla-Signature"] = hmac.new(
+                api_key.encode("utf-8"), body, hashlib.sha256
+            ).hexdigest()
+        else:
+            log("WARNING: WEBHOOK_SECRET / api_key vacío — el backend rechazará el webhook")
+            body = json.dumps(alert_data).encode("utf-8")
+
         response = requests.post(
             hook_url,
-            json=alert_data,
-            headers={
-                "Content-Type": "application/json",
-                "X-Wazuh-Integration": "valhalla-soc",
-            },
+            data=body,
+            headers=headers,
             timeout=10,
         )
 

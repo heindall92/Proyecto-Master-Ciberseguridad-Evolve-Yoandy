@@ -1,5 +1,6 @@
 import httpx
 from app.settings import settings
+from app.http_tls import httpx_verify
 
 class WazuhClient:
     def __init__(self):
@@ -9,7 +10,7 @@ class WazuhClient:
         self.token = None
 
     async def _get_token(self):
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=httpx_verify()) as client:
             r = await client.get(f"{self.base_url}/security/user/authenticate", auth=(self.user, self.pwd))
             if r.status_code == 200:
                 self.token = r.json().get("data", {}).get("token")
@@ -23,7 +24,7 @@ class WazuhClient:
         headers["Authorization"] = f"Bearer {self.token}"
         kwargs["headers"] = headers
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=httpx_verify()) as client:
             r = await client.request(method, f"{self.base_url}{path}", **kwargs)
             if r.status_code == 401: # Token expired?
                 await self._get_token()

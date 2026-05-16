@@ -26,7 +26,76 @@ body[data-theme="light"] {
   --bg-glass: rgba(255, 255, 255, 0.95);
 }
 
-/* Esquemas cromáticos en modo claro (multitema) */
+/* Login — modo claro: horizonte y aurora visibles (no pantalla plana) */
+body[data-theme="light"] .login-screen {
+  --login-brand-text: var(--text-bright);
+  --login-pro-muted: var(--text-dim);
+  --login-tagline: var(--text-dim);
+  --login-welcome: var(--text-bright);
+  --login-label: var(--text-dim);
+  --login-input-bg: #ffffff;
+  --login-input-border: var(--line-strong);
+  --login-input-fg: var(--text-bright);
+  --login-input-placeholder: var(--text-faint);
+  --login-footer-muted: var(--text-dim);
+  --login-panel-icon-bg: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--signal) 14%, #fff),
+    color-mix(in srgb, var(--signal) 5%, var(--bg-panel-2))
+  );
+  --login-panel-icon-border: color-mix(in srgb, var(--signal) 38%, transparent);
+  --login-panel-icon-shadow:
+    0 8px 24px rgba(27, 67, 50, 0.1),
+    inset 0 0 12px color-mix(in srgb, var(--signal) 8%, transparent);
+
+  background-color: #d4e0d8;
+  background-image:
+    radial-gradient(ellipse 105% 72% at 50% 120%, color-mix(in srgb, var(--signal) 38%, transparent) 0%, transparent 52%),
+    radial-gradient(ellipse 52% 42% at 14% 26%, color-mix(in srgb, var(--signal) 22%, transparent) 0%, transparent 46%),
+    radial-gradient(ellipse 42% 36% at 91% 21%, color-mix(in srgb, var(--signal) 16%, transparent) 0%, transparent 40%),
+    linear-gradient(172deg, rgba(255, 255, 255, 0.65) 0%, transparent 48%, color-mix(in srgb, var(--signal) 12%, rgba(255, 255, 255, 0.85)) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 220' preserveAspectRatio='none'%3E%3Cpath fill='%231b4332' fill-opacity='0.18' d='M0 140 L120 95 L220 125 L340 75 L460 115 L600 55 L740 105 L860 70 L980 120 L1100 85 L1200 100 L1200 220 L0 220Z'/%3E%3Cpath fill='%231b4332' fill-opacity='0.1' d='M0 175 L200 140 L350 130 L520 155 L720 120 L920 150 L1200 125 L1200 220 L0 220Z'/%3E%3C/svg%3E"),
+    url('/bg-login.png');
+  background-size: auto, auto, auto, auto, 100% min(38vh, 260px), cover;
+  background-position: center, center, center, center, center bottom, center;
+  background-repeat: no-repeat;
+}
+
+body[data-theme="light"] .login-screen::after {
+  mix-blend-mode: soft-light;
+  opacity: 0.85;
+}
+
+/* Botón entrar: en claro evitar texto blanco sobre fondo pastél */
+body[data-theme="light"] .login-screen .login-btn {
+  color: var(--forest);
+}
+body[data-theme="light"] .login-screen .login-btn::before {
+  background: var(--signal-deep);
+  border-color: color-mix(in srgb, var(--forest) 42%, transparent);
+}
+body[data-theme="light"] .login-screen .login-btn:hover {
+  color: var(--on-forest);
+}
+body[data-theme="light"] .login-screen .login-btn:hover::before {
+  background: var(--forest);
+  border-color: var(--forest-deep);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.12);
+}
+
+body[data-theme="light"] .cyber-panel {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, #ffffff 55%, transparent),
+    color-mix(in srgb, var(--signal) 8%, rgba(255, 255, 255, 0.35))
+  );
+  border-color: color-mix(in srgb, var(--signal) 35%, transparent);
+  box-shadow:
+    0 20px 48px rgba(27, 67, 50, 0.18),
+    0 0 0 1px color-mix(in srgb, var(--signal) 12%, transparent) inset,
+    0 0 32px color-mix(in srgb, var(--signal) 12%, transparent);
+}
+
 body[data-theme="light"][data-scheme="green"] {
   --forest: #1b4332;
   --forest-mid: #2d6a4f;

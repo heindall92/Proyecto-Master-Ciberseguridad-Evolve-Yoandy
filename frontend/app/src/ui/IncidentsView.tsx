@@ -20,7 +20,7 @@ export default function IncidentsView() {
   const currentUser = useAppSelector((s) => s.auth.user);
 
   useEffect(() => {
-    Promise.all([listTickets(), listUsers()])
+    Promise.all([listTickets(undefined, undefined, 500, 0, false), listUsers()])
       .then(([t, u]) => {
         setTickets(t);
         setUsers(u);
@@ -30,7 +30,7 @@ export default function IncidentsView() {
 
   const handleRefresh = () => {
     setLoading(true);
-    listTickets().then(setTickets).finally(() => setLoading(false));
+    listTickets(undefined, undefined, 500, 0, false).then(setTickets).finally(() => setLoading(false));
   };
 
   const handleScanIOC = async (ip: string) => {

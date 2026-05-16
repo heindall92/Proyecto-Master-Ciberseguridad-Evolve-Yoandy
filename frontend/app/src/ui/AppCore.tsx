@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
+import { sanitizePlainText } from "../lib/sanitize";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
 import "./light-theme-overrides.css";
@@ -226,19 +227,27 @@ export default function App() {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     try {
-      const res = await login(fd.get("u") as string, fd.get("p") as string);
-      dispatch(setToken(res.access_token));
+      await login(fd.get("u") as string, fd.get("p") as string);
+      dispatch(setToken("session"));
+      const u = await getCurrentUser();
+      dispatch(setUser(u));
+      dispatch(setProfilePic((u as { avatar_url?: string }).avatar_url || null));
       setUserMenuOpen(false);
       setNotifMenuOpen(false);
       dispatch(setView("overview"));
     } catch (err: any) {
-      if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
-        dispatch(setIsOffline(true));
-        alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
+      const devDemoOffline =
+        import.meta.env.DEV && import.meta.env.VITE_ALLOW_OFFLINE_DEMO === "true";
+      if (
+        devDemoOffline &&
+        err.message &&
+        (err.message.includes("fetch") || err.message.includes("Network"))
+      ) {
+        alert("DEV: Servidor no alcanzable. Modo offline demo (solo desarrollo).");
         dispatch(loginOffline());
         dispatch(setView("overview"));
       } else {
-        alert("ERROR: Credenciales inválidas.");
+        alert(err.message?.includes("401") ? "ERROR: Credenciales inválidas." : `ERROR: ${err.message || "Login fallido"}`);
       }
     }
   };
@@ -274,17 +283,8 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    if (!token) {
-      dispatch(setLoading(false));
-      return;
-    }
-    if (token === "offline-mode-token") {
+    if (import.meta.env.DEV && token === "offline-mode-token") {
       dispatch(setIsOffline(true));
-      dispatch(setUser({
-        id: 1, username: "admin_offline", email: "admin@valhalla",
-        full_name: "Admin Offline", is_active: true, is_superuser: true,
-        role: "admin", rank: "L3 Blue Team",
-      }));
       dispatch(setLoading(false));
       return;
     }
@@ -292,12 +292,18 @@ export default function App() {
       .then(u => {
         if (isMounted) {
           dispatch(setUser(u));
-          dispatch(setProfilePic((u as any).avatar_url || null));
+          dispatch(setToken("session"));
+          dispatch(setProfilePic((u as { avatar_url?: string }).avatar_url || null));
           dispatch(setLoading(false));
         }
       })
       .catch((err: any) => {
-        if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
+        if (
+          import.meta.env.DEV &&
+          import.meta.env.VITE_ALLOW_OFFLINE_DEMO === "true" &&
+          err.message &&
+          (err.message.includes("fetch") || err.message.includes("Network"))
+        ) {
           dispatch(setIsOffline(true));
           dispatch(setLoading(false));
           return;
@@ -309,7 +315,7 @@ export default function App() {
         }
       });
     return () => { isMounted = false; };
-  }, [token]);
+  }, [token, dispatch]);
 
   useEffect(() => {
     document.body.setAttribute("data-scheme", scheme);
@@ -323,28 +329,23 @@ export default function App() {
       })
       .catch((e) => { logger.error('[Dashboard] Error:', e); });
 
-    listTickets('open', undefined, 10)
-      .then(allOpen => {
-        let filtered = allOpen;
-        if (user?.role !== 'admin') {
-          filtered = allOpen.filter(tk => !tk.assigned_to_id || tk.assigned_to_id === user!.id);
-        }
-
+    listTickets(undefined, undefined, 10, 0, true)
+      .then(activeTickets => {
         const oldIds = new Set(recentOpenTickets.map(t => t.id));
-        const hasNew = filtered.some(t => !oldIds.has(t.id));
+        const hasNew = activeTickets.some(t => !oldIds.has(t.id));
 
         if (hasNew) {
           dispatch(setNotifSeen(false));
           if (recentOpenTickets.length > 0) {
             playNotificationSound();
-            const hasCritical = filtered.some(t => t.severity === 'critical' && !oldIds.has(t.id));
+            const hasCritical = activeTickets.some(t => t.severity === 'critical' && !oldIds.has(t.id));
             if (hasCritical) {
               setTimeout(playNotificationSound, 800);
             }
           }
         }
 
-        dispatch(setRecentOpenTickets(filtered));
+        dispatch(setRecentOpenTickets(activeTickets));
       })
       .catch((e) => logger.error('[Dashboard] Tickets error:', e));
 
@@ -550,7 +551,8 @@ export default function App() {
 
   const renderMsgText = (text: string) => {
     if (!text) return null;
-    const parts = text.split(/(@\w+)/g);
+    const safe = sanitizePlainText(text);
+    const parts = safe.split(/(@\w+)/g);
     return parts.map((p, i) =>
       p.startsWith('@') ? <span key={i} className="mention">{p}</span> : p
     );
@@ -599,54 +601,56 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className={`theme-${scheme} ${scanlines ? 'scanlines' : ''}`} data-scheme={scheme} data-scan={scanlines ? 'on' : 'off'} style={{
-          height: '100vh',
-          background: 'url("./bg-login.png") center/cover no-repeat, var(--bg-void)'
-      }}>
+      <div
+        className={`login-screen theme-${scheme} ${scanlines ? 'scanlines' : ''}`}
+        data-scheme={scheme}
+        data-scan={scanlines ? 'on' : 'off'}
+        style={{ minHeight: '100vh', height: '100vh' }}
+      >
         <SvgSymbols />
-        <div style={{ display: 'flex', height: '100%' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '60px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'var(--signal)', borderRadius: '12px', display: 'grid', placeItems: 'center', boxShadow: '0 0 20px var(--signal-glow)' }}>
+        <div className="login-layout">
+          <div className="login-hero-col">
+            <div className="login-brand-row">
+              <div className="login-logo-tile">
                  <AlexanaLetter char="V" style={{ width: '40px', height: '40px', color: '#000' }} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                 <AlexanaWord word="VALHALLA" height="48px" />
-                 <div style={{ display: 'flex', gap: '15px' }}>
+              <div className="login-brand-words">
+                 <AlexanaWord word="VALHALLA" height="48px" color="var(--login-brand-text)" />
+                 <div className="login-brand-sub">
                     <AlexanaWord word="SOC" height="24px" color="var(--signal)" />
-                    <AlexanaWord word="PRO" height="24px" color="rgba(255,255,255,0.5)" />
+                    <AlexanaWord word="PRO" height="24px" color="var(--login-pro-muted)" />
                  </div>
               </div>
             </div>
-            <p style={{ margin: '10px 0 0 5px', fontSize: '13px', color: 'var(--text-dim)', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'var(--mono)' }}>
+            <p className="login-tagline">
               {lang === 'es' ? 'Plataforma de Monitorización y' : 'Platform for Monitoring and'}<br/>
               {lang === 'es' ? 'Respuesta Táctica con IA' : 'Tactical AI Response'}
             </p>
           </div>
-          <div style={{ width: '450px', display: 'flex', alignItems: 'center', marginRight: '200px' }}>
+          <div className="login-form-col">
             <div className="cyber-panel-wrap">
               <div className="cyber-panel">
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-                 <div style={{ width: '72px', height: '72px', borderRadius: '18px', border: '1px solid rgba(60,255,158,0.4)', display: 'grid', placeItems: 'center', background: 'linear-gradient(145deg, rgba(60,255,158,0.15), rgba(0,0,0,0.4))', boxShadow: '0 8px 24px rgba(0,0,0,0.4), inset 0 0 12px rgba(60,255,158,0.1)' }}>
+              <div className="login-panel-head">
+                 <div className="login-panel-icon">
                     <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
-                 <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>{t('welcome')}</h2>
+                 <h2 className="login-welcome">{t('welcome')}</h2>
               </div>
-              <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('user_id')}</label>
-                   <input name="u" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} autoFocus />
+              <form className="login-form" onSubmit={onLogin}>
+                 <div className="login-field">
+                   <label className="login-label" htmlFor="login-user">{t('user_id')}</label>
+                   <input id="login-user" name="u" className="login-input" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" autoFocus />
                  </div>
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('password')}</label>
-                   <input name="p" type="password" placeholder="••••••••" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} />
+                 <div className="login-field">
+                   <label className="login-label" htmlFor="login-pass">{t('password')}</label>
+                   <input id="login-pass" name="p" className="login-input" type="password" placeholder="••••••••" />
                  </div>
                  <button type="submit" className="login-btn">{t('login_btn')}</button>
-                 <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--sans)' }}>
-                     <a href="/MANUAL.md" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--signal)', textDecoration: 'none', fontWeight: 500 }}>{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
+                 <div className="login-footer">
+                     <a className="login-manual-link" href="/MANUAL.md" target="_blank" rel="noopener noreferrer">{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
                   </div>
-                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
-                    <button type="button" onClick={toggleLang} style={{ background: 'rgba(60,255,158,0.1)', border: '1px solid rgba(60,255,158,0.3)', color: 'var(--signal)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}>
+                 <div className="login-lang-wrap">
+                    <button type="button" className="login-lang-btn" onClick={toggleLang}>
                        {lang === 'es' ? 'CAMBIAR A INGLÉS' : 'CHANGE TO SPANISH'}
                     </button>
                  </div>
