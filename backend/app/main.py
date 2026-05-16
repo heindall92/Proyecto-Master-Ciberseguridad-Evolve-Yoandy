@@ -1,20 +1,23 @@
 from __future__ import annotations
+
 import os
 import time
 import asyncio
 import logging
 import shutil
 import re as _re
+import hmac
+import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import json
 import secrets
 from starlette.middleware.base import BaseHTTPMiddleware
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -24,7 +27,25 @@ from slowapi.errors import RateLimitExceeded
 from app.db import get_db, engine, SessionLocal
 from app.models import *
 from app.schemas import *
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, require_role
+from app.auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token_with_meta,
+    create_refresh_token_with_meta,
+    get_current_user,
+    get_current_user_optional,
+    require_role,
+    require_admin,
+    get_user_from_token,
+    decode_token_payload,
+    validate_access_token,
+    revoke_tokens_from_request,
+    revoke_token_jti,
+    purge_expired_revoked_tokens,
+    set_auth_cookies,
+    TOKEN_TYPE_REFRESH,
+    is_token_revoked,
+)
 from app.settings import settings
 from app.logger import logger
 from app.security import (
@@ -43,6 +64,7 @@ from app.lsa_monitor import router as lsa_router
 from app.health import router as health_router
 from app.threat_map import get_threat_map_data
 from app.runbooks_seed import seed_runbooks_if_empty
+from app.http_tls import httpx_verify
 
 # --- MIDDLEWARES ---
 
@@ -79,25 +101,41 @@ class AuditMiddleware(BaseHTTPMiddleware):
 # --- APP INIT ---
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="Valhalla SOC API", version="2.0.0")
+_docs_url = None if settings.env.lower() == "production" else "/docs"
+_openapi_url = None if settings.env.lower() == "production" else "/openapi.json"
+app = FastAPI(title="Valhalla SOC API", version="2.0.0", docs_url=_docs_url, openapi_url=_openapi_url)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.middleware("http")(rate_limit_middleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(AuditMiddleware)
 
-ALLOWED_ORIGINS = settings.cors_origins.split(",") if hasattr(settings, "cors_origins") else ["http://localhost:3000"]
+_cors_origins = settings.cors_origins_list()
+_cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_cors_headers = ["Content-Type", "Authorization", "X-CSRF-Token", "Accept"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=_cors_methods,
+    allow_headers=_cors_headers,
 )
 
 app.include_router(lsa_router)
 app.include_router(health_router)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    if settings.env.lower() == "production":
+        return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
 
 # --- BACKGROUND TASKS ---
 
@@ -153,7 +191,9 @@ async def _sync_wazuh_alerts_to_tickets(hours: int = 1) -> dict[str, Any]:
 
 
 async def _auto_sync_loop():
-    """Background task: sync Wazuh alerts every 2 minutes."""
+    """Background task: sync Wazuh alerts (solo si AUTO_SYNC_WAZUH_TICKETS=true)."""
+    if not settings.auto_sync_wazuh_tickets:
+        return
     await asyncio.sleep(30)
     while True:
         await _sync_wazuh_alerts_to_tickets(hours=1)
@@ -161,7 +201,7 @@ async def _auto_sync_loop():
 
 
 def _can_access_ticket(user: User, ticket: Ticket) -> bool:
-    if user.role in ("admin", "analyst", "reporter"):
+    if user.role in ("admin", "analyst", "analista", "reporter"):
         return True
     if user.role == "viewer":
         return ticket.assigned_to_id == user.id or ticket.reporter_id == user.id
@@ -171,6 +211,68 @@ def _can_access_ticket(user: User, ticket: Ticket) -> bool:
 def _require_ticket_access(user: User, ticket: Ticket) -> None:
     if not _can_access_ticket(user, ticket):
         raise HTTPException(403, "No tienes permiso para acceder a este ticket")
+
+
+ACTIVE_TICKET_STATUSES = frozenset({"open", "in_progress", "escalated"})
+
+
+def _can_delete_tickets(user: User) -> bool:
+    return user.role.lower() in ("admin", "analyst", "analista")
+
+
+def _tickets_assignee_filter(q, user: User):
+    """Q ya es select(Ticket)... Restringe visibilidad como en workspace."""
+    if user.role == "viewer":
+        return q.where(
+            or_(
+                Ticket.assigned_to_id == user.id,
+                Ticket.reporter_id == user.id,
+            )
+        )
+    if user.role.lower() in ("analista", "analyst"):
+        return q.where(
+            or_(Ticket.assigned_to_id.is_(None), Ticket.assigned_to_id == user.id)
+        )
+    return q
+
+
+def _can_access_chat(user: User, chat_id: str) -> bool:
+    if chat_id == "global":
+        return True
+    if chat_id.startswith("dm:"):
+        parts = chat_id.replace("dm:", "").split("-")
+        try:
+            ids = {int(p) for p in parts if p.isdigit()}
+            return user.id in ids or user.role == "admin"
+        except ValueError:
+            return False
+    return user.role == "admin"
+
+
+def _require_chat_access(user: User, chat_id: str) -> None:
+    if not _can_access_chat(user, chat_id):
+        raise HTTPException(403, "No tienes permiso para acceder a este chat")
+
+
+def _verify_webhook_auth(request: Request, body: bytes) -> None:
+    """Token compartido o firma HMAC-SHA256 del cuerpo (X-Valhalla-Signature)."""
+    if not settings.webhook_secret:
+        logger.error("WEBHOOK_SECRET no configurado — rechazando webhook")
+        raise HTTPException(503, "Webhook no configurado")
+    secret = settings.webhook_secret.encode()
+    token = request.headers.get("X-Valhalla-Webhook-Token") or request.headers.get("X-Wazuh-Integration-Key")
+    if token and secrets.compare_digest(token, settings.webhook_secret):
+        return
+    sig_header = (request.headers.get("X-Valhalla-Signature") or "").strip()
+    if sig_header and body:
+        expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+        provided = sig_header.removeprefix("sha256=").strip()
+        if secrets.compare_digest(provided, expected):
+            return
+    raise HTTPException(401, "Webhook no autorizado")
+
+
+ALLOWED_AVATAR_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def _safe_evidence_filename(raw: str) -> str:
@@ -186,10 +288,26 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
-    # Defaults
+    # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
         if not (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none():
-            db.add(User(username="admin", password_hash=get_password_hash("Valhalla2026!"), role="admin", rank="Commander"))
+            if settings.admin_password:
+                InputValidator.validate_password(settings.admin_password)
+                db.add(User(
+                    username="admin",
+                    password_hash=get_password_hash(settings.admin_password),
+                    role="admin",
+                    rank="Commander",
+                ))
+                logger.info("Usuario admin creado desde ADMIN_PASSWORD")
+            elif settings.env.lower() == "production":
+                raise RuntimeError(
+                    "CRITICAL: No existe usuario admin y ADMIN_PASSWORD vacío con ENV=production."
+                )
+            else:
+                logger.warning(
+                    "Sin usuario admin y ADMIN_PASSWORD vacío — cree un admin con scripts/reset_admin.py"
+                )
         
         if not (await db.execute(select(Monitor))).scalars().first():
             defaults = [
@@ -205,9 +323,11 @@ async def on_startup():
                     severity_floor=sev, rule_id_pattern=pat, enabled=True,
                 ))
         await seed_runbooks_if_empty(db)
+        await purge_expired_revoked_tokens(db)
         await db.commit()
     
-    asyncio.create_task(_auto_sync_loop())
+    if settings.auto_sync_wazuh_tickets:
+        asyncio.create_task(_auto_sync_loop())
     logger.info("Valhalla SOC API Started")
 
 # --- WEBSOCKET CHAT ---
@@ -237,10 +357,25 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.cookies.get("access_token")
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+    async with SessionLocal() as db:
+        try:
+            await validate_access_token(token or "", db)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+        user = await get_user_from_token(token, db)
+        if not user:
+            await websocket.close(code=1008)
+            return
     await manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text() # Keep alive
+            await websocket.receive_text()  # Keep alive
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -258,6 +393,7 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
     # Validate and sanitize
     username = InputValidator.validate_username(req.username)
     InputValidator.validate_password(req.password)
+    check_user_blocked(username)
     
     user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
     
@@ -265,30 +401,61 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
         rate_limiter.record_failed_login(req.username, client_ip)
         raise HTTPException(401, "Credenciales inválidas")
     
-    access_token = create_access_token(data={"sub": user.username})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite=settings.session_cookie_samesite,
-        max_age=settings.access_token_expire_minutes * 60,
-    )
+    rate_limiter.record_successful_login(username)
+    access_token, _, _ = create_access_token_with_meta(user.username)
+    refresh_token, _, _ = create_refresh_token_with_meta(user.username)
     csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
-    response.set_cookie(
-        key="csrf_token",
-        value=csrf,
-        httponly=False,
-        secure=settings.session_cookie_secure,
-        samesite=settings.session_cookie_samesite,
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    return Token(
+        access_token=access_token,
+        expires_in=settings.access_token_expire_minutes * 60,
     )
-    return Token(access_token=access_token)
+
+
+@app.post("/api/auth/refresh", response_model=Token)
+@limiter.limit("30/minute")
+async def refresh_session(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    raw = request.cookies.get("refresh_token")
+    if not raw:
+        raise HTTPException(401, "Refresh token no presente")
+    payload = decode_token_payload(raw)
+    if not payload or payload.get("typ") != TOKEN_TYPE_REFRESH:
+        raise HTTPException(401, "Refresh token inválido")
+    if await is_token_revoked(payload.get("jti"), db):
+        raise HTTPException(401, "Sesión revocada")
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(401, "Refresh token inválido")
+    user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(401, "Usuario no encontrado")
+
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)):
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        await revoke_token_jti(payload.get("jti", ""), expires_at, db)
+
+    access_token, _, _ = create_access_token_with_meta(user.username)
+    refresh_token, _, refresh_exp = create_refresh_token_with_meta(user.username)
+    csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    return Token(
+        access_token=access_token,
+        expires_in=settings.access_token_expire_minutes * 60,
+    )
 
 
 @app.post("/api/auth/logout")
-async def logout(response: Response, _=Depends(get_current_user_optional)):
-    response.delete_cookie("access_token")
-    response.delete_cookie("csrf_token")
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user_optional),
+):
+    await revoke_tokens_from_request(request, db)
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/api/auth")
+    response.delete_cookie("csrf_token", path="/")
     return {"ok": True}
 
 
@@ -307,7 +474,7 @@ async def my_session(request: Request, current: User = Depends(get_current_user)
 
 
 @app.get("/api/users", response_model=list[UserOut])
-async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depends(require_admin)):
     rows = (await db.execute(select(User))).scalars().all()
     return rows
 
@@ -352,13 +519,28 @@ async def upload_my_avatar(
     db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_user)
 ):
-    upload_dir = "uploads/avatars"
+    upload_dir = os.path.abspath("uploads/avatars")
     os.makedirs(upload_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1]
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_AVATAR_EXT:
+        raise HTTPException(400, f"Extensión no permitida. Use: {', '.join(sorted(ALLOWED_AVATAR_EXT))}")
+    header = await file.read(2048)
+    try:
+        import magic
+
+        mime = magic.from_buffer(header, mime=True) or ""
+        if not mime.startswith("image/"):
+            raise HTTPException(400, "El archivo no es una imagen válida")
+    except ImportError:
+        pass
     filename = f"avatar_{current.id}{ext}"
     file_path = os.path.join(upload_dir, filename)
-    
-    with open(file_path, "wb") as buffer:
+    real_path = os.path.realpath(file_path)
+    if not real_path.startswith(upload_dir):
+        raise HTTPException(400, "Ruta de archivo inválida")
+
+    with open(real_path, "wb") as buffer:
+        buffer.write(header)
         shutil.copyfileobj(file.file, buffer)
     
     current.avatar_url = f"/api/avatars/{filename}"
@@ -366,10 +548,12 @@ async def upload_my_avatar(
     return {"avatar_url": current.avatar_url}
 
 @app.get("/api/avatars/{filename}")
-async def get_avatar_file(filename: str):
-    from fastapi.responses import FileResponse
-    path = os.path.join("uploads/avatars", filename)
-    if not os.path.exists(path): raise HTTPException(404)
+async def get_avatar_file(filename: str, current: User = Depends(get_current_user)):
+    safe_name = os.path.basename(filename)
+    upload_dir = os.path.abspath("uploads/avatars")
+    path = os.path.realpath(os.path.join(upload_dir, safe_name))
+    if not path.startswith(upload_dir) or not os.path.isfile(path):
+        raise HTTPException(404)
     return FileResponse(path)
 
 @app.delete("/api/users/{user_id}")
@@ -386,6 +570,7 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if not u: raise HTTPException(404, "User not found")
+    InputValidator.validate_password(req.new_password)
     u.password_hash = get_password_hash(req.new_password)
     await db.commit()
     return {"ok": True}
@@ -393,16 +578,45 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
 @app.get("/api/auth/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)): return current_user
 
-# TICKETS
+# TICKETS (rutas fijas antes de /{ticket_id} para no capturar "count" como id)
+@app.get("/api/tickets/count/open")
+async def count_open_tickets(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    q = select(func.count(Ticket.id)).where(Ticket.status.in_(ACTIVE_TICKET_STATUSES))
+    q = _tickets_assignee_filter(q, current)
+    n = (await db.execute(q)).scalar() or 0
+    return {"open": int(n)}
+
+
 @app.get("/api/tickets", response_model=list[TicketOut])
-async def list_tickets(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def list_tickets(
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+    status: str | None = None,
+    active_only: bool = False,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
     from sqlalchemy.orm import selectinload
-    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).order_by(desc(Ticket.created_at))
+
+    q = (
+        select(Ticket)
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .order_by(desc(Ticket.created_at))
+    )
+    q = _tickets_assignee_filter(q, current)
+    if active_only:
+        q = q.where(Ticket.status.in_(ACTIVE_TICKET_STATUSES))
+    elif status:
+        q = q.where(Ticket.status == status)
+    q = q.limit(limit).offset(offset)
     rows = (await db.execute(q)).scalars().all()
     for t in rows:
-        if t.assignee: t.assignee_username = t.assignee.username
-        if t.reporter: t.reporter_username = t.reporter.username
+        if t.assignee:
+            t.assignee_username = t.assignee.username
+        if t.reporter:
+            t.reporter_username = t.reporter.username
     return rows
+
 
 @app.get("/api/tickets/{ticket_id}", response_model=TicketOut)
 async def get_ticket(
@@ -426,17 +640,20 @@ async def get_ticket(
     return t
 
 @app.post("/api/tickets", response_model=TicketOut)
-async def create_ticket(req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def create_ticket(req: TicketCreate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     ticket = Ticket(
-        title=req.get("title"),
-        description=req.get("description"),
-        severity=req.get("severity", "medium"),
-        category=req.get("category"),
-        source_ip=req.get("source_ip"),
-        affected_asset=req.get("affected_asset"),
+        title=req.title,
+        description=req.description,
+        severity=req.severity,
+        category=req.category,
+        source_ip=req.source_ip,
+        affected_asset=req.affected_asset,
+        affected_user=req.affected_user,
+        mitre_technique=req.mitre_technique,
+        wazuh_alert_id=req.wazuh_alert_id,
         status="open",
         reporter_id=current.id,
-        assigned_to_id=req.get("assigned_to_id")
+        assigned_to_id=req.assigned_to_id,
     )
     db.add(ticket)
     await db.commit()
@@ -444,54 +661,45 @@ async def create_ticket(req: dict, db: AsyncSession = Depends(get_db), current: 
     return await get_ticket(ticket.id, db, current)
 
 @app.put("/api/tickets/{ticket_id}", response_model=TicketOut)
-async def update_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def update_ticket_ep(ticket_id: int, req: TicketUpdate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
-    
-    # Update fields if provided
-    if "title" in req: t.title = req["title"]
-    if "description" in req: t.description = req["description"]
-    if "severity" in req: t.severity = req["severity"]
-    if "status" in req: t.status = req["status"]
-    if "category" in req: t.category = req["category"]
-    if "analysis_notes" in req: t.analysis_notes = req["analysis_notes"]
-    if "resolution_notes" in req: t.resolution_notes = req["resolution_notes"]
-    if "assigned_to_id" in req: t.assigned_to_id = req["assigned_to_id"]
-    
+    for field, value in req.model_dump(exclude_unset=True).items():
+        setattr(t, field, value)
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.post("/api/tickets/{ticket_id}/assign", response_model=TicketOut)
-async def assign_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def assign_ticket_ep(ticket_id: int, req: TicketAssign, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
-    t.assigned_to_id = req.get("assigned_to_id")
+    t.assigned_to_id = req.assigned_to_id
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.post("/api/tickets/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def resolve_ticket_ep(ticket_id: int, req: TicketResolve, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
-    t.status = "resolved"
-    t.resolution_notes = req.get("resolution_notes")
-    t.resolved_at = datetime.now(timezone.utc)
+    t.status = req.status
+    t.resolution_notes = req.resolution_notes
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.delete("/api/tickets/{ticket_id}")
 async def delete_ticket_ep(ticket_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role not in ("admin", "analyst"):
+    if not _can_delete_tickets(current):
         raise HTTPException(403, "Solo admin o analista puede eliminar tickets")
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
     await db.delete(t)
     await db.commit()
     return {"ok": True}
@@ -541,9 +749,15 @@ async def upload_evidence(
     return {"status": "ok", "filename": file.filename}
 
 @app.get("/api/incidents", response_model=list[TicketOut])
-async def list_incidents(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def list_incidents(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     from sqlalchemy.orm import selectinload
-    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.severity.in_(["high", "critical"])).order_by(desc(Ticket.created_at))
+    q = (
+        select(Ticket)
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .where(Ticket.severity.in_(["high", "critical"]))
+        .order_by(desc(Ticket.created_at))
+    )
+    q = _tickets_assignee_filter(q, current)
     rows = (await db.execute(q)).scalars().all()
     return rows
 
@@ -644,7 +858,7 @@ async def wazuh_services(_=Depends(get_current_user)):
     try:
         import httpx
         async with asyncio.timeout(3):
-            async with httpx.AsyncClient(verify=False) as client:
+            async with httpx.AsyncClient(verify=httpx_verify()) as client:
                 res = await client.get(
                     f"{settings.opensearch_url}/",
                     auth=(settings.opensearch_user, settings.opensearch_pass),
@@ -769,8 +983,10 @@ async def list_audit(
 
 # REPORTS
 @app.get("/api/reports/executive")
-async def executive_report(db: AsyncSession = Depends(get_db), current: User | None = Depends(get_current_user_optional)):
+async def executive_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     """Genera el informe ejecutivo completo con datos reales e IA."""
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403, "Solo admin o analista puede ver el informe ejecutivo")
     try:
         # 1. Obtener estadisticas de OpenSearch
         stats = await osc.get_dashboard_stats(24)
@@ -870,16 +1086,20 @@ async def get_ai_settings(db: AsyncSession = Depends(get_db), _=Depends(get_curr
     }
 
 @app.post("/api/settings/ai")
-async def update_ai_settings(data: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def update_ai_settings(
+    data: AiSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(require_admin),
+):
     """Actualiza la configuracion de IA."""
-    for key in ["ollama_model", "ollama_temperature"]:
-        if key in data:
-            s = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
-            if not s:
-                s = SystemSetting(key=key, value=str(data[key]))
-                db.add(s)
-            else:
-                s.value = str(data[key])
+    payload = data.model_dump(exclude_unset=True)
+    for key, val in payload.items():
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+        if not s:
+            s = SystemSetting(key=key, value=str(val))
+            db.add(s)
+        else:
+            s.value = str(val)
     await db.commit()
     return {"status": "updated"}
 @app.get("/api/runbooks", response_model=list[RunbookOut])
@@ -935,7 +1155,7 @@ async def seed_runbooks_ep(db: AsyncSession = Depends(get_db), current: User = D
 
 async def _resolve_vt_api_key(request: Request, db: AsyncSession, user: User) -> str:
     key = request.headers.get("X-VT-API-Key")
-    if key:
+    if key and settings.env.lower() == "development":
         return key
     user_key = (
         await db.execute(
@@ -961,10 +1181,8 @@ async def get_my_vt_key_status(db: AsyncSession = Depends(get_db), current: User
     return {"configured": row is not None}
 
 @app.put("/api/users/me/vt-api-key")
-async def set_my_vt_key(data: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    key = (data.get("api_key") or "").strip()
-    if not key:
-        raise HTTPException(400, "api_key requerida")
+async def set_my_vt_key(data: VtKeyIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = data.api_key.strip()
     setting_key = f"vt_api_key_user_{current.id}"
     row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
     enc = encrypt_secret(key)
@@ -1014,22 +1232,25 @@ async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depen
 
 # CHAT PERSISTENCE
 @app.get("/api/chat/{chat_id}")
-async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    _require_chat_access(current, chat_id)
     q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
     rows = (await db.execute(q)).scalars().all()
     # Return in chronological order
     return sorted(rows, key=lambda x: x.timestamp)
 
 @app.post("/api/chat")
-async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    chat_id = msg.chat_id
+    _require_chat_access(current, chat_id)
     new_msg = ChatMessage(
-        id=msg.get("id"),
+        id=msg.id,
         user_id=current.id,
         username=current.username,
-        text=msg.get("text"),
-        chat_id=msg.get("chatId"),
-        mentions=msg.get("mentions", []),
-        attachment=msg.get("attachment")
+        text=msg.text,
+        chat_id=chat_id,
+        mentions=msg.mentions,
+        attachment=msg.attachment,
     )
     db.add(new_msg)
     await db.commit()
@@ -1053,9 +1274,11 @@ async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), curre
 @app.post("/api/webhook/wazuh")
 async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """Real-time alert webhook from Wazuh integrations."""
+    body = await request.body()
+    _verify_webhook_auth(request, body)
     try:
-        alert = await request.json()
-    except:
+        alert = json.loads(body.decode("utf-8") if body else "{}")
+    except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON")
     
     rule = alert.get("rule", {})
@@ -1082,8 +1305,8 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 logger.info(f"AI Insight for alert {rule_id}: {res.data.get('summary')}")
         asyncio.create_task(run_ai())
 
-    # 2. Create Ticket automatically for high level alerts
-    if level >= 9:
+    # 2. Crear ticket automático solo si está habilitado (entrega limpia: desactivado por defecto)
+    if settings.auto_create_webhook_tickets and level >= 9:
         admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
         if admin:
             ticket = Ticket(
@@ -1124,33 +1347,32 @@ async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSessio
     return (await db.execute(q)).scalars().all()
 
 @app.post("/api/ioc")
-async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    existing = (await db.execute(select(IOC).where(IOC.value == req.get("value")))).scalar_one_or_none()
+async def add_ioc_ep(req: IocCreate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    existing = (await db.execute(select(IOC).where(IOC.value == req.value))).scalar_one_or_none()
     if existing:
-        if req.get("status"):
-            existing.status = req["status"]
-            if req.get("tags"):
-                existing.tags = list(set((existing.tags or []) + req.get("tags", [])))
-            if req.get("vt_report"):
-                existing.vt_report = req["vt_report"]
-            if req.get("malicious_score") is not None:
-                existing.malicious_score = req["malicious_score"]
+        if req.status:
+            existing.status = req.status
+            if req.tags:
+                existing.tags = list(set((existing.tags or []) + req.tags))
+            if req.vt_report:
+                existing.vt_report = req.vt_report
+            existing.malicious_score = req.malicious_score
             await db.commit()
             await db.refresh(existing)
             return existing
         raise HTTPException(400, "IOC ya existe en la lista")
 
     ioc = IOC(
-        value=req.get("value"),
-        ioc_type=req.get("ioc_type"),
-        malicious_score=req.get("malicious_score", 0),
-        total_engines=req.get("total_engines", 0),
-        country=req.get("country"),
-        asn=str(req.get("asn")) if req.get("asn") else None,
-        as_owner=req.get("as_owner"),
-        tags=req.get("tags", []),
-        status=req.get("status", "watchlist"),
-        vt_report=req.get("vt_report")
+        value=req.value,
+        ioc_type=req.ioc_type,
+        malicious_score=req.malicious_score,
+        total_engines=req.total_engines,
+        country=req.country,
+        asn=req.asn,
+        as_owner=req.as_owner,
+        tags=req.tags,
+        status=req.status,
+        vt_report=req.vt_report,
     )
     db.add(ioc)
     try:
@@ -1161,12 +1383,15 @@ async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(ge
     return ioc
 
 @app.patch("/api/ioc/{id}")
-async def update_ioc_ep(id: int, req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def update_ioc_ep(id: int, req: IocUpdate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     ioc = (await db.execute(select(IOC).where(IOC.id == id))).scalar_one_or_none()
-    if not ioc: raise HTTPException(404, "IOC no encontrado")
-    if "status" in req: ioc.status = req["status"]
-    if "analyst_notes" in req: ioc.analyst_notes = req["analyst_notes"]
-    if "related_ticket_id" in req: ioc.related_ticket_id = req["related_ticket_id"]
+    if not ioc:
+        raise HTTPException(404, "IOC no encontrado")
+    for field, value in req.model_dump(exclude_unset=True).items():
+        if field == "tags" and value is not None:
+            ioc.tags = list(set((ioc.tags or []) + value))
+        else:
+            setattr(ioc, field, value)
     await db.commit()
     return ioc
 

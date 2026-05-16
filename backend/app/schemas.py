@@ -99,6 +99,7 @@ class PasswordReset(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int = 0
 
 class LoginRequest(BaseModel):
     username: str
@@ -339,3 +340,66 @@ class MonitorUpdate(BaseModel):
     enabled: bool | None = None
     threshold: int | None = None
     severity_floor: str | None = None
+
+
+# --- IOC / Threat Intel ---
+
+IocType = Literal["ip", "domain", "hash", "url"]
+IocStatus = Literal["watchlist", "blocked", "cleared", "investigating"]
+
+
+class IocCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str = Field(..., min_length=1, max_length=512)
+    ioc_type: IocType
+    malicious_score: int = Field(default=0, ge=0, le=100)
+    total_engines: int = Field(default=0, ge=0, le=200)
+    country: str | None = Field(default=None, max_length=80)
+    asn: str | None = Field(default=None, max_length=32)
+    as_owner: str | None = Field(default=None, max_length=200)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    status: IocStatus = "watchlist"
+    vt_report: dict[str, Any] | None = None
+
+    @field_validator("value")
+    @classmethod
+    def strip_value(cls, v: str) -> str:
+        return v.strip()
+
+
+class IocUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: IocStatus | None = None
+    analyst_notes: str | None = Field(default=None, max_length=5000)
+    related_ticket_id: int | None = None
+    tags: list[str] | None = None
+    vt_report: dict[str, Any] | None = None
+    malicious_score: int | None = Field(default=None, ge=0, le=100)
+
+
+class ChatMessageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str | None = None
+    text: str = Field(..., min_length=1, max_length=8000)
+    chat_id: str = Field(default="global", alias="chatId", max_length=128)
+    mentions: list[str] = Field(default_factory=list, max_length=50)
+    attachment: dict[str, Any] | None = None
+
+    @field_validator("text")
+    @classmethod
+    def sanitize_text(cls, v: str) -> str:
+        return _sanitize_html(v) or ""
+
+
+class AiSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ollama_model: str | None = Field(default=None, max_length=80)
+    ollama_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+
+
+class VtKeyIn(BaseModel):
+    api_key: str = Field(..., min_length=32, max_length=256)

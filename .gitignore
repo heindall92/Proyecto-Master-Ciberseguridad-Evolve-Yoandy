@@ -5,6 +5,9 @@
 # ── Credenciales y secretos ───────────────────────────────────────────────────
 .env
 .env.*.local
+backend/.env
+.env.setup-backup
+.env.bak
 credenciales.txt
 
 # ── Claude / AI internal files ────────────────────────────────────────────────
@@ -84,3 +87,6 @@ ORIENTACIONES.md
 
 # ── Uploads (runtime data, not versioned) ────────────────────────────────────
 backend/uploads/
+pgdata/
+*.sql.gz
+*.dump

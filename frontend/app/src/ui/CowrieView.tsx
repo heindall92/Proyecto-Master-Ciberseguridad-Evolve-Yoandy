@@ -140,7 +140,7 @@ export default function CowrieView() {
                               </span>
                               <span style={{ marginLeft: '6px', fontSize: '9px', background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '2px 4px', borderRadius: '3px', border: '1px solid var(--line)' }}>{c.geo}</span>
                            </td>
-                           <td style={{ padding: '10px 15px', color: 'var(--amber)' }}>{c.session.substring(0, 8)}</td>
+                           <td style={{ padding: '10px 15px', color: 'var(--amber)' }}>{String(c.session || 'unknown').substring(0, 8)}</td>
                            <td style={{ padding: '10px 15px', color: isDanger ? 'var(--danger)' : '#fff', fontWeight: isDanger ? 'bold' : 'normal' }}>
                              {isDanger ? '⚠️ ' : '$ '}{c.command}
                            </td>

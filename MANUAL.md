@@ -90,7 +90,7 @@ ollama run qwen2.5-coder:7b "Di hola en español"
 ### 1.4 Descargar el proyecto
 
 ```bash
-git clone https://github.com/saantiidp/Valhalla-SOC.git
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git
 cd Valhalla-SOC
 ```
 
@@ -389,7 +389,7 @@ Si tienes problemas con la instalación o el uso:
 
 1. Revisa la **sección de Preguntas Frecuentes** en el README.md
 2. Consulta los **logs** del contenedor problemático (`docker compose logs <servicio>`)
-3. Abre un **issue** en GitHub: https://github.com/saantiidp/Valhalla-SOC/issues
+3. Abre un **issue** en GitHub: https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/issues
 
 ---
 

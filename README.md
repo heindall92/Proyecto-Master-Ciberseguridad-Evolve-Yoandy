@@ -377,34 +377,41 @@ docker compose up -d --build
 
 > 📖 **Manual completo** disponible en [`MANUAL.md`](MANUAL.md)
 
-### Inicio rápido (5 pasos)
+### Inicio rápido (primera vez)
+
+> Guía detallada: [`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md)
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/saantiidp/Valhalla-SOC.git
-cd Valhalla-SOC
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git
+cd Proyecto-Master-Ciberseguridad-Evolve-Yoandy
 
-# 2. Configurar variables de entorno
-cp .env.example .env
+# 2. Configurar secretos (NO copiar .env.example a mano)
+#    Windows: setup.bat  |  Linux: ./scripts/setup_env.sh  |  make setup
+python scripts/setup_env.py
 
-# 3. Instalar e iniciar Ollama + descargar modelo
+# 3. Ollama + modelo IA
 ollama pull qwen2.5-coder:7b
 
-# 4. Levantar toda la infraestructura (SIEM + Honeypot + Dashboard)
-docker compose up -d --build
+# 4. Levantar infraestructura
+docker compose --profile labs up -d --build
 
-# 5. Configurar Wazuh (esperar 3-5 min tras paso 4)
+# 5. Wazuh (esperar 3-5 min tras paso 4)
 pip install requests
 python create_dashboards.py
 python setup_monitors.py
 python setup_reports.py
 ```
 
+En **Windows**, `Valhalla-Runner.bat` ejecuta el paso 2 automáticamente si falta `.env`.
+
+**Entrega limpia:** el repo no incluye tickets, chats ni usuarios de prueba. Solo `admin` tras el setup. Ver [`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md) (sección *Entrega limpia*).
+
 ### Acceder al Dashboard
 
 | Servicio | URL | Credenciales |
 |---|---|---|
-| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | admin / Valhalla2026! (por defecto) |
+| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | `admin` + contraseña elegida en el setup (`.env.setup-backup`) |
 | 📊 Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
 | 🔌 Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
 | 🗄️ OpenSearch | `https://localhost:9200` | admin / admin |

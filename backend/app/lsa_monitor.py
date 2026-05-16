@@ -6,11 +6,18 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+
+from app.auth import get_current_user, require_admin
+from app.models import User
 
 logger = logging.getLogger("valhalla.lsa")
 
-router = APIRouter(prefix="/api/lsa", tags=["lsa"])
+router = APIRouter(
+    prefix="/api/lsa",
+    tags=["lsa"],
+    dependencies=[Depends(get_current_user)],
+)
 
 # ============================================================================
 # SCHEMAS
@@ -199,7 +206,7 @@ async def get_lsa_alerts(hours: int = 24):
 
 
 @router.post("/apply-hardening")
-async def apply_lsa_hardening(request: LSAHardeningRequest):
+async def apply_lsa_hardening(request: LSAHardeningRequest, _: User = Depends(require_admin)):
     """
     Apply LSA protection hardening to a specific endpoint
     
@@ -301,7 +308,7 @@ async def get_agent_lsa_status(agent_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/harden")
-async def harden_agent_lsa(agent_id: str):
+async def harden_agent_lsa(agent_id: str, _: User = Depends(require_admin)):
     """
     Trigger LSA hardening active response on a specific agent
     """

@@ -26,8 +26,6 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
     getVtKeyStatus().then(s => {
       if (s.configured) setApiKey("••••••••••••••••");
     }).catch(() => {});
-    const savedKey = localStorage.getItem("vt_api_key");
-    if (savedKey) setApiKey(savedKey);
     
     if (initialIp) {
       setQuery(initialIp);
@@ -47,7 +45,6 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
     }
     try {
       await setMyVtApiKey(apiKey);
-      localStorage.setItem("vt_api_key", apiKey);
       alert(lang === "es" ? "API Key guardada en su perfil de operador (servidor)." : "API Key saved to your operator profile.");
       setShowConfig(false);
     } catch (e: any) {
@@ -56,29 +53,20 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
   };
 
   const testApiKey = async () => {
-    if (!apiKey) return alert("Ingrese una API Key primero");
-    
-    // Guardar temporalmente para que api.ts la lea
-    const previousKey = localStorage.getItem("vt_api_key");
-    localStorage.setItem("vt_api_key", apiKey);
-    
+    if (!apiKey || apiKey.startsWith("••")) return alert("Ingrese una API Key primero");
     try {
-      // Hacemos una llamada real al backend, que a su vez llama a VT con la nueva key.
+      await setMyVtApiKey(apiKey);
       const testRes = await vtCheckIp("8.8.8.8");
       if (testRes && !testRes.error) {
-        alert("¡Ping exitoso! La API Key de VirusTotal está funcionando correctamente y ha sido guardada.");
+        alert("¡Ping exitoso! La API Key está guardada en el servidor y funciona correctamente.");
+        setApiKey("••••••••••••••••");
         setShowConfig(false);
       } else {
         throw new Error(testRes?.error || "Respuesta inválida de VirusTotal");
       }
-    } catch (e: any) {
-      // Revertimos si falla
-      if (previousKey) {
-        localStorage.setItem("vt_api_key", previousKey);
-      } else {
-        localStorage.removeItem("vt_api_key");
-      }
-      alert(`Error verificando API Key: ${e.message || "Credenciales inválidas o sin cuota"}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Credenciales inválidas o sin cuota";
+      alert(`Error verificando API Key: ${msg}`);
     }
   };
 
