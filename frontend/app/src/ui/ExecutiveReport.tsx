@@ -868,7 +868,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     y1 = bodyText(reportData.executive_summary.key_finding, y1);
     y1 += 3;
 
-    const execAnalysis = `Durante ${period} se procesaron ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas en tiempo real, de las cuales ${reportData.wazuh_metrics.critical_alerts} fueron clasificadas como críticas y requirieron intervención manual. La tasa de resolución del ${closureRate}% y un MTTR de ${mttr} minutos reflejan la capacidad operativa del equipo SOC. El sistema de correlación basado en IA permitió priorizar amenazas de alto impacto y reducir el tiempo de detección y respuesta.`;
+    const execAnalysis = [
+      `• ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas procesadas en ${period}`,
+      `• ${reportData.wazuh_metrics.critical_alerts} críticas con intervención manual`,
+      `• Tasa de resolución: ${closureRate}%`,
+      `• MTTR: ${mttr} min`,
+      `• IA redujo tiempo de detección y respuesta`,
+    ].join("\n");
     y1 = analysisBox(execAnalysis, y1);
     y1 += 3;
 
@@ -955,7 +961,15 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     });
     y2 += 5;
 
-    const mitreConclusion = "La táctica dominante indica reconocimiento perimetral activo. Revisar firewall y aplicar threat hunting.";
+    const mitrePct = totalMitreEvents > 0 ? Math.round(((topTactic?.count ?? 0) / totalMitreEvents) * 100) : 0;
+    const mitreConclusion = [
+      `• Táctica dominante: "${topTactic?.tactic ?? "N/A"}"`,
+      `• ${topTactic?.count ?? 0} eventos (${mitrePct}% del total)`,
+      criticalTactics.length > 0
+        ? `• ${criticalTactics.length} táctica(s) en nivel CRÍTICO`
+        : `• Sin tácticas en nivel CRÍTICO`,
+      `• Revisar firewall y aplicar threat hunting`,
+    ].join("\n");
     y2 = analysisBox(mitreConclusion, y2, col - 18, "Ref: MITRE D3FEND, ISO 27001 A.13.1.");
     y2 += 4;
 
@@ -964,8 +978,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     const honeypotNarrative = `El sistema honeypot registró ${reportData.honeypot_intel.unique_attackers.toLocaleString()} atacantes únicos con ${reportData.honeypot_intel.malware_samples_collected} muestras de malware capturadas. Las contraseñas más usadas por los atacantes fueron: ${passwords.join(", ") || "no registradas"}. Este patrón es característico de ataques automatizados con credential stuffing y diccionarios genéricos, indicando campañas masivas no dirigidas específicamente a esta organización.`;
     y2 = bodyText(honeypotNarrative, y2);
     y2 += 3;
-    const honeypotConclusion = `ANÁLISIS: La presencia de contraseñas como "${passwords[0] ?? "admin"}" confirma el uso de diccionarios básicos. ACCIÓN: Verificar que ningún sistema use estas credenciales. Compartir los IOCs recolectados (IPs, hashes de malware) con plataformas de inteligencia de amenazas (MISP/ISAC). Referencia: ISO 27001 A.12.4, NIST SP 800-150.`;
-    y2 = analysisBox(honeypotConclusion, y2);
+    const honeypotConclusion = [
+      `• Contraseña top: "${passwords[0] ?? "admin"}"`,
+      `• Confirma uso de diccionarios básicos`,
+      `• Verificar credenciales en sistemas activos`,
+      `• Compartir IOCs con MISP/ISAC`,
+    ].join("\n");
+    y2 = analysisBox(honeypotConclusion, y2, col - 18, "Ref: ISO 27001 A.12.4, NIST SP 800-150.");
     pageFooter(2);
 
     // ── PÁGINA 3: Geo Intel + Gestión de Incidentes ────────────────────────
@@ -1047,7 +1066,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : mttr <= 60
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
-    const incidentAnalysis = "MTTR dentro del umbral NIST SP 800-61. Tasa de cierre supera objetivo ITIL. Establecer SLAs formales por severidad.";
+    const mttrStatus = mttr <= 30 ? "óptimo (<30 min)" : mttr <= 60 ? "aceptable (30–60 min)" : "crítico (>60 min)";
+    const closureStatus = closureRate >= 90 ? "cumple objetivo ITIL" : "bajo objetivo ITIL";
+    const incidentAnalysis = [
+      `• MTTR: ${mttr} min — ${mttrStatus}`,
+      `• Tasa de cierre: ${closureRate}% — ${closureStatus}`,
+      `• Tickets pendientes: ${pendingTickets}`,
+      `• Establecer SLAs formales por severidad`,
+    ].join("\n");
     y3 = analysisBox(incidentAnalysis, y3, col - 18, "Ref: ISO 27001 A.16.1.");
     pageFooter(3);
 
