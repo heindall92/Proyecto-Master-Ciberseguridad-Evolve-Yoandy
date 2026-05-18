@@ -797,10 +797,11 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       return y + lines.length * 4.5 + 2;
     };
 
-    const analysisBox = (text: string, y: number, maxW = 130): number => {
+    const analysisBox = (text: string, y: number, maxW = 130, ref = ""): number => {
       doc.setFillColor(232, 239, 248);
       const lines = doc.splitTextToSize(text, maxW);
-      const boxH = Math.max(16, lines.length * 4.5 + 8);
+      const refLines = ref ? doc.splitTextToSize(ref, maxW) : [];
+      const boxH = Math.max(16, (lines.length + (refLines.length > 0 ? refLines.length + 0.5 : 0)) * 4.5 + 8);
       doc.roundedRect(M, y, col, boxH, 2, 2, "F");
       doc.setDrawColor(...navy);
       doc.setLineWidth(1.5);
@@ -813,6 +814,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.rect(M + 2, y, col - 4, boxH);
       doc.clip();
       doc.text(lines, M + 8, y + 6);
+      if (refLines.length > 0) {
+        const refY = y + 6 + lines.length * 4.5 + 2;
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.5);
+        doc.text(refLines, M + 8, refY);
+      }
       doc.restoreGraphicsState();
       return y + boxH + 4;
     };
@@ -948,8 +955,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     });
     y2 += 5;
 
-    const mitreConclusion = "La táctica dominante indica reconocimiento perimetral activo. Revisar firewall y aplicar threat hunting. Ref: MITRE D3FEND, ISO 27001 A.13.1.";
-    y2 = analysisBox(mitreConclusion, y2, col - 18);
+    const mitreConclusion = "La táctica dominante indica reconocimiento perimetral activo. Revisar firewall y aplicar threat hunting.";
+    y2 = analysisBox(mitreConclusion, y2, col - 18, "Ref: MITRE D3FEND, ISO 27001 A.13.1.");
     y2 += 4;
 
     y2 = sectionTitle("4. INTELIGENCIA DE HONEYPOT COWRIE", y2);
@@ -1040,8 +1047,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : mttr <= 60
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
-    const incidentAnalysis = "MTTR dentro del umbral NIST SP 800-61. Tasa de cierre supera objetivo ITIL. Establecer SLAs formales por severidad. Ref: ISO 27001 A.16.1.";
-    y3 = analysisBox(incidentAnalysis, y3, col - 18);
+    const incidentAnalysis = "MTTR dentro del umbral NIST SP 800-61. Tasa de cierre supera objetivo ITIL. Establecer SLAs formales por severidad.";
+    y3 = analysisBox(incidentAnalysis, y3, col - 18, "Ref: ISO 27001 A.16.1.");
     pageFooter(3);
 
     // ── PÁGINA 4: Remediación detallada + ISO 27001 ────────────────────────
