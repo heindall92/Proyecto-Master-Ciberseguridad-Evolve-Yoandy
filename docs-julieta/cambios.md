@@ -1,5 +1,26 @@
 # Registro de cambios - Julieta
 
+## 2026-05-22 (date range picker reemplaza campo PERIOD)
+
+### Cambio
+- El campo de texto libre "PERIOD" en el formulario de configuración de `ExecutiveReport.tsx` fue reemplazado por dos date pickers nativos: **DATE START** y **DATE END**.
+- El período mostrado en el PDF se genera automáticamente a partir del rango seleccionado (formato `DD/MM/YYYY – DD/MM/YYYY`).
+
+### Comportamiento nuevo
+- Al cargar datos (`load()`), `dateStart` y `dateEnd` se inicializan al primer y último día del mes derivado de `raw.generatedAt`.
+- `period` pasa a ser un `useMemo` computado desde `dateStart`/`dateEnd`; ya no es estado editable directo.
+- El usuario puede cambiar las fechas con el calendario nativo del browser; el período del PDF se actualiza en tiempo real.
+
+### Diseño
+- Inputs tipo `date` con `colorScheme: dark` para que el calendario del browser respete el fondo oscuro.
+- Icono del calendario tintado en verde terminal con `filter: invert + sepia + hue-rotate`.
+- Dos grid items `md=4` cada uno (el formulario pasa de 5 a 6 campos, reorganizados en 2 filas de 3).
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — estado, `load()`, `useMemo period`, config form
+
+---
+
 ## 2026-05-13 (acortar strings mitreConclusion e incidentAnalysis - max 90 chars/línea)
 
 ### Problema

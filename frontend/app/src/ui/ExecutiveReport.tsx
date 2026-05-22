@@ -100,7 +100,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
   const [analystName, setAnalystName] = useState("Y. RAMIREZ");
-  const [period, setPeriod] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
   const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
 
@@ -108,11 +109,17 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
-      const MONTHS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
       const d = new Date(raw.generatedAt || Date.now());
-      const derivedPeriod = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-      const derivedReportId = `VHL-${d.getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      setPeriod(derivedPeriod);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDayNum = new Date(year, month + 1, 0).getDate();
+      const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+      const fmtDate = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+      const derivedPeriod = `${fmtDate(firstDay)} – ${fmtDate(lastDay)}`;
+      const derivedReportId = `VHL-${year}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setDateStart(firstDay);
+      setDateEnd(lastDay);
       setReportId(derivedReportId);
       if (raw.analystNameFromBackend) setAnalystName(raw.analystNameFromBackend);
       const structured: ValhallaReportJSON = {
@@ -177,6 +184,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   useEffect(() => { load(); }, []);
 
   const healthColor = useMemo(() => gaugeColor(reportData?.executive_summary.health_score ?? 0), [reportData]);
+
+  const period = useMemo(() => {
+    if (!dateStart || !dateEnd) return "";
+    const fmt = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+    return `${fmt(dateStart)} – ${fmt(dateEnd)}`;
+  }, [dateStart, dateEnd]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1249,7 +1262,34 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField fullWidth size="small" label="PERIOD" variant="standard" value={period} onChange={e => setPeriod(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+            <TextField
+              fullWidth size="small" label="DATE START" type="date" variant="standard"
+              value={dateStart} onChange={e => setDateStart(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                input: { color: 'var(--text)', colorScheme: 'dark' },
+                label: { color: 'var(--signal)' },
+                '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                  filter: 'invert(1) sepia(1) saturate(3) hue-rotate(90deg)',
+                  cursor: 'pointer',
+                },
+              }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth size="small" label="DATE END" type="date" variant="standard"
+              value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                input: { color: 'var(--text)', colorScheme: 'dark' },
+                label: { color: 'var(--signal)' },
+                '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                  filter: 'invert(1) sepia(1) saturate(3) hue-rotate(90deg)',
+                  cursor: 'pointer',
+                },
+              }}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small" variant="standard">
