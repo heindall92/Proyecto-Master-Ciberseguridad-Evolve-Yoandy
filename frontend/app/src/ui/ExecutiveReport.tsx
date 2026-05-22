@@ -91,6 +91,197 @@ function gaugeColor(score: number): string {
   return "#ff3b3b";
 }
 
+const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAY_ABBR = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+
+function DateRangePicker({ dateStart, dateEnd, onChange }: {
+  dateStart: string;
+  dateEnd: string;
+  onChange: (start: string, end: string) => void;
+}) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [viewYear, setViewYear] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[0]) : new Date().getFullYear()
+  );
+  const [viewMonth, setViewMonth] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[1]) - 1 : new Date().getMonth()
+  );
+  const [hoverDate, setHoverDate] = useState('');
+  const [open, setOpen] = useState(false);
+  const [picking, setPicking] = useState<'start' | 'end'>(
+    dateStart && !dateEnd ? 'end' : 'start'
+  );
+
+  useEffect(() => {
+    if (dateStart) {
+      setViewYear(parseInt(dateStart.split('-')[0]));
+      setViewMonth(parseInt(dateStart.split('-')[1]) - 1);
+    }
+  }, [dateStart]);
+
+  useEffect(() => {
+    setPicking(dateStart && !dateEnd ? 'end' : 'start');
+  }, [dateStart, dateEnd]);
+
+  const prevMonth = () =>
+    setViewMonth(m => { if (m === 0) { setViewYear(y => y - 1); return 11; } return m - 1; });
+  const nextMonth = () =>
+    setViewMonth(m => { if (m === 11) { setViewYear(y => y + 1); return 0; } return m + 1; });
+
+  function handleClick(ds: string) {
+    if (picking === 'start' || (dateStart && dateEnd)) {
+      onChange(ds, '');
+    } else {
+      const [s, e] = ds >= dateStart ? [dateStart, ds] : [ds, dateStart];
+      onChange(s, e);
+      setOpen(false);
+      setHoverDate('');
+    }
+  }
+
+  function buildWeeks(): (string | null)[][] {
+    const dim = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const off = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const prefix = `${viewYear}-${pad(viewMonth + 1)}-`;
+    const cells: (string | null)[] = [
+      ...Array(off).fill(null),
+      ...Array.from({ length: dim }, (_, i) => `${prefix}${pad(i + 1)}`),
+    ];
+    while (cells.length % 7) cells.push(null);
+    return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
+  }
+
+  function getRange() {
+    const eff = dateEnd || (picking === 'end' && hoverDate ? hoverDate : '');
+    if (!dateStart || !eff) return { rs: dateStart, re: '' };
+    return dateStart <= eff ? { rs: dateStart, re: eff } : { rs: eff, re: dateStart };
+  }
+
+  const { rs, re } = getRange();
+  const weeks = buildWeeks();
+  const fmt = (s: string) => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const navSx: any = {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: 'var(--signal)', fontSize: '20px', width: 28, height: 28,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: '4px', '&:hover': { bgcolor: 'rgba(60,255,158,0.1)' },
+  };
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <Box
+        onClick={() => setOpen(o => !o)}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
+          pb: '4px', borderBottom: `1px solid ${open ? 'var(--signal)' : 'rgba(60,255,158,0.3)'}`,
+          transition: 'border-color 0.2s', userSelect: 'none',
+          '&:hover': { borderBottomColor: 'var(--signal)' },
+        }}
+      >
+        <Typography sx={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '1.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+          PERIOD
+        </Typography>
+        <Typography sx={{ fontSize: '11px', color: dateStart ? 'var(--text)' : 'var(--text-dim)', fontFamily: 'var(--ff-mono)', flex: 1 }}>
+          {fmt(dateStart)} → {fmt(dateEnd)}
+        </Typography>
+        <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', ml: 0.5 }}>
+          {open ? '▲' : '▼'}
+        </Typography>
+      </Box>
+
+      {open && (
+        <Box
+          onClick={() => { setOpen(false); setHoverDate(''); }}
+          sx={{ position: 'fixed', inset: 0, zIndex: 999 }}
+        />
+      )}
+
+      {open && (
+        <Box sx={{
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 1000,
+          bgcolor: 'rgba(5, 14, 10, 0.98)', border: '1px solid rgba(60,255,158,0.25)',
+          borderRadius: '10px', p: 2, width: 272,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Box component="button" onClick={prevMonth} sx={navSx}>‹</Box>
+            <Typography sx={{ color: 'var(--signal)', fontSize: '11px', fontWeight: 900, letterSpacing: '2px', fontFamily: 'var(--ff-mono)' }}>
+              {MONTH_NAMES_ES[viewMonth].toUpperCase()} {viewYear}
+            </Typography>
+            <Box component="button" onClick={nextMonth} sx={navSx}>›</Box>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
+            {DAY_ABBR.map(d => (
+              <Typography key={d} sx={{ textAlign: 'center', fontSize: '9px', color: 'var(--text-dim)', fontWeight: 700, py: '3px' }}>
+                {d}
+              </Typography>
+            ))}
+          </Box>
+
+          {weeks.map((week, wi) => (
+            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {week.map((ds, di) => {
+                if (!ds) return <Box key={`_${wi}${di}`} sx={{ height: 36 }} />;
+                const isSel = ds === dateStart || ds === dateEnd;
+                const hasRange = !!(rs && re && rs !== re);
+                const inRange = hasRange && ds > rs && ds < re;
+                const isRs = hasRange && ds === rs;
+                const isRe = hasRange && ds === re;
+                const isToday = ds === todayStr;
+                const day = parseInt(ds.split('-')[2]);
+                let bg = 'transparent';
+                if (inRange) bg = 'rgba(60,255,158,0.13)';
+                else if (isRs) bg = 'linear-gradient(to right, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                else if (isRe) bg = 'linear-gradient(to left, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                return (
+                  <Box
+                    key={ds}
+                    onClick={() => handleClick(ds)}
+                    onMouseEnter={() => { if (picking === 'end') setHoverDate(ds); }}
+                    onMouseLeave={() => setHoverDate('')}
+                    sx={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: bg }}
+                  >
+                    <Box sx={{
+                      width: 30, height: 30,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%',
+                      bgcolor: isSel ? 'var(--signal)' : 'transparent',
+                      color: isSel ? '#000' : isToday ? 'var(--signal)' : 'var(--text)',
+                      fontSize: '12px', fontFamily: 'var(--ff-mono)',
+                      fontWeight: isSel || isToday ? 700 : 400,
+                      border: isToday && !isSel ? '1px solid rgba(60,255,158,0.4)' : 'none',
+                      transition: 'background-color 0.1s',
+                      '&:hover': { bgcolor: isSel ? 'var(--signal)' : 'rgba(60,255,158,0.2)' },
+                    }}>
+                      {day}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          ))}
+
+          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: '9px', color: 'var(--signal)', fontWeight: 700, letterSpacing: '1px' }}>
+              {picking === 'start' ? '► INICIO' : '► FIN'}
+            </Typography>
+            <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--ff-mono)' }}>
+              {dateStart ? (dateEnd ? `${fmt(dateStart)} → ${fmt(dateEnd)}` : `${fmt(dateStart)} → ?`) : '—'}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [loading, setLoading] = useState(true);
@@ -1262,33 +1453,10 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              fullWidth size="small" label="DATE START" type="date" variant="standard"
-              value={dateStart} onChange={e => setDateStart(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                input: { color: 'var(--text)', colorScheme: 'dark' },
-                label: { color: 'var(--signal)' },
-                '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                  filter: 'invert(1) sepia(1) saturate(3) hue-rotate(90deg)',
-                  cursor: 'pointer',
-                },
-              }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              fullWidth size="small" label="DATE END" type="date" variant="standard"
-              value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                input: { color: 'var(--text)', colorScheme: 'dark' },
-                label: { color: 'var(--signal)' },
-                '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                  filter: 'invert(1) sepia(1) saturate(3) hue-rotate(90deg)',
-                  cursor: 'pointer',
-                },
-              }}
+            <DateRangePicker
+              dateStart={dateStart}
+              dateEnd={dateEnd}
+              onChange={(s, e) => { setDateStart(s); setDateEnd(e); }}
             />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
