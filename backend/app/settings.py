@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # ── AbuseIPDB (Fase 2: enriquecimiento IOC) ──────────────────────────────
     abuseipdb_api_key: str = ""
 
+    # ── Exploit search (Fase 5: searchsploit en contenedor Kali) ─────────────
+    exploit_search_url: str = "http://exploit-search:8666"
+
     # ── Upload / Evidence ────────────────────────────────────────────────────
     evidence_dir: str = "uploads/evidence"
     max_upload_size_mb: int = 10

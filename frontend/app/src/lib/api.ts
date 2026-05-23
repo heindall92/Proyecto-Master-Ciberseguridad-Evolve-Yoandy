@@ -556,6 +556,17 @@ export function getLatestCves(limit = 15) {
   return http<CveItem[]>(`/api/cve/latest?limit=${limit}`);
 }
 
+export interface ExploitResult {
+  cve: string;
+  count: number;
+  exploits: Array<{ title: string; edb_id: string; type: string; platform: string; url: string }>;
+  error?: string;
+}
+
+export function getCveExploits(cveId: string) {
+  return http<ExploitResult>(`/api/cve/${encodeURIComponent(cveId)}/exploits`);
+}
+
 export function generateCveSocialPost(cveIds: string[] = []) {
   return http<{ post: string; cves_used: Array<{ id: string; severity: string }>; auto_published: boolean }>(
     "/api/cve/social-post",
