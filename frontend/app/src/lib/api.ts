@@ -465,6 +465,79 @@ export function deleteIOC(id: number) {
   return http<void>(`/api/ioc/${id}`, { method: "DELETE" });
 }
 
+// Firewall / Active Response (Fase 1)
+export interface FirewallBlockResult {
+  ok: boolean;
+  ip: string;
+  cdb_applied: boolean;
+  active_response: boolean;
+  timeout?: number | null;
+  detail?: any;
+}
+
+export function blockIp(ip: string, timeout?: number, reason?: string) {
+  return http<FirewallBlockResult>("/api/firewall/block", {
+    method: "POST",
+    body: JSON.stringify({ ip, ...(timeout != null ? { timeout } : {}), ...(reason ? { reason } : {}) }),
+  });
+}
+
+export function unblockIp(ip: string) {
+  return http<{ ok: boolean; ip: string; cdb_applied: boolean }>("/api/firewall/unblock", {
+    method: "POST",
+    body: JSON.stringify({ ip }),
+  });
+}
+
+export function getBlockedIps() {
+  return http<Array<{ ip: string; country?: string; as_owner?: string; tags?: string[]; since?: string }>>(
+    "/api/firewall/blocked"
+  );
+}
+
+// Fase 4 — Madurez y Métricas SOC
+export interface SocMetrics {
+  tickets: { total: number; closed: number; open: number; resolution_rate_pct: number };
+  mttr_minutes: number;
+  dwell_open_avg_minutes: number;
+  by_severity: Record<string, number>;
+  tickets_by_analyst: Array<{ analyst: string; closed: number }>;
+  attack_coverage_pct: number;
+  techniques_seen: string[];
+  alerts_24h: number;
+  generated_at: string;
+}
+
+export function getSocMetrics() {
+  return http<SocMetrics>("/api/metrics/soc");
+}
+
+export function getNavigatorLayer(hours = 720) {
+  return http<any>(`/api/mitre/navigator-layer?hours=${hours}`);
+}
+
+export function listHuntQueries() {
+  return http<Array<{ id: string; name: string; description: string }>>("/api/hunting/queries");
+}
+
+export function runHuntQuery(id: string, hours = 720) {
+  return http<{ query_id: string; name: string; type: string; count: number; results: any[] }>(
+    `/api/hunting/run/${id}?hours=${hours}`
+  );
+}
+
+// HEIMDALL — Informe de Inteligencia (datos reales; separado del informe ejecutivo)
+export function getHeimdallReport() {
+  return http<any>("/api/reports/heimdall");
+}
+
+// HEIMDALL en PDF profesional (Typst)
+export async function downloadHeimdallPdf(): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/reports/heimdall/pdf`, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.blob();
+}
+
 
 // RUNBOOKS - Procedimientos operativos estandar
 

@@ -28,13 +28,20 @@ Severity = Literal["low", "medium", "high", "critical"]
 
 SYSTEM_PROMPT = (
     "Eres un Analista Senior de SOC con mas de 10 años de experiencia, experto en deteccion de amenazas y respuesta ante incidentes. "
-    "Tu objetivo es analizar telemetria de Wazuh y Cowrie para proporcionar inteligencia accionable. "
-    "Debes clasificar la alerta segun la categoria de evento, identificar tecnicas MITRE ATT&CK (ej. T1110 para Brute Force) si es posible, "
-    "y dar una recomendacion tactica clara para el operador de turno. "
-    "Responde UNICAMENTE con un objeto JSON valido con estas claves: "
-    "attack_type (categoria/tipo de ataque), severity (low, medium, high, critical), "
-    "summary (resumen ejecutivo detallado en español), recommended_action (pasos de mitigacion especificos en español). "
-    "IMPORTANTE: Proporciona respuestas tecnicas, precisas y directas."
+    "Tu objetivo es analizar telemetria de Wazuh y Cowrie para proporcionar TRIAGE ACCIONABLE Y ESTRUCTURADO. "
+    "Responde UNICAMENTE con un objeto JSON valido con EXACTAMENTE estas claves: "
+    "attack_type (categoria/tipo de ataque), "
+    "severity (uno de: low, medium, high, critical), "
+    "risk_score (entero 0-100 que cuantifica el riesgo real del incidente), "
+    "mitre_ttp (lista de IDs MITRE ATT&CK como [\"T1110\",\"T1059\"], vacia si no aplica), "
+    "false_positive_likelihood (uno de: low, medium, high — probabilidad de que sea falso positivo), "
+    "summary (resumen ejecutivo en español, ASCII), "
+    "recommended_action (pasos de mitigacion especificos en español, ASCII), "
+    "cited_runbooks (lista de nombres EXACTOS de los runbooks del bloque 'knowledge' que aplican, vacia si ninguno). "
+    "Si el contexto incluye un bloque 'knowledge' con runbooks y tecnicas MITRE, BASA tu recommended_action en "
+    "esos procedimientos reales y cita sus nombres en cited_runbooks. "
+    "IMPORTANTE: respuestas tecnicas, precisas y directas. El risk_score debe ser coherente con la severity "
+    "(low~0-30, medium~30-60, high~60-85, critical~85-100)."
 )
 
 SYSTEM_PROMPT_REPORT = (
@@ -52,8 +59,12 @@ def _fallback(alert_id: int) -> dict[str, Any]:
         "alert_id": alert_id,
         "attack_type": "unknown",
         "severity": "medium",
+        "risk_score": 50,
+        "mitre_ttp": [],
+        "false_positive_likelihood": "medium",
         "summary": "No se pudo completar el analisis IA. Se devuelve un resultado por defecto para no interrumpir la demo.",
         "recommended_action": "Revisar la alerta en el SIEM, correlacionar con eventos cercanos y aplicar medidas de contencion basicas (bloqueo IP / rate limit) si procede.",
+        "cited_runbooks": [],
         "raw_response": None,
     }
 
@@ -89,6 +100,9 @@ def _extract_first_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+_SEVERITY_DEFAULT_RISK = {"low": 25, "medium": 50, "high": 75, "critical": 95}
+
+
 def _normalize_analysis(obj: dict[str, Any], alert_id: int) -> dict[str, Any] | None:
     required = {"attack_type", "severity", "summary", "recommended_action"}
     if not required.issubset(obj.keys()):
@@ -104,12 +118,41 @@ def _normalize_analysis(obj: dict[str, Any], alert_id: int) -> dict[str, Any] | 
         text = re.sub(r'[*_`]', '', text)
         return text
 
+    # risk_score: entero 0-100; si falta o es inválido, derivar de la severity
+    try:
+        risk_score = int(float(obj.get("risk_score")))
+        risk_score = max(0, min(100, risk_score))
+    except (TypeError, ValueError):
+        risk_score = _SEVERITY_DEFAULT_RISK[severity]
+
+    # mitre_ttp: lista de IDs tipo T1110 (acepta string o lista); default []
+    raw_ttp = obj.get("mitre_ttp", [])
+    if isinstance(raw_ttp, str):
+        raw_ttp = re.split(r"[,\s]+", raw_ttp)
+    mitre_ttp = sorted({
+        t.strip().upper() for t in (raw_ttp or [])
+        if isinstance(t, str) and re.match(r"^T\d{4}(\.\d{3})?$", t.strip().upper())
+    })
+
+    fp = str(obj.get("false_positive_likelihood", "low")).strip().lower()
+    if fp not in {"low", "medium", "high"}:
+        fp = "low"
+
+    raw_cited = obj.get("cited_runbooks", [])
+    if isinstance(raw_cited, str):
+        raw_cited = [raw_cited]
+    cited_runbooks = [str(c).strip() for c in (raw_cited or []) if str(c).strip()][:5]
+
     return {
         "alert_id": alert_id,
         "attack_type": _clean_text(obj.get("attack_type", "unknown")),
         "severity": severity,
+        "risk_score": risk_score,
+        "mitre_ttp": mitre_ttp,
+        "false_positive_likelihood": fp,
         "summary": _clean_text(obj.get("summary", "N/A")),
         "recommended_action": _clean_text(obj.get("recommended_action", "N/A")),
+        "cited_runbooks": cited_runbooks,
         "raw_response": obj,
     }
 

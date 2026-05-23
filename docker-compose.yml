@@ -121,8 +121,9 @@ services:
       - SSL_CERTIFICATE_AUTHORITIES=/source_certs/root-ca.pem
       - SSL_CERTIFICATE=/source_certs/wazuh.manager.pem
       - SSL_KEY=/source_certs/wazuh.manager-key.pem
-      # url de ollama configurable para integracion local
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      # Ollama containerizado (servicio 'ollama'); consistente con el backend.
+      # Antes apuntaba a host.docker.internal (Ollama del host) — inconsistente.
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - wazuh-manager-data:/var/ossec/data
@@ -136,23 +137,45 @@ services:
       - cowrie_logs:/var/log/cowrie:ro
       - ./wazuh_config/ossec.conf:/var/ossec/etc/ossec.conf
       - ./wazuh_config/rules/cowrie_rules.xml:/var/ossec/etc/rules/cowrie_rules.xml
+      - ./wazuh_config/rules/local_rules.xml:/var/ossec/etc/rules/local_rules.xml
+      - ./wazuh_config/rules/sigma_rules.xml:/var/ossec/etc/rules/sigma_rules.xml
+      - ./wazuh_config/rules/correlation_rules.xml:/var/ossec/etc/rules/correlation_rules.xml
       - ./wazuh_config/decoders/cowrie_decoders.xml:/var/ossec/etc/decoders/cowrie_decoders.xml
       # Montamos el script en /tmp para luego copiarlo con permisos correctos en el entrypoint
       - ./wazuh_config/integrations/custom-ollama.py:/tmp/custom-ollama-src:ro
       - ./wazuh_config/integrations/custom-valhalla.py:/tmp/custom-valhalla-src:ro
+      # Active Response propio (Fase 1): lee srcip/src_ip y aplica iptables
+      - ./wazuh_config/active-response/valhalla-fwdrop.py:/tmp/valhalla-fwdrop-src:ro
+      # Lista CDB blocked-ips: semilla en /tmp; el entrypoint la copia a un archivo
+      # propio del contenedor (la API Wazuh la reescribe — no puede ser bind-mount directo).
+      - ./wazuh_config/lists/blocked-ips:/tmp/blocked-ips-seed:ro
     entrypoint: >
       bash -c "
-      mkdir -p /var/ossec/integrations /var/ossec/etc/shared &&
-      touch /var/ossec/etc/shared/ar.conf &&
-      cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama &&
-      cp /tmp/custom-valhalla-src /var/ossec/integrations/custom-valhalla &&
-      chown root:wazuh /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true &&
-      chmod 750 /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla &&
-      echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf &&
+      mkdir -p /var/ossec/integrations /var/ossec/etc/shared /var/ossec/active-response/bin /var/ossec/etc/lists;
+      touch /var/ossec/etc/shared/ar.conf;
+      cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama;
+      cp /tmp/custom-valhalla-src /var/ossec/integrations/custom-valhalla;
+      chown root:wazuh /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true;
+      chmod 750 /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true;
+      cp /tmp/valhalla-fwdrop-src /var/ossec/active-response/bin/valhalla-fwdrop;
+      chown root:wazuh /var/ossec/active-response/bin/valhalla-fwdrop 2>/dev/null || true;
+      chmod 750 /var/ossec/active-response/bin/valhalla-fwdrop 2>/dev/null || true;
+      chown root:wazuh /var/ossec/etc/lists 2>/dev/null || true;
+      chmod 770 /var/ossec/etc/lists 2>/dev/null || true;
+      cp /tmp/blocked-ips-seed /var/ossec/etc/lists/blocked-ips;
+      chown root:wazuh /var/ossec/etc/lists/blocked-ips 2>/dev/null || true;
+      chmod 660 /var/ossec/etc/lists/blocked-ips 2>/dev/null || true;
+      ( command -v iptables >/dev/null 2>&1 || dnf install -y iptables >/dev/null 2>&1 || dnf install -y iptables-nft >/dev/null 2>&1 || true );
+      echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf;
       exec /init
       "
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Fase 1: NET_ADMIN permite que el Active Response firewall-drop ejecute
+    # iptables dentro del contenedor manager (necesario para el bloqueo real).
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       - valhalla-net
     depends_on:
@@ -237,6 +260,35 @@ services:
       resources:
         limits:
           memory: 512M
+
+  # ──────────────────────────────────────────────────
+  # WAZUH AGENT (Linux) — Fase 2: telemetría real + AR efectivo
+  #   Agente real enrolado al manager. Habilita:
+  #   - firewall-drop vía API de Wazuh sobre un agente (cierra el límite de Fase 1)
+  #   - detección host (auditd / FIM / SCA) en un endpoint real
+  #   iptables se instala al arrancar para que el AR pueda aplicar el DROP.
+  # ──────────────────────────────────────────────────
+  wazuh.agent:
+    build:
+      context: ./agent
+    image: valhalla-wazuh-agent:4.9.2
+    container_name: valhalla-agent
+    hostname: valhalla-linux-01
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - WAZUH_AGENT_NAME=valhalla-linux-01
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - wazuh.manager
+    networks:
+      - valhalla-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ──────────────────────────────────────────────────
   # POSTGRES (persistencia backend fastapi)

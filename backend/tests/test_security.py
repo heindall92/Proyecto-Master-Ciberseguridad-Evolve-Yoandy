@@ -6,7 +6,10 @@ import asyncio
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from app.main import app
+from app.main import app, limiter
+# Desactivar el rate-limit de login (5/min por IP) durante los tests: con varios
+# logins en la misma suite se alcanzaba el límite y los logins devolvían 429.
+limiter.enabled = False
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.db import get_db
 from app.models import Base, User
@@ -166,3 +169,69 @@ def test_access_tokens_include_jti():
     assert payload is not None
     assert payload.get("jti") == jti
     assert payload.get("typ") == "access"
+
+
+# ── Fase 1: Active Response / Firewall block ──
+
+async def _auth_headers(ac):
+    """Login + cabeceras con el par CSRF double-submit que exige SecurityMiddleware."""
+    r = await ac.post("/api/auth/login", json={"username": "testuser", "password": "TestPass123!"})
+    token = r.json()["access_token"]
+    csrf = ac.cookies.get("csrf_token")
+    return {"Authorization": f"Bearer {token}", "X-CSRF-Token": csrf or ""}
+
+
+@pytest.mark.asyncio
+async def test_firewall_block_requires_auth(test_db):
+    # CSRF satisfecho (cookie+header iguales) pero SIN sesión → debe fallar en auth (401)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", cookies={"csrf_token": "x"}
+    ) as ac:
+        r = await ac.post("/api/firewall/block", json={"ip": "1.2.3.4"}, headers={"X-CSRF-Token": "x"})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_firewall_block_invalid_ip(test_db):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        headers = await _auth_headers(ac)
+        r = await ac.post("/api/firewall/block", json={"ip": "not-an-ip-at-all"}, headers=headers)
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_firewall_block_wazuh_failure_returns_502(test_db):
+    """Si Wazuh no confirma, NO se debe mentir: 502 y sin IOC persistido (rollback)."""
+    from unittest.mock import AsyncMock, patch
+    from sqlalchemy import select
+    from app.models import IOC
+
+    with patch("app.main.wazuh.upload_cdb_list", new=AsyncMock(side_effect=Exception("down"))), \
+         patch("app.main.wazuh.run_firewall_drop", new=AsyncMock(side_effect=Exception("down"))):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            headers = await _auth_headers(ac)
+            r = await ac.post("/api/firewall/block", json={"ip": "185.220.101.47"}, headers=headers)
+    assert r.status_code == 502
+    # El IOC no debe haberse quedado persistido tras el rollback
+    async with TestSessionLocal() as db:
+        row = (await db.execute(select(IOC).where(IOC.value == "185.220.101.47"))).scalar_one_or_none()
+    assert row is None
+
+
+@pytest.mark.asyncio
+async def test_firewall_block_success(test_db):
+    from unittest.mock import AsyncMock, patch
+    from sqlalchemy import select
+    from app.models import IOC
+
+    with patch("app.main.wazuh.upload_cdb_list", new=AsyncMock(return_value={"error": 0})), \
+         patch("app.main.wazuh.run_firewall_drop", new=AsyncMock(return_value={"error": 0})):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            headers = await _auth_headers(ac)
+            r = await ac.post("/api/firewall/block", json={"ip": "185.220.101.47"}, headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["cdb_applied"] is True and body["active_response"] is True
+    async with TestSessionLocal() as db:
+        row = (await db.execute(select(IOC).where(IOC.value == "185.220.101.47"))).scalar_one_or_none()
+    assert row is not None and row.status == "blocked" and "blocked-firewall" in (row.tags or [])
