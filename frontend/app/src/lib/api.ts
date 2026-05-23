@@ -538,6 +538,31 @@ export async function downloadHeimdallPdf(): Promise<Blob> {
   return await res.blob();
 }
 
+// CVE Intel (Fase 5) — feed CISA KEV + post IA (borrador)
+export interface CveItem {
+  id: string;
+  summary: string;
+  product: string;
+  name: string;
+  published: string;
+  due_date: string;
+  required_action: string;
+  ransomware: boolean;
+  severity: string;
+  source: string;
+}
+
+export function getLatestCves(limit = 15) {
+  return http<CveItem[]>(`/api/cve/latest?limit=${limit}`);
+}
+
+export function generateCveSocialPost() {
+  return http<{ post: string; cves_used: Array<{ id: string; severity: string }>; auto_published: boolean }>(
+    "/api/cve/social-post",
+    { method: "POST" }
+  );
+}
+
 
 // RUNBOOKS - Procedimientos operativos estandar
 

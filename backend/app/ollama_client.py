@@ -4,6 +4,14 @@ import json
 import logging
 import re
 import unicodedata
+
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002600-\U000026FF\U00002700-\U000027BF\U00002B00-\U00002BFF\U0001F1E6-\U0001F1FF️‍]"
+)
+
+
+def _strip_emojis(text: str) -> str:
+    return re.sub(r"  +", " ", _EMOJI_RE.sub("", text or "")).strip()
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -270,6 +278,46 @@ async def chat_assistant(question: str, history: list[dict[str, str]] | None = N
     except Exception as e:
         logger.warning("chat_assistant failed: %s", e)
         return "El asistente IA no está disponible ahora mismo (¿modelo Ollama cargado?)."
+
+
+SYSTEM_PROMPT_SOCIAL = (
+    "Eres el responsable de divulgación técnica de un SOC. Redacta un post profesional para LinkedIn "
+    "en español que difunda las vulnerabilidades CVE más relevantes para una audiencia de ciberseguridad. "
+    "Tono profesional y claro, 120-180 palabras. Incluye 3-5 hashtags al final (por ejemplo #Ciberseguridad #CVE). "
+    "Usa SOLO los CVE proporcionados, no inventes datos. NO uses emojis."
+)
+
+
+async def draft_social_post(cves: list[dict[str, Any]]) -> str:
+    """Redacta un borrador de post de redes (LinkedIn) sobre los CVE dados. NO publica."""
+    lines = "\n".join(
+        f"- {c.get('id')} [{c.get('severity','')}{', ransomware' if c.get('ransomware') else ''}]"
+        f" {c.get('product','')}: {str(c.get('summary',''))[:200]}"
+        for c in (cves or [])[:5]
+    ) or "Sin CVEs recientes."
+    base = settings.ollama_base_url.rstrip("/")
+    client = get_ollama_client()
+    payload = {
+        "model": settings.ollama_model, "stream": False, "options": {"temperature": 0.6},
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_SOCIAL},
+            {"role": "user", "content": f"CVEs destacados de hoy:\n{lines}\n\nRedacta el post de LinkedIn."},
+        ],
+    }
+    try:
+        r = await client.post(f"{base}/api/chat", json=payload)
+        if r.status_code == 404:
+            r = await client.post(f"{base}/api/generate", json={
+                "model": settings.ollama_model, "stream": False, "options": {"temperature": 0.6},
+                "prompt": SYSTEM_PROMPT_SOCIAL + f"\n\nCVEs:\n{lines}\n\nPost:",
+            })
+        r.raise_for_status()
+        body = r.json()
+        content = (body.get("message") or {}).get("content") if isinstance(body.get("message"), dict) else None
+        return _strip_emojis(content or body.get("response") or "") or "No se pudo redactar el post."
+    except Exception as e:
+        logger.warning("draft_social_post failed: %s", e)
+        return "El generador de posts IA no está disponible ahora mismo (¿modelo Ollama cargado?)."
 
 
 async def generate_executive_summary(metrics_context: dict[str, Any]) -> str:
