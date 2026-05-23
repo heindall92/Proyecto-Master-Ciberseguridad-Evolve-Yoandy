@@ -28,7 +28,8 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
   const fetchExploits = async (id: string) => {
     setExploits((p) => ({ ...p, [id]: "loading" }));
     try {
-      setExploits((p) => ({ ...p, [id]: await getCveExploits(id) }));
+      const res = await getCveExploits(id);
+      setExploits((p) => ({ ...p, [id]: res }));
     } catch (e) {
       logger.error("exploits error:", e);
       setExploits((p) => ({ ...p, [id]: { cve: id, count: 0, exploits: [], error: "error" } }));
