@@ -58,7 +58,8 @@ from app.security import (
 from app.crypto import encrypt_secret, decrypt_secret
 from app import opensearch_client as osc
 from app.wazuh_client import wazuh
-from app.ollama_client import analyze_alert, generate_executive_summary, chat_assistant
+from app.ollama_client import analyze_alert, generate_executive_summary, chat_assistant, draft_social_post
+from app import cve_feed
 from app import virustotal_client as vt
 from app import abuseipdb_client as abuse
 from app.rag import build_knowledge, MITRE_TECHNIQUES
@@ -2055,3 +2056,26 @@ async def heimdall_report_pdf(db: AsyncSession = Depends(get_db), current: User 
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=heimdall-intel-report.pdf"},
     )
+
+
+# ─────────────────────────────────────────────
+# CVE INTEL — feed de vulnerabilidades + post IA para redes (Fase 5)
+# La IA redacta un BORRADOR (no publica). Difusión la decide el analista.
+# ─────────────────────────────────────────────
+@app.get("/api/cve/latest")
+async def cve_latest(limit: int = Query(15, ge=1, le=50), _=Depends(get_current_user)):
+    return await cve_feed.get_latest_cves(limit)
+
+
+@app.post("/api/cve/social-post")
+@limiter.limit("10/minute")
+async def cve_social_post(request: Request, current: User = Depends(get_current_user)):
+    """La IA redacta un post de difusión sobre los CVE más críticos recientes (solo borrador)."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede generar el post")
+    cves = await cve_feed.get_latest_cves(20)
+    # Prioriza las usadas en ransomware, luego las más recientes
+    top = sorted(cves, key=lambda c: (not c.get("ransomware"), c.get("published", "")), reverse=False)
+    top = sorted(top, key=lambda c: c.get("published", ""), reverse=True)[:5]
+    post = await draft_social_post(top)
+    return {"post": post, "cves_used": [{"id": c["id"], "severity": c.get("severity")} for c in top], "auto_published": False}

@@ -59,6 +59,7 @@ import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
 import SocMaturityView from "./SocMaturityView";
 import HeimdallReportView from "./HeimdallReportView";
+import CveIntelView from "./CveIntelView";
 import ExecutiveReport from "./ExecutiveReport";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
@@ -920,6 +921,7 @@ export default function App() {
           {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
           {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="heimdall" label="Heimdall" sub={lang === 'es' ? 'Informe Intel' : 'Intel Report'} icon="i-metrics" />}
+          <NavBtn id="cveintel" label="CVE Intel" sub={lang === 'es' ? 'KEV · Difusión IA' : 'KEV · AI outreach'} icon="i-vuln" />
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
           {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
@@ -982,10 +984,11 @@ export default function App() {
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
                 {view === 'heimdall' && <HeimdallReportView lang={lang} />}
+                {view === 'cveintel' && <CveIntelView lang={lang} />}
                 {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} />}
                 {view === 'executive-report' && <ExecutiveReport lang={lang} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
-                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
