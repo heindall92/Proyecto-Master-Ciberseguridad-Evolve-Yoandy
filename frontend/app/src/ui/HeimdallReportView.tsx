@@ -85,7 +85,7 @@ export default function HeimdallReportView({ lang = "es" }: { lang?: string }) {
         borderBottom: "1px solid var(--cyan, #4ae3ff)", paddingBottom: "12px" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "24px", color: "var(--cyan, #4ae3ff)", fontFamily: "var(--mono)", letterSpacing: "3px", textShadow: "0 0 12px rgba(74,227,255,0.4)" }}>
-            🛡️ HEIMDALL
+             HEIMDALL
           </h2>
           <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
             {report.subtitle} · {t("Analista", "Analyst")}: {report.analyst} · {new Date(report.generated_at).toLocaleString()}
@@ -93,10 +93,10 @@ export default function HeimdallReportView({ lang = "es" }: { lang?: string }) {
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button onClick={downloadPdf} disabled={pdfLoading} style={{ padding: "8px 16px", background: "linear-gradient(135deg, rgba(74,227,255,0.2), rgba(60,255,158,0.12))", border: "1px solid var(--cyan, #4ae3ff)", color: "var(--cyan, #4ae3ff)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "1px", boxShadow: "0 0 12px rgba(74,227,255,0.25)" }}>
-            {pdfLoading ? "..." : "📄 PDF"}
+            {pdfLoading ? "..." : " PDF"}
           </button>
-          <button onClick={downloadJson} style={{ padding: "8px 14px", background: "rgba(74,227,255,0.1)", border: "1px solid var(--cyan, #4ae3ff)", color: "var(--cyan, #4ae3ff)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 600, fontFamily: "var(--mono)" }}>⬇ JSON</button>
-          <button onClick={load} style={{ padding: "8px 12px", background: "transparent", border: "1px solid var(--cyan, #4ae3ff)", color: "var(--cyan, #4ae3ff)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}>🔄 SYNC</button>
+          <button onClick={downloadJson} style={{ padding: "8px 14px", background: "rgba(74,227,255,0.1)", border: "1px solid var(--cyan, #4ae3ff)", color: "var(--cyan, #4ae3ff)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 600, fontFamily: "var(--mono)" }}> JSON</button>
+          <button onClick={load} style={{ padding: "8px 12px", background: "transparent", border: "1px solid var(--cyan, #4ae3ff)", color: "var(--cyan, #4ae3ff)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}> SYNC</button>
         </div>
       </div>
 

@@ -7,15 +7,15 @@ import { translations } from "./translations";
 // ── Severity helpers ──────────────────────────────────────────────────────────
 const SEV_COLOR: Record<string, string> = {
   critical: "#ff3b3b",
-  high:     "#ff8c00",
-  medium:   "#f5c518",
-  low:      "#3cf",
+  high: "#ff8c00",
+  medium: "#f5c518",
+  low: "#3cf",
 };
 const SEV_BG: Record<string, string> = {
   critical: "rgba(255,59,59,0.12)",
-  high:     "rgba(255,140,0,0.10)",
-  medium:   "rgba(245,197,24,0.08)",
-  low:      "rgba(51,204,255,0.08)",
+  high: "rgba(255,140,0,0.10)",
+  medium: "rgba(245,197,24,0.08)",
+  low: "rgba(51,204,255,0.08)",
 };
 
 const SYSTEM_PATTERNS = ["ollama ai insight", "error consultando ollama"];
@@ -39,33 +39,33 @@ function Toast({ msg, ok, onDone }: { msg: string; ok: boolean; onDone: () => vo
       fontSize: 12, fontWeight: 600, letterSpacing: "0.5px",
       boxShadow: `0 4px 24px ${ok ? "rgba(51,204,255,0.2)" : "rgba(255,59,59,0.2)"}`,
     }}>
-      {ok ? "✓" : "✕"} {msg}
+      {ok ? "" : ""} {msg}
     </div>
   );
 }
 
 // ── Severity chip filter ──────────────────────────────────────────────────────
 const CHIPS = [
-  { id: "all",      label: "ALL" },
+  { id: "all", label: "ALL" },
   { id: "critical", label: "CRIT" },
-  { id: "high",     label: "HIGH" },
-  { id: "medium",   label: "MED"  },
-  { id: "low",      label: "LOW"  },
+  { id: "high", label: "HIGH" },
+  { id: "medium", label: "MED" },
+  { id: "low", label: "LOW" },
 ];
 
 export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const alertLabel = (d: string) => translateAlertDescription(d, lang);
-  const [alerts, setAlerts]           = useState<any[]>([]);
-  const [mitre, setMitre]             = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [mitre, setMitre] = useState<any[]>([]);
   const [topAttackers, setTopAttackers] = useState<any[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [selected, setSelected]       = useState<any>(null);
-  const [filter, setFilter]           = useState("all");
-  const [search, setSearch]           = useState("");
-  const [hoveredId, setHoveredId]     = useState<string | null>(null);
-  const [escalating, setEscalating]   = useState<string | null>(null);
-  const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any>(null);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [escalating, setEscalating] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [showFullLog, setShowFullLog] = useState(false);
   const [groupAlerts, setGroupAlerts] = useState(true);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -378,7 +378,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "1px" }}>RAW LOG</div>
-                    <button 
+                    <button
                       onClick={() => setShowFullLog(true)}
                       style={{ background: 'none', border: 'none', color: 'var(--cyan)', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
                     >
@@ -394,7 +394,7 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                     {JSON.stringify(selected.raw_alert ?? {}, null, 2)}
                   </pre>
                 </div>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                    <button
                     onClick={e => handleEscalate(e, selected)}
@@ -412,12 +412,12 @@ export default function SiemView({ lang = "es" }: { lang?: "es" | "en" }) {
                   </button>
                   <button
                     onClick={() => {
-                      const ev = new CustomEvent('navigate-to-workspace', { 
-                        detail: { 
+                      const ev = new CustomEvent('navigate-to-workspace', {
+                        detail: {
                           title: `Investigación: ${selected.description}`,
                           source_ip: selected.source_ip,
                           affected_asset: selected.agent_name
-                        } 
+                        }
                       });
                       window.dispatchEvent(ev);
                     }}

@@ -815,7 +815,7 @@ export default function App() {
                 {profilePic ? (
                   <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: '14px' }}>👤</span>
+                  <span style={{ fontSize: '14px' }}></span>
                 )}
               </div>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -838,10 +838,10 @@ export default function App() {
                 <button onClick={() => window.location.reload()} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>{t('sync')}</button>
                 <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
                 <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
-                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>🎨 {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
-                <button onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}>👤 {t('profile_settings')}</button>
+                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}> {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
+                <button onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}> {t('profile_settings')}</button>
                 {user?.role === 'admin' && (
-                  <button onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>⚙ {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
+                  <button onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}> {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
                 )}
                 <div className="tactical-dropdown__divider" />
                 <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)', background: 'rgba(60,255,158,0.05)' }}>{t('language')}: {lang.toUpperCase()}</button>
@@ -937,7 +937,7 @@ export default function App() {
           )}
 
           {/* Collapse Button */}
-          <button 
+          <button
             className={`navbtn collapse-btn${sidebarCollapsed ? ' collapse-btn--active' : ''}`}
             onClick={() => {
               const newVal = !sidebarCollapsed;
@@ -1011,11 +1011,11 @@ export default function App() {
                  ))}
               </div>
               <button onClick={toggleTheme} className="action-btn">
-                {theme === 'dark' ? '☀ MODO CLARO' : '🌑 MODO OSCURO'}
+                {theme === 'dark' ? ' MODO CLARO' : ' MODO OSCURO'}
               </button>
               <button onClick={() => dispatch(setScanlines(!scanlines))} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
               <button onClick={() => dispatch(setTvMode(!tvMode))} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
-              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}>✕ CERRAR</button>
+              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}> CERRAR</button>
            </div>
         </div>
         )}
@@ -1039,8 +1039,8 @@ export default function App() {
                 }
               </span>
               <div className="chat-panel__head-actions">
-                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}>🗑</button>
-                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))}>✕</button>
+                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}></button>
+                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))}></button>
               </div>
             </div>
 
@@ -1125,9 +1125,9 @@ export default function App() {
                           ) : (
                             <>
                               <span style={{ fontSize: '16px' }}>
-                                {msg.attachment.type === 'application/pdf' ? '📄' :
-                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '📊' :
-                                 msg.attachment.type === 'text/plain' ? '📝' : '📎'}
+                                {msg.attachment.type === 'application/pdf' ? '' :
+                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '' :
+                                 msg.attachment.type === 'text/plain' ? '' : ''}
                               </span>
                               <a href={msg.attachment.data} download={msg.attachment.name} style={{ color: 'var(--signal)', textDecoration: 'none' }}>
                                 {msg.attachment.name}
@@ -1150,9 +1150,9 @@ export default function App() {
                     {pendingAttachment.type.startsWith('image/') ? (
                       <img src={pendingAttachment.data} alt={pendingAttachment.name} />
                     ) : (
-                      <span>📎 {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
+                      <span> {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
                     )}
-                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))}>✕</button>
+                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))}></button>
                   </div>
                 )}
 
@@ -1180,7 +1180,7 @@ export default function App() {
                     style={{ display: 'none' }}
                     accept=".txt,.pdf,.png,.jpg,.jpeg,.svg,.xlsx,.xls,.csv"
                   />
-                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}>📎</button>
+                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}></button>
                   <input
                     ref={chatInputRef}
                     className="chat-panel__input"
@@ -1196,7 +1196,7 @@ export default function App() {
                     maxLength={500}
                     autoFocus
                   />
-                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar">➤</button>
+                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar"></button>
                 </div>
               </div>
             </div>

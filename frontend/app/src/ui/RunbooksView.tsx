@@ -117,10 +117,10 @@ export default function RunbooksView() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-        <button 
+        <button
           onClick={() => setFilter("all")}
-          style={{ 
-            padding: '6px 14px', 
+          style={{
+            padding: '6px 14px',
             background: filter === "all" ? 'var(--signal)' : 'rgba(60,255,158,0.1)',
             color: filter === "all" ? '#000' : 'var(--signal)',
             border: filter === "all" ? '1px solid var(--signal)' : '1px solid var(--signal-dim)',
@@ -134,11 +134,11 @@ export default function RunbooksView() {
          Todo
         </button>
         {CATEGORIES.map(cat => (
-          <button 
+          <button
             key={cat}
             onClick={() => setFilter(cat)}
-            style={{ 
-              padding: '6px 14px', 
+            style={{
+              padding: '6px 14px',
               background: filter === cat ? 'var(--signal)' : 'rgba(60,255,158,0.1)',
               color: filter === cat ? '#000' : 'var(--signal)',
               border: filter === cat ? '1px solid var(--signal)' : '1px solid var(--signal-dim)',
@@ -157,11 +157,11 @@ export default function RunbooksView() {
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', gap: '20px', overflow: 'hidden' }}>
         {/* List */}
-        <div style={{ 
-          width: '350px', 
+        <div style={{
+          width: '350px',
           overflow: 'auto',
-          display: 'flex', 
-          flexDirection: 'column', 
+          display: 'flex',
+          flexDirection: 'column',
           gap: '10px'
         }}>
           {loading && <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '20px' }}>CARGANDO...</div>}
@@ -171,7 +171,7 @@ export default function RunbooksView() {
             </div>
           )}
           {filtered.map(rb => (
-            <div 
+            <div
               key={rb.id}
               onClick={() => setSelected(rb)}
               style={{
@@ -184,9 +184,9 @@ export default function RunbooksView() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ 
-                  fontFamily: 'var(--mono)', 
-                  fontSize: '14px', 
+                <span style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: '14px',
                   color: 'var(--text)',
                   fontWeight: 600
                 }}>
@@ -194,8 +194,8 @@ export default function RunbooksView() {
                 </span>
                 <span style={{
                   padding: '2px 8px',
-                  background: rb.severity_applicable === 'critical' ? 'var(--danger)' : 
-                             rb.severity_applicable === 'high' ? 'orange' : 
+                  background: rb.severity_applicable === 'critical' ? 'var(--danger)' :
+                             rb.severity_applicable === 'high' ? 'orange' :
                              rb.severity_applicable === 'medium' ? 'yellow' : 'var(--signal)',
                   color: '#000',
                   borderRadius: '4px',
@@ -218,10 +218,10 @@ export default function RunbooksView() {
         {/* Detail/Edit panel */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {!selected && !editing && (
-            <div style={{ 
-              height: '100%', 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--text-dim)'
             }}>
@@ -230,7 +230,7 @@ export default function RunbooksView() {
           )}
 
           {(selected || editing) && (
-            <RunbookDetail 
+            <RunbookDetail
               runbook={selected!}
               editing={editing}
               onEdit={() => setEditing(true)}
@@ -245,13 +245,13 @@ export default function RunbooksView() {
   );
 }
 
-function RunbookDetail({ 
-  runbook, 
-  editing, 
-  onEdit, 
-  onSave, 
-  onDelete, 
-  onCancel 
+function RunbookDetail({
+  runbook,
+  editing,
+  onEdit,
+  onSave,
+  onDelete,
+  onCancel
 }: {
   runbook: Runbook;
   editing: boolean;
@@ -312,8 +312,8 @@ function RunbookDetail({
           <div>
             <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Nombre</label>
             {editing ? (
-              <input 
-                value={form.name} 
+              <input
+                value={form.name}
                 onChange={e => updateField("name", e.target.value)}
                 style={inputStyle}
               />
@@ -324,8 +324,8 @@ function RunbookDetail({
           <div>
             <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Categoría</label>
             {editing ? (
-              <select 
-                value={form.category} 
+              <select
+                value={form.category}
                 onChange={e => updateField("category", e.target.value)}
                 style={inputStyle}
               >
@@ -342,8 +342,8 @@ function RunbookDetail({
         <div>
           <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Descripción</label>
           {editing ? (
-            <textarea 
-              value={form.description} 
+            <textarea
+              value={form.description}
               onChange={e => updateField("description", e.target.value)}
               rows={3}
               style={{ ...inputStyle, resize: 'vertical' }}
@@ -356,8 +356,8 @@ function RunbookDetail({
         <div>
           <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Severidad aplicable</label>
           {editing ? (
-            <select 
-              value={form.severity_applicable} 
+            <select
+              value={form.severity_applicable}
               onChange={e => updateField("severity_applicable", e.target.value)}
               style={inputStyle}
             >
@@ -371,72 +371,72 @@ function RunbookDetail({
         </div>
 
         {/* Identification */}
-        <StepsSection 
-          title="Identification & Analysis (Identificación)" 
+        <StepsSection
+          title="Identification & Analysis (Identificación)"
           steps={form.identification_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("identification_steps", i, v)}
           onAdd={() => addStep("identification_steps")}
           onRemove={(i) => removeStep("identification_steps", i)}
-          icon="🔍"
+          icon=""
         />
 
         {/* Containment */}
-        <StepsSection 
-          title="Containment (Contención)" 
+        <StepsSection
+          title="Containment (Contención)"
           steps={form.containment_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("containment_steps", i, v)}
           onAdd={() => addStep("containment_steps")}
           onRemove={(i) => removeStep("containment_steps", i)}
-          icon="🛑"
+          icon=""
         />
 
         {/* Eradication */}
-        <StepsSection 
-          title="Eradication (Erradicación)" 
+        <StepsSection
+          title="Eradication (Erradicación)"
           steps={form.eradication_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("eradication_steps", i, v)}
           onAdd={() => addStep("eradication_steps")}
           onRemove={(i) => removeStep("eradication_steps", i)}
-          icon="🧹"
+          icon=""
         />
 
         {/* Recovery */}
-        <StepsSection 
-          title="Recovery (Recuperación)" 
+        <StepsSection
+          title="Recovery (Recuperación)"
           steps={form.recovery_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("recovery_steps", i, v)}
           onAdd={() => addStep("recovery_steps")}
           onRemove={(i) => removeStep("recovery_steps", i)}
-          icon="♻️"
+          icon=""
         />
 
         {/* Post Mortem */}
-        <StepsSection 
-          title="Lessons Learned (Lecciones Aprendidas)" 
+        <StepsSection
+          title="Lessons Learned (Lecciones Aprendidas)"
           steps={form.post_mortem_steps || []}
           editing={editing}
           onUpdate={(i, v) => updateStep("post_mortem_steps", i, v)}
           onAdd={() => addStep("post_mortem_steps")}
           onRemove={(i) => removeStep("post_mortem_steps", i)}
-          icon="📝"
+          icon=""
         />
       </div>
     </div>
   );
 }
 
-function StepsSection({ 
-  title, 
-  steps, 
-  editing, 
-  onUpdate, 
-  onAdd, 
+function StepsSection({
+  title,
+  steps,
+  editing,
+  onUpdate,
+  onAdd,
   onRemove,
-  icon 
+  icon
 }: {
   title: string;
   steps: RunbookStep[];
@@ -463,13 +463,13 @@ function StepsSection({
               <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600 }}>#{i + 1}</span>
               {editing ? (
                 <>
-                  <input 
-                    value={step.text} 
+                  <input
+                    value={step.text}
                     onChange={e => onUpdate(i, { text: e.target.value })}
                     placeholder="Descripción de la acción..."
                     style={{ ...inputStyle, flex: 1 }}
                   />
-                  <button onClick={() => onRemove(i)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => onRemove(i)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}></button>
                 </>
               ) : (
                 <div style={{ flex: 1, color: 'var(--text)', fontSize: '12px', fontWeight: 500 }}>
@@ -477,25 +477,25 @@ function StepsSection({
                 </div>
               )}
             </div>
-            
+
             {/* Command Area */}
             {(editing || step.command) && (
               <div style={{ paddingLeft: '24px' }}>
                 {editing ? (
-                  <input 
+                  <input
                     value={step.command || ""}
                     onChange={e => onUpdate(i, { command: e.target.value })}
                     placeholder="Comando opcional (ej: rm -rf /tmp/malware)..."
                     style={{ ...inputStyle, fontSize: '11px', fontFamily: 'var(--mono)', background: 'rgba(0,255,136,0.05)', borderColor: 'rgba(0,255,136,0.2)' }}
                   />
                 ) : (
-                  <div style={{ 
-                    padding: '8px 12px', 
-                    background: '#000', 
-                    border: '1px solid rgba(0,255,136,0.2)', 
-                    borderRadius: '4px', 
-                    fontFamily: 'var(--mono)', 
-                    fontSize: '11px', 
+                  <div style={{
+                    padding: '8px 12px',
+                    background: '#000',
+                    border: '1px solid rgba(0,255,136,0.2)',
+                    borderRadius: '4px',
+                    fontFamily: 'var(--mono)',
+                    fontSize: '11px',
                     color: 'var(--signal)',
                     display: 'flex',
                     justifyContent: 'space-between',

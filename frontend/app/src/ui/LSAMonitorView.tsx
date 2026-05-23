@@ -94,15 +94,15 @@ export default function LSAMonitorView() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "20px", color: "var(--signal)", fontFamily: "var(--mono)" }}>
-            🔐 Credential Guard & LSA Monitor
+             Credential Guard & LSA Monitor
           </h2>
           <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>Monitoreo Real de Seguridad LSA via Sysmon ID 10</span>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button onClick={handleHardening} disabled={hardeningMode} style={{ padding: "8px 16px", background: hardeningMode ? "var(--danger)" : "var(--signal)", border: "none", color: "#000", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)" }}>
-            {hardeningMode ? "⏳ APLICANDO..." : "🛡️ ENABLE LSA PROTECTION"}
+            {hardeningMode ? "⏳ APLICANDO..." : " ENABLE LSA PROTECTION"}
           </button>
-          <button onClick={fetchData} style={{ padding: "6px 12px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}>🔄 SYNC</button>
+          <button onClick={fetchData} style={{ padding: "6px 12px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}> SYNC</button>
         </div>
       </div>
 
@@ -150,9 +150,9 @@ export default function LSAMonitorView() {
                   <tr key={ep.hostname} style={{ borderBottom: "1px solid var(--line-faint)" }}>
                     <td style={{ padding: "8px" }}>{ep.hostname}</td>
                     <td style={{ padding: "8px", textAlign: "center" }}>
-                      <span style={{ 
-                        padding: "3px 8px", 
-                        borderRadius: "4px", 
+                      <span style={{
+                        padding: "3px 8px",
+                        borderRadius: "4px",
                         background: ep.runasppl_enabled ? "var(--signal)" : "var(--danger)",
                         color: ep.runasppl_enabled ? "#000" : "#fff",
                         fontSize: "10px",
@@ -162,9 +162,9 @@ export default function LSAMonitorView() {
                       </span>
                     </td>
                     <td style={{ padding: "8px", textAlign: "center" }}>
-                      <span style={{ 
-                        padding: "3px 8px", 
-                        borderRadius: "4px", 
+                      <span style={{
+                        padding: "3px 8px",
+                        borderRadius: "4px",
                         background: ep.lsa_protected ? "var(--signal)" : "var(--danger)",
                         color: ep.lsa_protected ? "#000" : "#fff",
                         fontSize: "10px",
@@ -174,7 +174,7 @@ export default function LSAMonitorView() {
                       </span>
                     </td>
                     <td style={{ padding: "8px", textAlign: "center" }}>
-                      <span style={{ 
+                      <span style={{
                         color: ep.risk_score > 70 ? "var(--danger)" : ep.risk_score > 30 ? "var(--amber)" : "var(--signal)",
                         fontWeight: 600
                       }}>
@@ -198,9 +198,9 @@ export default function LSAMonitorView() {
               <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", opacity: 0.5 }}>Sin detecciones</div>
             ) : (
               alerts.map(alert => (
-                <div key={alert.id} style={{ 
-                  padding: "10px", 
-                  marginBottom: "8px", 
+                <div key={alert.id} style={{
+                  padding: "10px",
+                  marginBottom: "8px",
                   background: alert.severity === "critical" ? "rgba(239,68,68,0.15)" : "rgba(234,179,8,0.1)",
                   border: `1px solid ${alert.severity === "critical" ? "var(--danger)" : "var(--amber)"}`,
                   borderRadius: "6px",
@@ -209,8 +209,8 @@ export default function LSAMonitorView() {
                   alignItems: "center"
                 }}>
                   <div>
-                    <span style={{ 
-                      padding: "2px 6px", 
+                    <span style={{
+                      padding: "2px 6px",
                       background: alert.severity === "critical" ? "var(--danger)" : "var(--amber)",
                       color: "#000",
                       borderRadius: "3px",
@@ -251,7 +251,7 @@ export default function LSAMonitorView() {
         </div>
 
         <div style={{ background: "var(--bg-panel)", border: "1px solid var(--line)", borderRadius: "8px", padding: "15px" }}>
-          <h3 style={{ margin: "0 0 10px", fontSize: "12px", color: "var(--signal)", fontFamily: "var(--mono)" }}>⚡ COMANDOS SYSMON ID 10</h3>
+          <h3 style={{ margin: "0 0 10px", fontSize: "12px", color: "var(--signal)", fontFamily: "var(--mono)" }}> COMANDOS SYSMON ID 10</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
             <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "6px", padding: "12px" }}>
               <div style={{ fontSize: "11px", color: "var(--amber)", marginBottom: "8px", fontWeight: 600 }}>QUERY EVENTOS LSASS (SYSMON ID 10)</div>
@@ -262,7 +262,7 @@ export default function LSAMonitorView() {
               <pre style={{ fontSize: "11px", color: "var(--text)", margin: 0, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: "1.4" }}>{CHECK_LSA_STATUS}</pre>
             </div>
             <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "6px", padding: "12px" }}>
-              <div style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "8px", fontWeight: 600 }}>🛡️ ENABLE LSA PROTECTION</div>
+              <div style={{ fontSize: "11px", color: "var(--danger)", marginBottom: "8px", fontWeight: 600 }}> ENABLE LSA PROTECTION</div>
               <pre style={{ fontSize: "11px", color: "var(--text)", margin: 0, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: "1.4" }}>{LSA_HARDENING_CMD}</pre>
             </div>
           </div>

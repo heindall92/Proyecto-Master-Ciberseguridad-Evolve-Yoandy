@@ -1,4 +1,4 @@
-# 📖 Manual de Usuario — Valhalla SOC
+# Manual de Usuario — Valhalla SOC
 
 ---
 
@@ -6,7 +6,7 @@
 
 Este manual explica paso a paso cómo instalar, configurar y usar **Valhalla SOC**, un Centro de Operaciones de Seguridad basado en software libre.
 
-**¿A quién va dirigido?**  
+**¿A quién va dirigido?**
 A cualquier persona con conocimientos básicos de informática. No se necesita experiencia en ciberseguridad ni en programación. Se explica todo desde cero.
 
 ---
@@ -154,11 +154,11 @@ docker compose ps
 
 Debes ver los 4 servicios en estado **Running**:
 ```
-NAME                 STATUS    PORTS
-wazuh-indexer        Running   9200/tcp
-wazuh-manager        Running   1514/tcp, 1515/tcp, 514/udp, 55000/tcp
-wazuh-dashboard      Running   443/tcp
-valhalla-cowrie      Running   2222/tcp, 2223/tcp
+NAME STATUS PORTS
+wazuh-indexer Running 9200/tcp
+wazuh-manager Running 1514/tcp, 1515/tcp, 514/udp, 55000/tcp
+wazuh-dashboard Running 443/tcp
+valhalla-cowrie Running 2222/tcp, 2223/tcp
 ```
 
 **Si alguno NO está Running:**
@@ -233,11 +233,11 @@ python setup_reports.py
 2. Seleccionar **"Valhalla SOC - Cowrie Honeypot"**
 
 Aquí verás:
-- 🔴 **Alertas Críticas** — Número total de alertas graves
-- 🥧 **Alertas por Nivel** — Distribución por severidad
-- 📊 **Top IPs Atacantes** — Quién ataca más
-- 📈 **Timeline** — Evolución de ataques en el tiempo
-- 📋 **Comandos Ejecutados** — Qué comandos escribieron los atacantes
+- **Alertas Críticas** — Número total de alertas graves
+- **Alertas por Nivel** — Distribución por severidad
+- **Top IPs Atacantes** — Quién ataca más
+- **Timeline** — Evolución de ataques en el tiempo
+- **Comandos Ejecutados** — Qué comandos escribieron los atacantes
 
 ### 4.3 Ver análisis de la IA
 
@@ -267,12 +267,12 @@ Los análisis de Ollama aparecen en:
 
 **Búsquedas útiles:**
 ```
-rule.groups:cowrie                           → Todos los eventos Cowrie
-rule.id:100111                               → Solo fuerza bruta
-rule.level:[10 TO 15]                        → Solo alertas altas/críticas
-data.src_ip:185.220.101.1                    → Eventos de una IP específica
-rule.id:100120 AND data.input:*wget*         → Comandos con wget
-rule.mitre.id:T1110                          → Técnica MITRE específica
+rule.groups:cowrie → Todos los eventos Cowrie
+rule.id:100111 → Solo fuerza bruta
+rule.level:[10 TO 15] → Solo alertas altas/críticas
+data.src_ip:185.220.101.1 → Eventos de una IP específica
+rule.id:100120 AND data.input:*wget* → Comandos con wget
+rule.mitre.id:T1110 → Técnica MITRE específica
 ```
 
 ---
@@ -332,17 +332,17 @@ docker compose up -d
 ### 6.3 Ver logs de un servicio específico
 
 ```bash
-docker compose logs wazuh.manager    # Logs del SIEM
-docker compose logs cowrie            # Logs del honeypot
-docker compose logs wazuh.dashboard   # Logs del dashboard
-docker compose logs wazuh.indexer     # Logs de la base de datos
+docker compose logs wazuh.manager # Logs del SIEM
+docker compose logs cowrie # Logs del honeypot
+docker compose logs wazuh.dashboard # Logs del dashboard
+docker compose logs wazuh.indexer # Logs de la base de datos
 ```
 
 ### 6.4 Borrar todo y empezar de cero
 
 ```bash
 docker compose down -v
-# ⚠️ CUIDADO: Este comando elimina todos los datos (alertas, configuraciones)
+# CUIDADO: Este comando elimina todos los datos (alertas, configuraciones)
 ```
 
 ### 6.5 Actualizar el proyecto
@@ -393,6 +393,6 @@ Si tienes problemas con la instalación o el uso:
 
 ---
 
-> **Versión del manual:** 1.0  
-> **Última actualización:** Abril 2026  
+> **Versión del manual:** 1.0
+> **Última actualización:** Abril 2026
 > **Autor:** Equipo Valhalla SOC

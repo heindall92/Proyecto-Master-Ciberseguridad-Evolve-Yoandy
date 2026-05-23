@@ -22,10 +22,10 @@
 
 ---
 
-## 📋 Índice
+## Índice
 
 <details>
-<summary>📖 Haz clic para expandir</summary>
+<summary> Haz clic para expandir</summary>
 
 1. [¿Qué es Valhalla SOC?](#-qué-es-valhalla-soc)
 2. [¿Cómo funciona? (Explicación simple)](#-cómo-funciona-explicación-simple)
@@ -45,103 +45,103 @@
 
 ---
 
-## 🎯 ¿Qué es Valhalla SOC?
+## ¿Qué es Valhalla SOC?
 
-<img align="right" width="150" src="https://img.shields.io/badge/⚔️-Valhalla_SOC-1a1a2e?style=for-the-badge&labelColor=e94560" />
+<img align="right" width="150" src="https://img.shields.io/badge/-Valhalla_SOC-1a1a2e?style=for-the-badge&labelColor=e94560" />
 
 **Valhalla SOC** es un **Centro de Operaciones de Seguridad** (Security Operations Center) completo que:
 
-- 🪤 **Despliega un honeypot** (una trampa) que simula ser un servidor real para atraer atacantes
-- 🔍 **Detecta ataques en tiempo real** como fuerza bruta, ejecución de comandos maliciosos, descargas de malware y reverse shells
-- 🤖 **Analiza cada amenaza con IA local** usando Ollama (sin enviar datos a la nube)
-- 📊 **Presenta todo en dashboards** profesionales con gráficas, tablas y métricas
-- 🗺️ **Mapea ataques al framework MITRE ATT&CK** para clasificarlos según estándares internacionales
+- **Despliega un honeypot** (una trampa) que simula ser un servidor real para atraer atacantes
+- **Detecta ataques en tiempo real** como fuerza bruta, ejecución de comandos maliciosos, descargas de malware y reverse shells
+- **Analiza cada amenaza con IA local** usando Ollama (sin enviar datos a la nube)
+- **Presenta todo en dashboards** profesionales con gráficas, tablas y métricas
+- **Mapea ataques al framework MITRE ATT&CK** para clasificarlos según estándares internacionales
 
 > **En palabras simples:** Es como poner una cámara de seguridad inteligente en internet que graba a los ladrones, analiza lo que hacen y te lo explica.
 
 ---
 
-## 🧩 ¿Cómo funciona? (Explicación simple)
+## ¿Cómo funciona? (Explicación simple)
 
 Imagina un edificio con un sistema de seguridad completo:
 
 ```
-🏠 Edificio  →  🏪 Tienda falsa  →  📹 Cámaras  →  🧠 Analista IA  →  📺 Monitor
-   (Internet)    (Honeypot Cowrie)   (Wazuh SIEM)    (Ollama)         (Dashboard)
+ Edificio → Tienda falsa → Cámaras → Analista IA → Monitor
+   (Internet) (Honeypot Cowrie) (Wazuh SIEM) (Ollama) (Dashboard)
 ```
 
 ### Paso a paso:
 
 | Paso | Componente | Qué sucede |
 |:---:|:---:|:---|
-| 1️⃣ | 🪤 **Cowrie** | Se conecta a internet haciéndose pasar por un servidor SSH real. Los atacantes/bots lo encuentran e intentan entrar |
-| 2️⃣ | 📝 **Logs JSON** | Todo queda registrado: cada intento de login, cada comando, cada archivo descargado |
-| 3️⃣ | 🔍 **Wazuh** | Lee esos registros en tiempo real y los clasifica: "fuerza bruta", "descarga de malware", "reverse shell" |
-| 4️⃣ | 🤖 **Ollama** | Recibe las alertas más graves y las analiza con IA, explicando qué está haciendo el atacante |
-| 5️⃣ | 📊 **Dashboard** | Muestra todo de forma visual: gráficas, IPs atacantes, comandos ejecutados, mapeo MITRE ATT&CK |
+| 1️⃣ | **Cowrie** | Se conecta a internet haciéndose pasar por un servidor SSH real. Los atacantes/bots lo encuentran e intentan entrar |
+| 2️⃣ | **Logs JSON** | Todo queda registrado: cada intento de login, cada comando, cada archivo descargado |
+| 3️⃣ | **Wazuh** | Lee esos registros en tiempo real y los clasifica: "fuerza bruta", "descarga de malware", "reverse shell" |
+| 4️⃣ | **Ollama** | Recibe las alertas más graves y las analiza con IA, explicando qué está haciendo el atacante |
+| 5️⃣ | **Dashboard** | Muestra todo de forma visual: gráficas, IPs atacantes, comandos ejecutados, mapeo MITRE ATT&CK |
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ```
                     ┌─────────────────────────────────────────────┐
-                    │              INTERNET / ATACANTES            │
+                    │ INTERNET / ATACANTES │
                     └────────────────────┬────────────────────────┘
                                          │
                                     Puerto 2222
                                          │
                     ┌────────────────────▼────────────────────────┐
-                    │          🪤 COWRIE HONEYPOT                  │
-                    │   Simula SSH/Telnet real                    │
-                    │   Registra TODA la actividad en JSON        │
+                    │ COWRIE HONEYPOT │
+                    │ Simula SSH/Telnet real │
+                    │ Registra TODA la actividad en JSON │
                     └────────────────────┬────────────────────────┘
                               Volumen compartido
                             (cowrie_logs)
                                          │
                     ┌────────────────────▼────────────────────────┐
-                    │          🔍 WAZUH MANAGER                   │
-                    │   Lee logs de Cowrie en tiempo real         │
-                    │   Aplica reglas personalizadas              │
-                    │   Clasifica alertas por severidad           │
-                    │   Mapea a MITRE ATT&CK                     │
-                    │                                             │
-                    │   Cuando alerta nivel ≥ 5:                  │
-                    │   ────► Llama a Ollama para análisis IA     │
+                    │ WAZUH MANAGER │
+                    │ Lee logs de Cowrie en tiempo real │
+                    │ Aplica reglas personalizadas │
+                    │ Clasifica alertas por severidad │
+                    │ Mapea a MITRE ATT&CK │
+                    │ │
+                    │ Cuando alerta nivel ≥ 5: │
+                    │ ────► Llama a Ollama para análisis IA │
                     └──────────┬──────────────┬───────────────────┘
-                               │              │
-                    ┌──────────▼──────┐  ┌────▼──────────────────┐
-                    │  🗄️ WAZUH        │  │  🤖 OLLAMA (IA Local) │
-                    │  INDEXER         │  │  Puerto 11434         │
-                    │  (OpenSearch)    │  │  Modelo: qwen2.5      │
-                    │  Puerto 9200     │  │  Analiza amenazas     │
-                    └──────────┬──────┘  └────────────────────────┘
+                               │ │
+                    ┌──────────▼──────┐ ┌────▼──────────────────┐
+                    │ WAZUH │ │ OLLAMA (IA Local) │
+                    │ INDEXER │ │ Puerto 11434 │
+                    │ (OpenSearch) │ │ Modelo: qwen2.5 │
+                    │ Puerto 9200 │ │ Analiza amenazas │
+                    └──────────┬──────┘ └────────────────────────┘
                                │
                     ┌──────────▼──────────────────────────────────┐
-                    │          📊 WAZUH DASHBOARD                  │
-                    │   Puerto 443 (HTTPS)                        │
-                    │   Dashboards interactivos                   │
-                    │   Reportes PDF/CSV                          │
-                    │   Alertas en tiempo real                    │
+                    │ WAZUH DASHBOARD │
+                    │ Puerto 443 (HTTPS) │
+                    │ Dashboards interactivos │
+                    │ Reportes PDF/CSV │
+                    │ Alertas en tiempo real │
                     └─────────────────────────────────────────────┘
 ```
 
 ### Pipeline de datos:
 
 ```
-Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder → 
-→ Aplica regla → Genera alerta → Envía a Ollama (si nivel ≥ 5) → 
+Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder →
+→ Aplica regla → Genera alerta → Envía a Ollama (si nivel ≥ 5) →
 → IA analiza → Todo se indexa en OpenSearch → Dashboard lo muestra
 ```
 
 ---
 
-## 🔧 Componentes Principales
+## Componentes Principales
 
-### 1. 🪤 Cowrie Honeypot — "La Trampa"
+### 1. Cowrie Honeypot — "La Trampa"
 
 <details>
-<summary>📖 Más información</summary>
+<summary> Más información</summary>
 
 **¿Qué es?** Un programa que simula ser un servidor SSH/Telnet real. Cuando un atacante se conecta, cree que está en un servidor de verdad, pero todo es falso.
 
@@ -158,10 +158,10 @@ Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder �
 
 ---
 
-### 2. 🔍 Wazuh — "El Cerebro del SIEM"
+### 2. Wazuh — "El Cerebro del SIEM"
 
 <details>
-<summary>📖 Más información</summary>
+<summary> Más información</summary>
 
 **¿Qué es?** Wazuh es un SIEM (Security Information and Event Management) de código abierto. Es el sistema que recibe logs, los analiza y genera alertas.
 
@@ -178,21 +178,21 @@ Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder �
 | ID Regla | Nivel | Qué detecta | MITRE ATT&CK |
 |---|---|---|---|
 | 100110 | 5 | Login fallido | — |
-| 100111 | 10 | 🔴 Fuerza bruta (5+ fallos en 120s) | T1110 |
-| 100112 | 9 | 🟠 Login exitoso en honeypot | T1078 |
-| 100113 | 12 | 🔴 Login exitoso tras fuerza bruta | T1078, T1110 |
-| 100120 | 8 | 🟡 Comando ejecutado | T1059 |
-| 100121 | 9 | 🟠 Comandos de reconocimiento | T1082 |
-| 100130 | 13 | 🔴 Descarga de malware (wget/curl) | T1105 |
-| 100140 | 15 | 🔴 Reverse shell | T1059, T1071 |
-| 100150 | 14 | 🔴 Desactivar firewall/seguridad | T1562 |
-| 100160 | 11 | 🔴 Persistencia (crontab) | T1053 |
-| 100170 | 12 | 🔴 Anti-forense (borrar logs) | T1070 |
-| 100180 | 12 | 🔴 Escalada de privilegios | T1548 |
+| 100111 | 10 | Fuerza bruta (5+ fallos en 120s) | T1110 |
+| 100112 | 9 | Login exitoso en honeypot | T1078 |
+| 100113 | 12 | Login exitoso tras fuerza bruta | T1078, T1110 |
+| 100120 | 8 | Comando ejecutado | T1059 |
+| 100121 | 9 | Comandos de reconocimiento | T1082 |
+| 100130 | 13 | Descarga de malware (wget/curl) | T1105 |
+| 100140 | 15 | Reverse shell | T1059, T1071 |
+| 100150 | 14 | Desactivar firewall/seguridad | T1562 |
+| 100160 | 11 | Persistencia (crontab) | T1053 |
+| 100170 | 12 | Anti-forense (borrar logs) | T1070 |
+| 100180 | 12 | Escalada de privilegios | T1548 |
 
 ---
 
-## 🤖 ¿Qué es Ollama y qué hace aquí?
+## ¿Qué es Ollama y qué hace aquí?
 
 ### ¿Qué es Ollama?
 
@@ -202,11 +202,11 @@ Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder �
 
 | Característica | Ollama (Local) | ChatGPT / Nube |
 |---|---|---|
-| **Privacidad** | ✅ Los datos nunca salen de tu equipo | ❌ Los datos van a servidores externos |
-| **Coste** | ✅ Gratis, sin suscripciones | ❌ Pago por uso (costoso) |
-| **Cumplimiento normativo** | ✅ Alineado con ISO 27001, GDPR | ⚠️ Requiere acuerdos de procesamiento |
-| **Velocidad** | ✅ Sin latencia de red | ❌ Depende de la conexión |
-| **Disponibilidad** | ✅ Funciona sin internet | ❌ Requiere internet |
+| **Privacidad** | Los datos nunca salen de tu equipo | Los datos van a servidores externos |
+| **Coste** | Gratis, sin suscripciones | Pago por uso (costoso) |
+| **Cumplimiento normativo** | Alineado con ISO 27001, GDPR | Requiere acuerdos de procesamiento |
+| **Velocidad** | Sin latencia de red | Depende de la conexión |
+| **Disponibilidad** | Funciona sin internet | Requiere internet |
 
 ### ¿Qué hace Ollama en Valhalla SOC?
 
@@ -258,7 +258,7 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
-## 📸 Capturas de Pantalla
+## Capturas de Pantalla
 
 ### Dashboard principal de Wazuh
 > Resumen de agentes, alertas de las últimas 24 horas, módulos de seguridad
@@ -325,7 +325,7 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
-## 💻 Requisitos Previos
+## Requisitos Previos
 
 ### Hardware Mínimo
 
@@ -347,16 +347,16 @@ Wazuh Manager (dentro de Docker)
 
 ---
 
-## 🖥️ Dashboard Valhalla SOC (Frontend)
+## Dashboard Valhalla SOC (Frontend)
 
 Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propio** desarrollado con HTML/CSS/JS que se ejecuta en `http://localhost:3000`.
 
 ### Características:
-- 🎨 **Interfaz moderna** con visualización de amenazas en tiempo real
-- 🔐 **Sistema de autenticación** con JWT
-- 📊 **Dashboard interactivo** con métricas del honeypot
-- 🎫 **Gestión de tickets** SOC
-- 📈 **Exportación de reportes** en múltiples formatos
+- **Interfaz moderna** con visualización de amenazas en tiempo real
+- **Sistema de autenticación** con JWT
+- **Dashboard interactivo** con métricas del honeypot
+- **Gestión de tickets** SOC
+- **Exportación de reportes** en múltiples formatos
 
 ### Componentes:
 | Componente | Puerto | Descripción |
@@ -373,9 +373,9 @@ docker compose up -d --build
 
 ---
 
-## 🚀 Guía de Puesta en Marcha
+## Guía de Puesta en Marcha
 
-> 📖 **Manual completo** disponible en [`MANUAL.md`](MANUAL.md)
+> **Manual completo** disponible en [`MANUAL.md`](MANUAL.md)
 
 ### Inicio rápido (primera vez)
 
@@ -387,7 +387,7 @@ git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yo
 cd Proyecto-Master-Ciberseguridad-Evolve-Yoandy
 
 # 2. Configurar secretos (NO copiar .env.example a mano)
-#    Windows: setup.bat  |  Linux: ./scripts/setup_env.sh  |  make setup
+# Windows: setup.bat | Linux: ./scripts/setup_env.sh | make setup
 python scripts/setup_env.py
 
 # 3. Ollama + modelo IA
@@ -411,12 +411,12 @@ En **Windows**, `Valhalla-Runner.bat` ejecuta el paso 2 automáticamente si falt
 
 | Servicio | URL | Credenciales |
 |---|---|---|
-| 🏠 **Valhalla SOC Dashboard** | `http://localhost:3000` | `admin` + contraseña elegida en el setup (`.env.setup-backup`) |
-| 📊 Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
-| 🔌 Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
-| 🗄️ OpenSearch | `https://localhost:9200` | admin / admin |
-| 🪤 Honeypot SSH | `ssh localhost -p 2222` | ¡Es la trampa! 🪤 |
-| 🤖 Ollama API | `http://localhost:11434` | Sin autenticación |
+| **Valhalla SOC Dashboard** | `http://localhost:3000` | `admin` + contraseña elegida en el setup (`.env.setup-backup`) |
+| Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
+| Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
+| OpenSearch | `https://localhost:9200` | admin / admin |
+| Honeypot SSH | `ssh localhost -p 2222` | ¡Es la trampa! |
+| Ollama API | `http://localhost:11434` | Sin autenticación |
 
 ### Simular ataques de prueba
 
@@ -430,81 +430,81 @@ hydra -l root -P wordlist.txt ssh://localhost:2222
 
 ---
 
-## 📊 Dashboards y Visualizaciones
+## Dashboards y Visualizaciones
 
 ### Dashboard 1: Cowrie Honeypot (Tiempo Real)
 > `https://localhost/app/dashboards#/view/valhalla-soc-cowrie`
-- 🔴 Contador de alertas críticas
-- 🥧 Distribución por severidad
-- 📈 Timeline de eventos
-- 🏆 Top 10 IPs atacantes
-- 📋 Comandos ejecutados
+- Contador de alertas críticas
+- Distribución por severidad
+- Timeline de eventos
+- Top 10 IPs atacantes
+- Comandos ejecutados
 
 ### Dashboard 2: Reportes de Seguridad
 > `https://localhost/app/dashboards#/view/valhalla-soc-reports`
-- 📊 Alertas por nivel diario
-- 📋 Resumen por regla
-- 🗺️ Cobertura MITRE ATT&CK
+- Alertas por nivel diario
+- Resumen por regla
+- Cobertura MITRE ATT&CK
 
 ### 7 Monitores en Tiempo Real (cada 5 min)
 
 | Monitor | Severidad |
 |---|---|
-| Brute Force SSH | 🔴 CRÍTICO |
-| Login Exitoso en Honeypot | 🔴 CRÍTICO |
-| Descarga de Malware | 🔴 CRÍTICO |
-| Reverse Shell / C2 | 🔴 CRÍTICO |
-| Evasión de Defensa | 🔴 CRÍTICO |
-| Volumen Anómalo (50+ eventos) | 🔴 CRÍTICO |
-| Persistencia (crontab) | 🟠 ALTO |
+| Brute Force SSH | CRÍTICO |
+| Login Exitoso en Honeypot | CRÍTICO |
+| Descarga de Malware | CRÍTICO |
+| Reverse Shell / C2 | CRÍTICO |
+| Evasión de Defensa | CRÍTICO |
+| Volumen Anómalo (50+ eventos) | CRÍTICO |
+| Persistencia (crontab) | ALTO |
 
 ---
 
-### 💬 Comunicación y Colaboración (Real-Time)
-- 🚀 **Chat de Operadores**: Sistema basado en WebSockets para comunicación instantánea entre múltiples navegadores o equipos.
-- 💾 **Persistencia Total**: Historial de chat almacenado en base de datos para no perder mensajes al refrescar o cambiar de sesión.
-- 🔔 **Notificaciones Visuales**: Alertas luminosas (Neon Red) cuando hay mensajes nuevos para el operador.
+### Comunicación y Colaboración (Real-Time)
+- **Chat de Operadores**: Sistema basado en WebSockets para comunicación instantánea entre múltiples navegadores o equipos.
+- **Persistencia Total**: Historial de chat almacenado en base de datos para no perder mensajes al refrescar o cambiar de sesión.
+- **Notificaciones Visuales**: Alertas luminosas (Neon Red) cuando hay mensajes nuevos para el operador.
 
-### 🛡️ Inteligencia de Amenazas (Threat Intelligence)
-- 🔍 **Watchlist de IOCs**: Registro persistente de IPs, Hashes y Dominios maliciosos detectados mediante el modelo de datos unificado.
-- 🚫 **Bloqueo Directo**: Botón "Bloquear en Firewall" integrado directamente en la interfaz de análisis de indicadores.
-- 📊 **Integración con VirusTotal**: Análisis profundo de indicadores con reportes detallados cargados en tiempo real desde la API.
+### Inteligencia de Amenazas (Threat Intelligence)
+- **Watchlist de IOCs**: Registro persistente de IPs, Hashes y Dominios maliciosos detectados mediante el modelo de datos unificado.
+- **Bloqueo Directo**: Botón "Bloquear en Firewall" integrado directamente en la interfaz de análisis de indicadores.
+- **Integración con VirusTotal**: Análisis profundo de indicadores con reportes detallados cargados en tiempo real desde la API.
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 Valhalla-SOC/
-├── 📄 docker-compose.yml          ← Orquestación de servicios
-├── 📄 .env.example                ← Variables de entorno
-├── 📄 README.md                   ← Este archivo
-├── 📄 MANUAL.md                   ← Manual de usuario completo
+├── docker-compose.yml ← Orquestación de servicios
+├── .env.example ← Variables de entorno
+├── README.md ← Este archivo
+├── MANUAL.md ← Manual de usuario completo
 │
-├── 📂 config/
-│   ├── certs.yml                  ← Definición de nodos para certs
-│   └── 📂 wazuh_indexer_ssl_certs/  ← Certificados TLS
+├── config/
+│ ├── certs.yml ← Definición de nodos para certs
+│ └── wazuh_indexer_ssl_certs/ ← Certificados TLS
 │
-├── 📂 cowrie_config/
-│   ├── cowrie.cfg                 ← Configuración del honeypot
-│   └── userdb.txt                 ← Credenciales trampa
+├── cowrie_config/
+│ ├── cowrie.cfg ← Configuración del honeypot
+│ └── userdb.txt ← Credenciales trampa
 │
-├── 📂 wazuh_config/
-│   ├── ossec.conf                 ← Config principal Wazuh
-│   ├── 📂 decoders/               ← Parseo de logs Cowrie
-│   ├── 📂 rules/                  ← Reglas de detección
-│   └── 📂 integrations/
-│       ├── custom-ollama.py       ← 🤖 Integración Ollama IA
-│       └── custom-valhalla.py     ← Integración backend
+├── wazuh_config/
+│ ├── ossec.conf ← Config principal Wazuh
+│ ├── decoders/ ← Parseo de logs Cowrie
+│ ├── rules/ ← Reglas de detección
+│ └── integrations/
+│ ├── custom-ollama.py ← Integración Ollama IA
+│ └── custom-valhalla.py ← Integración backend
 │
-├── 📄 create_dashboards.py        ← Crear dashboards Cowrie
-├── 📄 setup_monitors.py           ← Crear monitores de alertas
-└── 📄 setup_reports.py            ← Crear reportes de seguridad
+├── create_dashboards.py ← Crear dashboards Cowrie
+├── setup_monitors.py ← Crear monitores de alertas
+└── setup_reports.py ← Crear reportes de seguridad
 ```
 
 ---
 
-## 🖥️ Aplicación de Escritorio (Standalone)
+## Aplicación de Escritorio (Standalone)
 
 Valhalla SOC incluye una versión nativa para Windows basada en **Electron**. Esta arquitectura ha sido diseñada para garantizar la continuidad de las operaciones tácticas, permitiendo el acceso a la consola de control incluso en escenarios de desconexión total o fallo en los servicios centrales (Wazuh/Docker).
 
@@ -526,10 +526,10 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 
 ---
 
-## ❓ Preguntas Frecuentes (FAQ)
+## Preguntas Frecuentes (FAQ)
 
 <details>
-<summary><b>🔧 Generales</b></summary>
+<summary><b> Generales</b></summary>
 
 **¿Necesito saber programar?** No. Solo ejecutar comandos básicos en la terminal.
 
@@ -542,7 +542,7 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 </details>
 
 <details>
-<summary><b>🤖 Sobre Ollama y la IA</b></summary>
+<summary><b> Sobre Ollama y la IA</b></summary>
 
 **¿Es obligatorio Ollama?** No. El sistema funciona sin él, pero no tendrás análisis IA.
 
@@ -557,24 +557,24 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 </details>
 
 <details>
-<summary><b>🔍 Sobre Wazuh</b></summary>
+<summary><b> Sobre Wazuh</b></summary>
 
 **Niveles de alerta:**
 
 | Nivel | Significado |
 |---|---|
-| 0-4 | 🟢 Bajo / Informativo |
-| 5-7 | 🟡 Medio |
-| 8-9 | 🟠 Alto |
-| 10-12 | 🔴 Muy Alto |
-| 13-15 | ⚫ Crítico |
+| 0-4 | Bajo / Informativo |
+| 5-7 | Medio |
+| 8-9 | Alto |
+| 10-12 | Muy Alto |
+| 13-15 | Crítico |
 
 **¿Qué es MITRE ATT&CK?** Base de conocimiento que clasifica técnicas de ataque (ej: T1110 = Fuerza bruta).
 
 </details>
 
 <details>
-<summary><b>🐛 Problemas Comunes</b></summary>
+<summary><b> Problemas Comunes</b></summary>
 
 **Contenedores se reinician** → Falta RAM. Necesitas ≥8 GB libres para Docker.
 
@@ -592,7 +592,7 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 
 ---
 
-## 📜 Licencia y Créditos
+## Licencia y Créditos
 
 | Tecnología | Licencia | Web |
 |---|---|---|
@@ -611,9 +611,9 @@ El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SO
 
 <div align="center">
 
-**⚔️ Valhalla SOC** — *Donde los ataques vienen a morir*
+** Valhalla SOC** — *Donde los ataques vienen a morir*
 
-[![Made with ❤️](https://img.shields.io/badge/Made_with-❤️-red?style=flat-square)]()
+[![Made with](https://img.shields.io/badge/Made_with--red?style=flat-square)]()
 [![Powered by Ollama](https://img.shields.io/badge/Powered_by-Ollama_AI-black?style=flat-square&logo=ollama)]()
 
 </div>

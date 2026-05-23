@@ -90,7 +90,7 @@ export default function SocMaturityView({ lang = "es" }: { lang?: string }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "20px", color: "var(--signal)", fontFamily: "var(--mono)", letterSpacing: "2px" }}>
-            🌈 BIFRÖST
+             BIFRÖST
           </h2>
           <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
             {t("Observabilidad SOC · KPIs · MITRE Navigator · Threat Hunting", "SOC observability · KPIs · MITRE Navigator · Threat Hunting")}
@@ -98,9 +98,9 @@ export default function SocMaturityView({ lang = "es" }: { lang?: string }) {
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button onClick={downloadNavigator} style={{ padding: "8px 14px", background: "rgba(60,255,158,0.1)", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 600, fontFamily: "var(--mono)" }}>
-            ⬇ {t("CAPA MITRE NAVIGATOR", "MITRE NAVIGATOR LAYER")}
+             {t("CAPA MITRE NAVIGATOR", "MITRE NAVIGATOR LAYER")}
           </button>
-          <button onClick={load} style={{ padding: "8px 12px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}>🔄 SYNC</button>
+          <button onClick={load} style={{ padding: "8px 12px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}> SYNC</button>
         </div>
       </div>
 
@@ -156,7 +156,7 @@ export default function SocMaturityView({ lang = "es" }: { lang?: string }) {
       {/* Threat Hunting */}
       <div style={CARD}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-          <h3 style={{ margin: 0, fontSize: "12px", color: "var(--signal)", fontFamily: "var(--mono)" }}>🔍 THREAT HUNTING</h3>
+          <h3 style={{ margin: 0, fontSize: "12px", color: "var(--signal)", fontFamily: "var(--mono)" }}> THREAT HUNTING</h3>
           <div style={{ display: "flex", gap: "8px" }}>
             <select value={activeHunt} onChange={(e) => setActiveHunt(e.target.value)}
               style={{ background: "rgba(0,0,0,0.3)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: "4px", padding: "6px 10px", fontSize: "11px", fontFamily: "var(--mono)" }}>

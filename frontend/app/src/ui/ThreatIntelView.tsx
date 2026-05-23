@@ -26,7 +26,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
     getVtKeyStatus().then(s => {
       if (s.configured) setApiKey("••••••••••••••••");
     }).catch(() => {});
-    
+
     if (initialIp) {
       setQuery(initialIp);
       setType("ip");
@@ -239,24 +239,24 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">Motor de Inteligencia de Amenazas · VT REPORT ENGINE</span>
-          <button 
+          <button
             onClick={() => setShowConfig(!showConfig)}
             style={{ background: 'var(--signal)', border: 'none', color: '#000', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
           >
-            ⚙️ CONFIG API
+             CONFIG API
           </button>
         </div>
         <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', flex: 1, minHeight: 0 }}>
-          
+
           {/* API Config Panel */}
           {showConfig && (
             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', border: '1px solid var(--signal)' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-bright)', marginBottom: '8px' }}>Configuración de VirusTotal API Key</div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input 
-                  type="password" 
-                  value={apiKey} 
-                  onChange={e => setApiKey(e.target.value)} 
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
                   placeholder="Ingrese su VirusTotal API Key..."
                   style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--text-bright)', padding: '6px' }}
                 />
@@ -294,7 +294,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
           {!result && !loading && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎯</div>
+                <div style={{ fontSize: '48px', marginBottom: '10px' }}></div>
                 <div style={{ fontSize: '12px', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>ESPERANDO ENTRADA DE IOC PARA ANÁLISIS GLOBAL</div>
               </div>
             </div>
@@ -332,9 +332,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                 </div>
                 <div>
                   <div style={{ color: result.malicious > 0 ? 'var(--danger)' : 'var(--signal)', fontSize: '14px', fontWeight: 600, marginBottom: '6px' }}>
-                    {result.malicious > 0 
-                      ? `⚠️ ${result.malicious} motores de seguridad marcaron este indicador como malicioso.` 
-                      : `✅ Ningún motor detectó amenazas en este indicador.`}
+                    {result.malicious > 0
+                      ? ` ${result.malicious} motores de seguridad marcaron este indicador como malicioso.`
+                      : ` Ningún motor detectó amenazas en este indicador.`}
                   </div>
                   <div style={{ display: 'flex', gap: '20px', fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
                     <div><span style={{ color: 'var(--text-faint)' }}>Target: </span><span style={{ color: 'var(--text-bright)' }}>{query}</span></div>
@@ -350,17 +350,17 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ {lang === "es" ? "WATCHLIST" : "WATCHLIST"}</button>
-                    <button onClick={handleWhitelist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%', borderColor: 'var(--signal)' }}>✓ {lang === "es" ? "LISTA BLANCA" : "WHITELIST"}</button>
-                    <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR IOC' : 'BLOCK IOC'}</button>
+                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}> {lang === "es" ? "WATCHLIST" : "WATCHLIST"}</button>
+                    <button onClick={handleWhitelist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%', borderColor: 'var(--signal)' }}> {lang === "es" ? "LISTA BLANCA" : "WHITELIST"}</button>
+                    <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}> {lang === 'es' ? 'BLOQUEAR IOC' : 'BLOCK IOC'}</button>
                 </div>
               </div>
 
               {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0, overflowX: 'auto' }}>
                 {(["DETALLES", "VENDORS", "WHOIS", "DNS", "COMUNIDAD"] as const).map(tab => (
-                  <button 
-                    key={tab} 
+                  <button
+                    key={tab}
                     onClick={() => setActiveTab(tab)}
                     style={{
                       background: 'none',
@@ -382,7 +382,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
               {/* Scrollable Content */}
               <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                
+
                 {activeTab === "DETALLES" && (
                   <>
                     {result.ioc_type === "ip" && (
@@ -505,14 +505,14 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                                 {result.comments.map((c: any, i: number) => (
                                     <div key={i} style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}>👤 {c.user}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}> {c.user}</span>
                                             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{c.date}</span>
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#fff', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.text}</div>
                                         <div style={{ marginTop: '10px', display: 'flex', gap: '10px', fontSize: '9px', color: 'var(--text-dim)' }}>
-                                            <span>👍 {c.votes?.positive || 0}</span>
-                                            <span>👎 {c.votes?.negative || 0}</span>
-                                            <span>🚩 {c.votes?.abuse || 0}</span>
+                                            <span> {c.votes?.positive || 0}</span>
+                                            <span> {c.votes?.negative || 0}</span>
+                                            <span> {c.votes?.abuse || 0}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -528,7 +528,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
           {result && !result.found && !loading && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ textAlign: 'center', color: 'var(--amber)' }}>
-                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>⚠️</div>
+                      <div style={{ fontSize: '32px', marginBottom: '10px' }}></div>
                       <div>INDICADOR NO ENCONTRADO EN VIRUSTOTAL</div>
                   </div>
               </div>
@@ -553,9 +553,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                             <div style={{ fontSize: '13px', fontFamily: 'var(--mono)', color: 'var(--text-bright)', wordBreak: 'break-all' }}>{ioc.value}</div>
                             <div style={{ display: 'flex', gap: '4px' }}>
                                 <button onClick={() => handleUpdateStatus(ioc.id, ioc.status)} title="Cambiar Estado" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--text-bright)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}>
-                                    {isBlocked ? '🛡️' : isResolved ? '✅' : '👀'}
+                                    {isBlocked ? '' : isResolved ? '' : ''}
                                 </button>
-                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}>✖</button>
+                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}></button>
                             </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px' }}>
@@ -575,7 +575,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
             })}
             {watchlist.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px', marginTop: '40px' }}>
-                    <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '10px' }}>📋</div>
+                    <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '10px' }}></div>
                     No hay indicadores en seguimiento.
                 </div>
             )}
