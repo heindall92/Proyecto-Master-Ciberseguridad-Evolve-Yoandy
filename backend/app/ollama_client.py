@@ -261,12 +261,12 @@ async def chat_assistant(question: str, history: list[dict[str, str]] | None = N
     client = get_ollama_client()
     try:
         r = await client.post(f"{base}/api/chat", json={
-            "model": settings.ollama_model, "stream": False,
+            "model": settings.ollama_light_model, "stream": False,
             "options": {"temperature": 0.4}, "messages": messages,
         })
         if r.status_code == 404:
             r = await client.post(f"{base}/api/generate", json={
-                "model": settings.ollama_model, "stream": False,
+                "model": settings.ollama_light_model, "stream": False,
                 "options": {"temperature": 0.4},
                 "prompt": SYSTEM_PROMPT_CHAT + "\n\nAnalista: " + question + "\nVALHALLA-IA:",
             })
@@ -298,7 +298,7 @@ async def draft_social_post(cves: list[dict[str, Any]]) -> str:
     base = settings.ollama_base_url.rstrip("/")
     client = get_ollama_client()
     payload = {
-        "model": settings.ollama_model, "stream": False, "options": {"temperature": 0.6},
+        "model": settings.ollama_light_model, "stream": False, "options": {"temperature": 0.6},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT_SOCIAL},
             {"role": "user", "content": f"CVEs destacados de hoy:\n{lines}\n\nRedacta el post de LinkedIn."},
@@ -309,7 +309,7 @@ async def draft_social_post(cves: list[dict[str, Any]]) -> str:
         r = await client.post(f"{base}/api/chat", json=payload, timeout=POST_TIMEOUT)
         if r.status_code == 404:
             r = await client.post(f"{base}/api/generate", json={
-                "model": settings.ollama_model, "stream": False, "options": {"temperature": 0.6},
+                "model": settings.ollama_light_model, "stream": False, "options": {"temperature": 0.6},
                 "prompt": SYSTEM_PROMPT_SOCIAL + f"\n\nCVEs:\n{lines}\n\nPost:",
             }, timeout=POST_TIMEOUT)
         r.raise_for_status()

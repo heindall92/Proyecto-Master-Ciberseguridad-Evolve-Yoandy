@@ -2069,13 +2069,18 @@ async def cve_latest(limit: int = Query(15, ge=1, le=50), _=Depends(get_current_
 
 @app.post("/api/cve/social-post")
 @limiter.limit("10/minute")
-async def cve_social_post(request: Request, current: User = Depends(get_current_user)):
-    """La IA redacta un post de difusión sobre los CVE más críticos recientes (solo borrador)."""
+async def cve_social_post(request: Request, req: SocialPostIn | None = None, current: User = Depends(get_current_user)):
+    """La IA redacta un post de difusión. Si se indican cve_ids, sobre esas; si no, top recientes."""
     if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista puede generar el post")
-    cves = await cve_feed.get_latest_cves(20)
-    # Prioriza las usadas en ransomware, luego las más recientes
-    top = sorted(cves, key=lambda c: (not c.get("ransomware"), c.get("published", "")), reverse=False)
-    top = sorted(top, key=lambda c: c.get("published", ""), reverse=True)[:5]
-    post = await draft_social_post(top)
-    return {"post": post, "cves_used": [{"id": c["id"], "severity": c.get("severity")} for c in top], "auto_published": False}
+    cves = await cve_feed.get_latest_cves(50)
+    ids = (req.cve_ids if req else []) or []
+    if ids:
+        idset = {i.upper() for i in ids}
+        selected = [c for c in cves if c["id"].upper() in idset][:8]
+        if not selected:
+            raise HTTPException(404, "No se encontraron las CVE seleccionadas en el feed actual")
+    else:
+        selected = sorted(cves, key=lambda c: c.get("published", ""), reverse=True)[:5]
+    post = await draft_social_post(selected)
+    return {"post": post, "cves_used": [{"id": c["id"], "severity": c.get("severity")} for c in selected], "auto_published": False}

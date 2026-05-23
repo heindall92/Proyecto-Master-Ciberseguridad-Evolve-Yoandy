@@ -407,6 +407,13 @@ class TriageRequest(BaseModel):
     rule_level: int | None = Field(default=None, ge=0, le=16)
 
 
+class SocialPostIn(BaseModel):
+    """CVEs seleccionadas para que la IA redacte el post (Fase 5). Vacío = top recientes."""
+    model_config = ConfigDict(extra="forbid")
+
+    cve_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
 class PlaybookActionIn(BaseModel):
     """Acción ejecutable de un playbook/runbook (SOAR ligero, Fase 3).
 
