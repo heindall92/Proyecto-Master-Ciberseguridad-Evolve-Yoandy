@@ -91,6 +91,197 @@ function gaugeColor(score: number): string {
   return "#ff3b3b";
 }
 
+const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAY_ABBR = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+
+function DateRangePicker({ dateStart, dateEnd, onChange }: {
+  dateStart: string;
+  dateEnd: string;
+  onChange: (start: string, end: string) => void;
+}) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [viewYear, setViewYear] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[0]) : new Date().getFullYear()
+  );
+  const [viewMonth, setViewMonth] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[1]) - 1 : new Date().getMonth()
+  );
+  const [hoverDate, setHoverDate] = useState('');
+  const [open, setOpen] = useState(false);
+  const [picking, setPicking] = useState<'start' | 'end'>(
+    dateStart && !dateEnd ? 'end' : 'start'
+  );
+
+  useEffect(() => {
+    if (dateStart) {
+      setViewYear(parseInt(dateStart.split('-')[0]));
+      setViewMonth(parseInt(dateStart.split('-')[1]) - 1);
+    }
+  }, [dateStart]);
+
+  useEffect(() => {
+    setPicking(dateStart && !dateEnd ? 'end' : 'start');
+  }, [dateStart, dateEnd]);
+
+  const prevMonth = () =>
+    setViewMonth(m => { if (m === 0) { setViewYear(y => y - 1); return 11; } return m - 1; });
+  const nextMonth = () =>
+    setViewMonth(m => { if (m === 11) { setViewYear(y => y + 1); return 0; } return m + 1; });
+
+  function handleClick(ds: string) {
+    if (picking === 'start' || (dateStart && dateEnd)) {
+      onChange(ds, '');
+    } else {
+      const [s, e] = ds >= dateStart ? [dateStart, ds] : [ds, dateStart];
+      onChange(s, e);
+      setOpen(false);
+      setHoverDate('');
+    }
+  }
+
+  function buildWeeks(): (string | null)[][] {
+    const dim = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const off = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const prefix = `${viewYear}-${pad(viewMonth + 1)}-`;
+    const cells: (string | null)[] = [
+      ...Array(off).fill(null),
+      ...Array.from({ length: dim }, (_, i) => `${prefix}${pad(i + 1)}`),
+    ];
+    while (cells.length % 7) cells.push(null);
+    return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
+  }
+
+  function getRange() {
+    const eff = dateEnd || (picking === 'end' && hoverDate ? hoverDate : '');
+    if (!dateStart || !eff) return { rs: dateStart, re: '' };
+    return dateStart <= eff ? { rs: dateStart, re: eff } : { rs: eff, re: dateStart };
+  }
+
+  const { rs, re } = getRange();
+  const weeks = buildWeeks();
+  const fmt = (s: string) => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const navSx: any = {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: 'var(--signal)', fontSize: '20px', width: 28, height: 28,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: '4px', '&:hover': { bgcolor: 'rgba(60,255,158,0.1)' },
+  };
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <Box
+        onClick={() => setOpen(o => !o)}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
+          pb: '4px', borderBottom: `1px solid ${open ? 'var(--signal)' : 'rgba(60,255,158,0.3)'}`,
+          transition: 'border-color 0.2s', userSelect: 'none',
+          '&:hover': { borderBottomColor: 'var(--signal)' },
+        }}
+      >
+        <Typography sx={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '1.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+          PERIOD
+        </Typography>
+        <Typography sx={{ fontSize: '11px', color: dateStart ? 'var(--text)' : 'var(--text-dim)', fontFamily: 'var(--ff-mono)', flex: 1 }}>
+          {fmt(dateStart)} → {fmt(dateEnd)}
+        </Typography>
+        <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', ml: 0.5 }}>
+          {open ? '▲' : '▼'}
+        </Typography>
+      </Box>
+
+      {open && (
+        <Box
+          onClick={() => { setOpen(false); setHoverDate(''); }}
+          sx={{ position: 'fixed', inset: 0, zIndex: 999 }}
+        />
+      )}
+
+      {open && (
+        <Box sx={{
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 1000,
+          bgcolor: 'rgba(5, 14, 10, 0.98)', border: '1px solid rgba(60,255,158,0.25)',
+          borderRadius: '10px', p: 2, width: 272,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Box component="button" onClick={prevMonth} sx={navSx}>‹</Box>
+            <Typography sx={{ color: 'var(--signal)', fontSize: '11px', fontWeight: 900, letterSpacing: '2px', fontFamily: 'var(--ff-mono)' }}>
+              {MONTH_NAMES_ES[viewMonth].toUpperCase()} {viewYear}
+            </Typography>
+            <Box component="button" onClick={nextMonth} sx={navSx}>›</Box>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
+            {DAY_ABBR.map(d => (
+              <Typography key={d} sx={{ textAlign: 'center', fontSize: '9px', color: 'var(--text-dim)', fontWeight: 700, py: '3px' }}>
+                {d}
+              </Typography>
+            ))}
+          </Box>
+
+          {weeks.map((week, wi) => (
+            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {week.map((ds, di) => {
+                if (!ds) return <Box key={`_${wi}${di}`} sx={{ height: 36 }} />;
+                const isSel = ds === dateStart || ds === dateEnd;
+                const hasRange = !!(rs && re && rs !== re);
+                const inRange = hasRange && ds > rs && ds < re;
+                const isRs = hasRange && ds === rs;
+                const isRe = hasRange && ds === re;
+                const isToday = ds === todayStr;
+                const day = parseInt(ds.split('-')[2]);
+                let bg = 'transparent';
+                if (inRange) bg = 'rgba(60,255,158,0.13)';
+                else if (isRs) bg = 'linear-gradient(to right, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                else if (isRe) bg = 'linear-gradient(to left, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                return (
+                  <Box
+                    key={ds}
+                    onClick={() => handleClick(ds)}
+                    onMouseEnter={() => { if (picking === 'end') setHoverDate(ds); }}
+                    onMouseLeave={() => setHoverDate('')}
+                    sx={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: bg }}
+                  >
+                    <Box sx={{
+                      width: 30, height: 30,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%',
+                      bgcolor: isSel ? 'var(--signal)' : 'transparent',
+                      color: isSel ? '#000' : isToday ? 'var(--signal)' : 'var(--text)',
+                      fontSize: '12px', fontFamily: 'var(--ff-mono)',
+                      fontWeight: isSel || isToday ? 700 : 400,
+                      border: isToday && !isSel ? '1px solid rgba(60,255,158,0.4)' : 'none',
+                      transition: 'background-color 0.1s',
+                      '&:hover': { bgcolor: isSel ? 'var(--signal)' : 'rgba(60,255,158,0.2)' },
+                    }}>
+                      {day}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          ))}
+
+          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: '9px', color: 'var(--signal)', fontWeight: 700, letterSpacing: '1px' }}>
+              {picking === 'start' ? '► INICIO' : '► FIN'}
+            </Typography>
+            <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--ff-mono)' }}>
+              {dateStart ? (dateEnd ? `${fmt(dateStart)} → ${fmt(dateEnd)}` : `${fmt(dateStart)} → ?`) : '—'}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [loading, setLoading] = useState(true);
@@ -100,7 +291,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
   const [analystName, setAnalystName] = useState("Y. RAMIREZ");
-  const [period, setPeriod] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
   const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
 
@@ -108,11 +300,17 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
-      const MONTHS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
       const d = new Date(raw.generatedAt || Date.now());
-      const derivedPeriod = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-      const derivedReportId = `VHL-${d.getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      setPeriod(derivedPeriod);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDayNum = new Date(year, month + 1, 0).getDate();
+      const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+      const fmtDate = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+      const derivedPeriod = `${fmtDate(firstDay)} – ${fmtDate(lastDay)}`;
+      const derivedReportId = `VHL-${year}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setDateStart(firstDay);
+      setDateEnd(lastDay);
       setReportId(derivedReportId);
       if (raw.analystNameFromBackend) setAnalystName(raw.analystNameFromBackend);
       const structured: ValhallaReportJSON = {
@@ -177,6 +375,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   useEffect(() => { load(); }, []);
 
   const healthColor = useMemo(() => gaugeColor(reportData?.executive_summary.health_score ?? 0), [reportData]);
+
+  const period = useMemo(() => {
+    if (!dateStart || !dateEnd) return "";
+    const fmt = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+    return `${fmt(dateStart)} – ${fmt(dateEnd)}`;
+  }, [dateStart, dateEnd]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -797,10 +1001,11 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       return y + lines.length * 4.5 + 2;
     };
 
-    const analysisBox = (text: string, y: number, maxW = 130): number => {
+    const analysisBox = (text: string, y: number, maxW = 130, ref = ""): number => {
       doc.setFillColor(232, 239, 248);
       const lines = doc.splitTextToSize(text, maxW);
-      const boxH = Math.max(16, lines.length * 4.5 + 8);
+      const refLines = ref ? doc.splitTextToSize(ref, maxW) : [];
+      const boxH = Math.max(16, (lines.length + (refLines.length > 0 ? refLines.length + 0.5 : 0)) * 4.5 + 8);
       doc.roundedRect(M, y, col, boxH, 2, 2, "F");
       doc.setDrawColor(...navy);
       doc.setLineWidth(1.5);
@@ -813,6 +1018,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.rect(M + 2, y, col - 4, boxH);
       doc.clip();
       doc.text(lines, M + 8, y + 6);
+      if (refLines.length > 0) {
+        const refY = y + 6 + lines.length * 4.5 + 2;
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.5);
+        doc.text(refLines, M + 8, refY);
+      }
       doc.restoreGraphicsState();
       return y + boxH + 4;
     };
@@ -861,7 +1072,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     y1 = bodyText(reportData.executive_summary.key_finding, y1);
     y1 += 3;
 
-    const execAnalysis = `Durante ${period} se procesaron ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas en tiempo real, de las cuales ${reportData.wazuh_metrics.critical_alerts} fueron clasificadas como críticas y requirieron intervención manual. La tasa de resolución del ${closureRate}% y un MTTR de ${mttr} minutos reflejan la capacidad operativa del equipo SOC. El sistema de correlación basado en IA permitió priorizar amenazas de alto impacto y reducir el tiempo de detección y respuesta.`;
+    const execAnalysis = [
+      `• ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas procesadas en ${period}`,
+      `• ${reportData.wazuh_metrics.critical_alerts} críticas con intervención manual`,
+      `• Tasa de resolución: ${closureRate}%`,
+      `• MTTR: ${mttr} min`,
+      `• IA redujo tiempo de detección y respuesta`,
+    ].join("\n");
     y1 = analysisBox(execAnalysis, y1);
     y1 += 3;
 
@@ -948,8 +1165,16 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     });
     y2 += 5;
 
-    const mitreConclusion = "La táctica dominante indica reconocimiento perimetral activo. Revisar firewall y aplicar threat hunting. Ref: MITRE D3FEND, ISO 27001 A.13.1.";
-    y2 = analysisBox(mitreConclusion, y2, col - 18);
+    const mitrePct = totalMitreEvents > 0 ? Math.round(((topTactic?.count ?? 0) / totalMitreEvents) * 100) : 0;
+    const mitreConclusion = [
+      `• Táctica dominante: "${topTactic?.tactic ?? "N/A"}"`,
+      `• ${topTactic?.count ?? 0} eventos (${mitrePct}% del total)`,
+      criticalTactics.length > 0
+        ? `• ${criticalTactics.length} táctica(s) en nivel CRÍTICO`
+        : `• Sin tácticas en nivel CRÍTICO`,
+      `• Revisar firewall y aplicar threat hunting`,
+    ].join("\n");
+    y2 = analysisBox(mitreConclusion, y2, col - 18, "Ref: MITRE D3FEND, ISO 27001 A.13.1.");
     y2 += 4;
 
     y2 = sectionTitle("4. INTELIGENCIA DE HONEYPOT COWRIE", y2);
@@ -957,8 +1182,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     const honeypotNarrative = `El sistema honeypot registró ${reportData.honeypot_intel.unique_attackers.toLocaleString()} atacantes únicos con ${reportData.honeypot_intel.malware_samples_collected} muestras de malware capturadas. Las contraseñas más usadas por los atacantes fueron: ${passwords.join(", ") || "no registradas"}. Este patrón es característico de ataques automatizados con credential stuffing y diccionarios genéricos, indicando campañas masivas no dirigidas específicamente a esta organización.`;
     y2 = bodyText(honeypotNarrative, y2);
     y2 += 3;
-    const honeypotConclusion = `ANÁLISIS: La presencia de contraseñas como "${passwords[0] ?? "admin"}" confirma el uso de diccionarios básicos. ACCIÓN: Verificar que ningún sistema use estas credenciales. Compartir los IOCs recolectados (IPs, hashes de malware) con plataformas de inteligencia de amenazas (MISP/ISAC). Referencia: ISO 27001 A.12.4, NIST SP 800-150.`;
-    y2 = analysisBox(honeypotConclusion, y2);
+    const honeypotConclusion = [
+      `• Contraseña top: "${passwords[0] ?? "admin"}"`,
+      `• Confirma uso de diccionarios básicos`,
+      `• Verificar credenciales en sistemas activos`,
+      `• Compartir IOCs con MISP/ISAC`,
+    ].join("\n");
+    y2 = analysisBox(honeypotConclusion, y2, col - 18, "Ref: ISO 27001 A.12.4, NIST SP 800-150.");
     pageFooter(2);
 
     // ── PÁGINA 3: Geo Intel + Gestión de Incidentes ────────────────────────
@@ -1040,8 +1270,15 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       : mttr <= 60
       ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
       : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
-    const incidentAnalysis = "MTTR dentro del umbral NIST SP 800-61. Tasa de cierre supera objetivo ITIL. Establecer SLAs formales por severidad. Ref: ISO 27001 A.16.1.";
-    y3 = analysisBox(incidentAnalysis, y3, col - 18);
+    const mttrStatus = mttr <= 30 ? "óptimo (<30 min)" : mttr <= 60 ? "aceptable (30–60 min)" : "crítico (>60 min)";
+    const closureStatus = closureRate >= 90 ? "cumple objetivo ITIL" : "bajo objetivo ITIL";
+    const incidentAnalysis = [
+      `• MTTR: ${mttr} min — ${mttrStatus}`,
+      `• Tasa de cierre: ${closureRate}% — ${closureStatus}`,
+      `• Tickets pendientes: ${pendingTickets}`,
+      `• Establecer SLAs formales por severidad`,
+    ].join("\n");
+    y3 = analysisBox(incidentAnalysis, y3, col - 18, "Ref: ISO 27001 A.16.1.");
     pageFooter(3);
 
     // ── PÁGINA 4: Remediación detallada + ISO 27001 ────────────────────────
@@ -1216,7 +1453,11 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField fullWidth size="small" label="PERIOD" variant="standard" value={period} onChange={e => setPeriod(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+            <DateRangePicker
+              dateStart={dateStart}
+              dateEnd={dateEnd}
+              onChange={(s, e) => { setDateStart(s); setDateEnd(e); }}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small" variant="standard">
