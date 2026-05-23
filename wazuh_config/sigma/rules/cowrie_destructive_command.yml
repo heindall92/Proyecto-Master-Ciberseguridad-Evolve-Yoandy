@@ -1,0 +1,22 @@
+title: Comando destructivo en honeypot
+id: vh-sigma-0002
+status: experimental
+description: Detecta comandos destructivos de borrado masivo en sesiones Cowrie
+author: Valhalla SOC
+level: critical
+logsource:
+  product: cowrie
+  service: honeypot
+detection:
+  selection:
+    eventid: cowrie.command.input
+    input|contains:
+      - 'rm -rf /'
+      - 'mkfs.'
+      - 'dd if=/dev/zero'
+      - ':(){ :|:& };:'
+  condition: selection
+tags:
+  - attack.t1485
+falsepositives:
+  - Administración legítima (improbable en honeypot)

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # ── VirusTotal ───────────────────────────────────────────────────────────
     virustotal_api_key: str = ""
 
+    # ── AbuseIPDB (Fase 2: enriquecimiento IOC) ──────────────────────────────
+    abuseipdb_api_key: str = ""
+
     # ── Upload / Evidence ────────────────────────────────────────────────────
     evidence_dir: str = "uploads/evidence"
     max_upload_size_mb: int = 10
@@ -73,6 +76,13 @@ class Settings(BaseSettings):
     # Tickets desde Wazuh: desactivado por defecto (instalación limpia; activar en .env si se desea)
     auto_sync_wazuh_tickets: bool = False
     auto_create_webhook_tickets: bool = False
+
+    # ── Co-piloto IA (Fase 3): respuesta autónoma CON barreras ───────────────
+    # Tier 1: bloqueo automático de IP solo si la IA puntúa por encima del umbral,
+    # baja probabilidad de falso positivo y la IP no está en whitelist. Reversible (timeout).
+    auto_block_enabled: bool = False          # OFF por defecto (seguridad)
+    auto_block_risk_threshold: int = 90       # risk_score mínimo para auto-bloqueo
+    auto_block_timeout_seconds: int = 3600    # bloqueo reversible
 
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

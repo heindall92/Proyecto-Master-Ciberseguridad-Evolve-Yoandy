@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
-import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC, setMyVtApiKey, getVtKeyStatus } from "../lib/api";
+import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC, setMyVtApiKey, getVtKeyStatus, blockIp, unblockIp } from "../lib/api";
 
 export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
   const [query, setQuery] = useState("");
@@ -112,6 +112,52 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
   const handleBlock = async () => {
     if (!result) return;
+
+    // IPs → bloqueo REAL vía Active Response de Wazuh (firewall-drop + lista CDB).
+    if (type === "ip") {
+      try {
+        // Registramos primero los metadatos de inteligencia (best-effort, no crítico).
+        await addIOC({
+          value: query,
+          ioc_type: type,
+          malicious_score: result.malicious || 0,
+          total_engines: result.total || 0,
+          country: result.country,
+          asn: result.asn,
+          as_owner: result.as_owner,
+          tags: [...(result.tags || []), "blocked-firewall"],
+          status: "blocked",
+          vt_report: result,
+        }).catch(() => {});
+
+        const res = await blockIp(query);
+        // Feedback HONESTO: reflejamos qué confirmó realmente Wazuh.
+        if (res.cdb_applied && res.active_response) {
+          alert(lang === 'es'
+            ? `IP ${query} BLOQUEADA. firewall-drop aplicado en el host y añadida a la lista CDB.`
+            : `IP ${query} BLOCKED. firewall-drop applied on host and added to CDB list.`);
+        } else if (res.active_response) {
+          alert(lang === 'es'
+            ? `IP ${query} bloqueada (firewall-drop activo). Aviso: la lista CDB no se actualizó.`
+            : `IP ${query} blocked (firewall-drop active). Note: CDB list not updated.`);
+        } else if (res.cdb_applied) {
+          alert(lang === 'es'
+            ? `IP ${query} añadida a la lista CDB. Aviso: el bloqueo inmediato (firewall-drop) no se confirmó.`
+            : `IP ${query} added to CDB list. Note: immediate firewall-drop not confirmed.`);
+        } else {
+          alert(lang === 'es' ? `Bloqueo registrado pero Wazuh no confirmó la acción.` : `Block recorded but Wazuh did not confirm.`);
+        }
+      } catch (e: any) {
+        alert(lang === 'es'
+          ? `ERROR: no se pudo bloquear la IP en Wazuh. ${e?.message || ''}`
+          : `ERROR: could not block IP in Wazuh. ${e?.message || ''}`);
+      } finally {
+        loadWatchlist();
+      }
+      return;
+    }
+
+    // Dominios / hashes → no aplican a firewall-drop: solo registro IOC.
     try {
       await addIOC({
         value: query,
@@ -125,7 +171,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
         status: "blocked",
         vt_report: result
       });
-      alert(lang === 'es' ? "Indicador BLOQUEADO en el registro IOC del SOC." : "Indicator BLOCKED in SOC IOC registry.");
+      alert(lang === 'es'
+        ? "Indicador BLOQUEADO en el registro IOC (los dominios/hashes no se aplican al firewall)."
+        : "Indicator BLOCKED in IOC registry (domains/hashes do not apply to firewall).");
       loadWatchlist();
     } catch (e) {
       alert(lang === 'es' ? "Error al bloquear (quizás ya existe)." : "Error blocking (maybe already exists).");
@@ -152,8 +200,14 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
   };
 
   const handleUpdateStatus = async (id: number, currentStatus: string) => {
-    const newStatus = currentStatus === "watchlist" ? "blocked" : currentStatus === "blocked" ? "resolved" : "watchlist";
+    // Ciclo de estados válidos en el backend: watchlist → blocked → cleared → watchlist
+    const newStatus = currentStatus === "watchlist" ? "blocked" : currentStatus === "blocked" ? "cleared" : "watchlist";
+    const ioc = watchlist.find((w) => w.id === id);
     try {
+      // Si desbloqueamos una IP, retiramos también el firewall-drop / lista CDB en Wazuh.
+      if (currentStatus === "blocked" && ioc?.ioc_type === "ip") {
+        await unblockIp(ioc.value).catch((e) => logger.error("unblockIp", e));
+      }
       await updateIOC(id, { status: newStatus });
       loadWatchlist();
     } catch (e) {

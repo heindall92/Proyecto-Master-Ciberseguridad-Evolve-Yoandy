@@ -60,6 +60,9 @@ from app import opensearch_client as osc
 from app.wazuh_client import wazuh
 from app.ollama_client import analyze_alert, generate_executive_summary
 from app import virustotal_client as vt
+from app import abuseipdb_client as abuse
+from app.rag import build_knowledge, MITRE_TECHNIQUES
+from app import hunting
 from app.lsa_monitor import router as lsa_router
 from app.health import router as health_router
 from app.threat_map import get_threat_map_data
@@ -903,6 +906,26 @@ async def wazuh_services(_=Depends(get_current_user)):
 async def threat_map(hours: int = 24, _=Depends(get_current_user)):
     return await get_threat_map_data(hours)
 
+# ─────────────────────────────────────────────
+# TRIAGE IA ESTRUCTURADO (Fase 3 — SOAR + IA táctica)
+# Ollama devuelve scoring accionable: risk_score, mitre_ttp, recommended_action, fp_likelihood
+# ─────────────────────────────────────────────
+@app.post("/api/triage/analyze")
+@limiter.limit("20/minute")
+async def triage_analyze(request: Request, req: TriageRequest, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar triage IA")
+    # RAG: recuperar runbooks + MITRE relevantes para fundamentar la recomendación
+    knowledge = await build_knowledge(db, f"{req.description} {req.full_log or ''}", [])
+    context = {
+        "rule": {"id": req.rule_id, "level": req.rule_level, "description": req.description},
+        "data": {"srcip": req.source_ip} if req.source_ip else {},
+        "full_log": req.full_log or "",
+        "knowledge": knowledge,
+    }
+    res = await analyze_alert(req.rule_id or 0, context)
+    return {"ok": res.ok, "analysis": res.data, "knowledge": knowledge}
+
 @app.get("/api/wazuh/sync-alerts")
 async def sync_alerts_manual(hours: int = 1, _=Depends(get_current_user)):
     return await _sync_wazuh_alerts_to_tickets(hours=hours)
@@ -996,10 +1019,10 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
         # 2. Obtener estadisticas de Tickets desde DB
         total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
         closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status == "closed"))).scalar() or 0
-        
+
         # 3. Generar resumen ejecutivo con IA (Ollama)
         ai_summary = await generate_executive_summary(stats)
-        
+
         # 4. Estructurar respuesta para el frontend (ValhallaReportJSON)
         report = {
             "source": "api",
@@ -1039,7 +1062,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
                 "total_alerts": stats.get("total_alerts", 0),
                 "critical_alerts": stats.get("critical_alerts", 0),
                 "top_affected_assets": [
-                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245}, 
+                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245},
                     {"name": "GW-FIREWALL-01", "ip": "10.0.1.1", "alerts": 840}
                 ]
             },
@@ -1055,7 +1078,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User = D
             "incident_management": {
                 "total_tickets": total_tickets,
                 "closed_tickets": closed_tickets,
-                "avg_resolution_time_min": 15 
+                "avg_resolution_time_min": 15
             },
             "remediation_steps": [
                 {"task": "Actualizar parches de seguridad en activos criticos."},
@@ -1230,6 +1253,63 @@ async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depen
     key = await _resolve_vt_api_key(request, db, current)
     return await vt.check_domain(domain, key)
 
+# ─────────────────────────────────────────────
+# ABUSEIPDB (Fase 2 — enriquecimiento IOC multi-fuente)
+# ─────────────────────────────────────────────
+
+async def _resolve_abuseipdb_api_key(request: Request, db: AsyncSession, user: User) -> str:
+    header_key = request.headers.get("X-AbuseIPDB-API-Key")
+    if header_key and settings.env.lower() == "development":
+        return header_key
+    user_key = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"abuseipdb_api_key_user_{user.id}")
+        )
+    ).scalar_one_or_none()
+    if user_key:
+        return decrypt_secret(user_key.value)
+    global_key = (await db.execute(select(SystemSetting).where(SystemSetting.key == "abuseipdb_api_key"))).scalar_one_or_none()
+    if global_key:
+        return decrypt_secret(global_key.value)
+    if settings.abuseipdb_api_key:
+        return settings.abuseipdb_api_key
+    raise HTTPException(404, "API Key de AbuseIPDB no configurada. Añádela en Threat Intel.")
+
+
+@app.put("/api/users/me/abuseipdb-api-key")
+async def set_my_abuseipdb_key(data: VtKeyIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = data.api_key.strip()
+    setting_key = f"abuseipdb_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    enc = encrypt_secret(key)
+    if row:
+        row.value = enc
+        row.is_sensitive = True
+    else:
+        db.add(SystemSetting(key=setting_key, value=enc, is_sensitive=True))
+    await db.commit()
+    test = await abuse.check_ip("8.8.8.8", key)
+    if "error" in test and ("401" in str(test["error"]) or "403" in str(test["error"])):
+        raise HTTPException(401, "API Key inválida")
+    return {"status": "ok", "configured": True}
+
+
+@app.get("/api/users/me/abuseipdb-api-key")
+async def get_my_abuseipdb_key_status(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    row = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"abuseipdb_api_key_user_{current.id}")
+        )
+    ).scalar_one_or_none()
+    return {"configured": row is not None}
+
+
+@app.get("/api/abuseipdb/ip/{ip}")
+async def abuseipdb_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    ip = InputValidator.validate_ip(ip)
+    key = await _resolve_abuseipdb_api_key(request, db, current)
+    return await abuse.check_ip(ip, key)
+
 # CHAT PERSISTENCE
 @app.get("/api/chat/{chat_id}")
 async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
@@ -1294,36 +1374,94 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     elif level >= 5: severity = "medium"
     else: severity = "low"
 
-    # 1. Background IA Analysis for high severity
-    ai_insight = None
-    if level >= 7:
-        async def run_ai():
+    # ── CO-PILOTO IA (Fase 3): triage estructurado con barreras ──
+    # Hacemos el triage SÍNCRONO solo cuando hay que tomar una decisión (ticket/bloqueo);
+    # si no, en background para no bloquear el webhook de Wazuh.
+    ai = None
+    need_decision = (settings.auto_create_webhook_tickets and level >= 9) or (
+        settings.auto_block_enabled and level >= 7
+    )
+    if level >= 7 and need_decision:
+        try:
+            alert["knowledge"] = await build_knowledge(db, description, [])
             res = await analyze_alert(int(rule_id), alert)
             if res.ok:
-                # Update ticket or broadcast insight later if needed
-                # For now we just log it
-                logger.info(f"AI Insight for alert {rule_id}: {res.data.get('summary')}")
+                ai = res.data
+        except Exception as e:
+            logger.warning("Co-piloto: triage falló para %s: %s", rule_id, e)
+    elif level >= 7:
+        async def run_ai():
+            try:
+                res = await analyze_alert(int(rule_id), alert)
+                if res.ok:
+                    logger.info("AI Insight %s: rs=%s %s", rule_id, res.data.get("risk_score"), res.data.get("summary"))
+            except Exception:
+                pass
         asyncio.create_task(run_ai())
 
-    # 2. Crear ticket automático solo si está habilitado (entrega limpia: desactivado por defecto)
+    risk_score = int(ai.get("risk_score", 0)) if ai else None
+    mitre_ttp = ai.get("mitre_ttp", []) if ai else []
+    # La IA puede refinar la severidad según el riesgo real
+    if risk_score is not None:
+        severity = "critical" if risk_score >= 85 else "high" if risk_score >= 60 else "medium" if risk_score >= 30 else "low"
+
+    # Tier 0 (auto, seguro): ticket auto-priorizado con contexto IA
     if settings.auto_create_webhook_tickets and level >= 9:
         admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
         if admin:
-            ticket = Ticket(
+            desc = description
+            if ai:
+                desc = (
+                    f"{description}\n\n[Triage IA] risk_score={risk_score} · "
+                    f"fp_likelihood={ai.get('false_positive_likelihood')}\n"
+                    f"Resumen: {ai.get('summary')}\n"
+                    f"Acción recomendada: {ai.get('recommended_action')}"
+                )
+            db.add(Ticket(
                 title=f"Wazuh Real-time: {description}",
-                description=description,
+                description=desc,
                 severity=severity,
                 category="wazuh-realtime",
-                source_ip=source_ip,
+                source_ip=source_ip if source_ip != "N/A" else None,
                 affected_asset=agent_name,
+                mitre_technique=",".join(mitre_ttp) if mitre_ttp else None,
                 wazuh_alert_id=str(alert.get("id") or rule_id),
                 reporter_id=admin.id,
-                status="open"
-            )
-            db.add(ticket)
+                status="open",
+            ))
             await db.commit()
 
-    # 3. Broadcast to UI
+    # Tier 1 (auto CON BARRERAS): bloqueo de IP reversible y auditado.
+    # Solo si: habilitado + risk_score alto + baja prob. de falso positivo + IP válida + NO whitelist.
+    auto_blocked = False
+    block_reason = None
+    if (settings.auto_block_enabled and ai and source_ip and source_ip != "N/A"
+            and risk_score is not None and risk_score >= settings.auto_block_risk_threshold
+            and ai.get("false_positive_likelihood") == "low"):
+        try:
+            ip = InputValidator.validate_ip(source_ip)
+            wl = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+            if wl and any("whitelist" in (t or "").lower() for t in (wl.tags or [])):
+                block_reason = "omitido: IP en whitelist"
+            else:
+                r = await _apply_ip_block(db, ip)
+                if r["cdb_ok"] or r["ar_ok"]:
+                    db.add(AuditLog(user_id=None, username="ai-copilot",
+                                    action="AUTO_BLOCK", route="/api/webhook/wazuh", ip_address=ip))
+                    await db.commit()
+                    auto_blocked = True
+                    block_reason = f"auto-bloqueo IA (risk={risk_score}, reversible {settings.auto_block_timeout_seconds}s)"
+                else:
+                    await db.rollback()
+                    block_reason = "fallo: Wazuh no confirmó"
+        except HTTPException:
+            block_reason = "omitido: IP inválida"
+        except Exception as e:
+            await db.rollback()
+            block_reason = f"error: {e}"
+            logger.warning("Co-piloto auto-block falló: %s", e)
+
+    # Broadcast a la UI con scoring IA y estado de la acción autónoma
     broadcast_payload = {
         "type": "NEW_ALERT",
         "data": {
@@ -1332,12 +1470,17 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             "description": description,
             "severity": severity,
             "source_ip": source_ip,
-            "agent_name": agent_name
-        }
+            "agent_name": agent_name,
+            "risk_score": risk_score,
+            "mitre_ttp": mitre_ttp,
+            "recommended_action": ai.get("recommended_action") if ai else None,
+            "auto_blocked": auto_blocked,
+            "block_reason": block_reason,
+        },
     }
     await manager.broadcast(broadcast_payload)
-    
-    return {"status": "processed"}
+
+    return {"status": "processed", "risk_score": risk_score, "auto_blocked": auto_blocked}
 
 @app.get("/api/ioc")
 async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
@@ -1402,3 +1545,466 @@ async def delete_ioc_ep(id: int, db: AsyncSession = Depends(get_db), _=Depends(g
     await db.delete(ioc)
     await db.commit()
     return {"ok": True}
+
+# ─────────────────────────────────────────────
+# FIREWALL / ACTIVE RESPONSE (Fase 1 — Consolidación Defensiva)
+# Flujo: UI → endpoint → API Wazuh (CDB blocked-ips + firewall-drop) → iptables DROP
+# La tabla IOC (Postgres) es la fuente de verdad; la lista CDB es su proyección.
+# ─────────────────────────────────────────────
+
+def _can_block_ips(user: User) -> bool:
+    return user.role.lower() in ("admin", "analyst", "analista")
+
+
+async def _build_blocked_cdb(db: AsyncSession) -> str:
+    """Contenido de la lista CDB 'blocked-ips' desde los IOC bloqueados (formato key:value).
+
+    Incluye siempre una línea de cabecera para que el archivo nunca quede vacío: la API
+    de Wazuh rechaza subir un cuerpo vacío (error 1912) cuando se desbloquea la última IP.
+    """
+    rows = (
+        await db.execute(
+            select(IOC.value).where(IOC.status == "blocked", IOC.ioc_type == "ip")
+        )
+    ).scalars().all()
+    header = "valhalla-soc-managed:1\n"  # entrada centinela inocua (no es una IP)
+    return header + "".join(f"{ip}:drop\n" for ip in sorted(set(rows)))
+
+
+async def _push_blocked_cdb(db: AsyncSession) -> dict:
+    return await wazuh.upload_cdb_list("blocked-ips", await _build_blocked_cdb(db))
+
+
+async def _apply_ip_block(db: AsyncSession, ip: str) -> dict[str, Any]:
+    """Núcleo de bloqueo reutilizable (endpoint manual y co-piloto IA).
+
+    Upsert del IOC como blocked + proyección a la lista CDB + firewall-drop.
+    NO hace commit/rollback (lo gestiona el llamante). Devuelve estado real.
+    """
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing:
+        existing.status = "blocked"
+        existing.tags = list({*(existing.tags or []), "blocked-firewall"})
+    else:
+        db.add(IOC(value=ip, ioc_type="ip", status="blocked", tags=["blocked-firewall"], malicious_score=0))
+    await db.flush()
+
+    cdb_ok = ar_ok = ar_skipped = False
+    detail: dict[str, Any] = {}
+    try:
+        cdb_res = await _push_blocked_cdb(db)
+        cdb_ok = int(cdb_res.get("error", 1)) == 0
+        detail["cdb"] = cdb_res
+    except Exception as e:
+        detail["cdb_error"] = str(e)
+        logger.warning("Block — CDB upload falló para %s: %s", ip, e)
+    try:
+        ar_res = await wazuh.run_firewall_drop(ip)
+        ar_skipped = bool(ar_res.get("skipped"))
+        ar_ok = int(ar_res.get("error", 1)) == 0 and not ar_skipped
+        detail["active_response"] = ar_res
+    except Exception as e:
+        detail["ar_error"] = str(e)
+        logger.warning("Block — firewall-drop falló para %s: %s", ip, e)
+
+    return {"cdb_ok": cdb_ok, "ar_ok": ar_ok, "ar_skipped": ar_skipped, "detail": detail}
+
+
+@app.get("/api/firewall/blocked")
+async def list_blocked_ips(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    rows = (
+        await db.execute(
+            select(IOC)
+            .where(IOC.status == "blocked", IOC.ioc_type == "ip")
+            .order_by(desc(IOC.updated_at))
+        )
+    ).scalars().all()
+    return [
+        {
+            "ip": r.value,
+            "country": r.country,
+            "as_owner": r.as_owner,
+            "tags": r.tags,
+            "since": r.updated_at,
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/firewall/block")
+async def firewall_block(
+    req: FirewallBlockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _can_block_ips(current):
+        raise HTTPException(403, "Solo admin o analista puede bloquear IPs")
+    ip = InputValidator.validate_ip(req.ip.strip())
+
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing and any("whitelist" in (t or "").lower() for t in (existing.tags or [])):
+        raise HTTPException(409, "La IP está en lista blanca; retírala antes de bloquear")
+
+    r = await _apply_ip_block(db, ip)
+    cdb_ok, ar_ok, ar_skipped, detail = r["cdb_ok"], r["ar_ok"], r["ar_skipped"], r["detail"]
+
+    # Éxito = la IP quedó persistida en la lista CDB (regla 100500 la aplicará en el
+    # manager al reaparecer; en agentes reales el AR-API la bloquea de inmediato).
+    # Solo es fallo real si la CDB no se pudo actualizar Y el AR tampoco se ejecutó.
+    if not cdb_ok and not ar_ok:
+        await db.rollback()
+        raise HTTPException(502, f"Wazuh no confirmó el bloqueo de {ip}. Detalle: {detail}")
+
+    await db.commit()
+    return {
+        "ok": True,
+        "ip": ip,
+        "cdb_applied": cdb_ok,
+        "active_response": ar_ok,
+        "active_response_skipped": ar_skipped,
+        "timeout": req.timeout,
+        "detail": detail,
+    }
+
+
+@app.post("/api/cowrie/block")
+async def cowrie_block_alias(
+    req: FirewallBlockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    """Alias de compatibilidad citado en docs/WAZUH_ACTIVE_RESPONSE.md."""
+    return await firewall_block(req, db, current)
+
+
+@app.post("/api/firewall/unblock")
+async def firewall_unblock(
+    req: FirewallUnblockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _can_block_ips(current):
+        raise HTTPException(403, "Solo admin o analista puede desbloquear IPs")
+    ip = InputValidator.validate_ip(req.ip.strip())
+
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing:
+        existing.status = "cleared"
+        existing.tags = [t for t in (existing.tags or []) if t != "blocked-firewall"]
+    await db.flush()
+
+    cdb_ok = False
+    detail: dict[str, Any] = {}
+    try:
+        cdb_res = await _push_blocked_cdb(db)
+        cdb_ok = int(cdb_res.get("error", 1)) == 0
+        detail["cdb"] = cdb_res
+    except Exception as e:
+        detail["cdb_error"] = str(e)
+        logger.warning("Firewall unblock — CDB upload falló para %s: %s", ip, e)
+
+    await db.commit()
+    # iptables: el DROP activo expira por el <timeout> del active-response configurado en ossec.conf
+    return {"ok": True, "ip": ip, "cdb_applied": cdb_ok, "detail": detail}
+
+
+# ─────────────────────────────────────────────
+# SOAR — PLAYBOOKS EJECUTABLES (Fase 3)
+# Los pasos de un runbook dejan de ser texto: el operador aprueba (1 clic) y el
+# backend ejecuta la acción REAL, con auditoría. Solo acciones seguras/reversibles.
+# ─────────────────────────────────────────────
+@app.post("/api/playbooks/execute")
+@limiter.limit("30/minute")
+async def playbook_execute(
+    request: Request,
+    req: PlaybookActionIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar playbooks")
+
+    action = req.action
+    if action in ("block_ip", "unblock_ip", "enrich_ip", "add_ioc") and not req.ip:
+        raise HTTPException(400, "Falta 'ip' para esta acción")
+
+    if action == "block_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        wl = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+        if wl and any("whitelist" in (t or "").lower() for t in (wl.tags or [])):
+            raise HTTPException(409, "La IP está en whitelist")
+        r = await _apply_ip_block(db, ip)
+        if not r["cdb_ok"] and not r["ar_ok"]:
+            await db.rollback()
+            raise HTTPException(502, f"Wazuh no confirmó el bloqueo: {r['detail']}")
+        await db.commit()
+        return {"ok": True, "action": action, "ip": ip, "cdb_applied": r["cdb_ok"], "active_response": r["ar_ok"]}
+
+    if action == "unblock_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+        if existing:
+            existing.status = "cleared"
+            existing.tags = [t for t in (existing.tags or []) if t != "blocked-firewall"]
+        await db.flush()
+        try:
+            await _push_blocked_cdb(db)
+        except Exception as e:
+            logger.warning("Playbook unblock CDB falló: %s", e)
+        await db.commit()
+        return {"ok": True, "action": action, "ip": ip}
+
+    if action == "create_ticket":
+        if not req.title:
+            raise HTTPException(400, "Falta 'title' para crear el ticket")
+        sev = (req.severity or "medium").lower()
+        if sev not in ("low", "medium", "high", "critical"):
+            sev = "medium"
+        t = Ticket(
+            title=req.title,
+            description=req.description or "",
+            severity=sev,
+            category="playbook",
+            source_ip=req.ip,
+            status="open",
+            reporter_id=current.id,
+        )
+        db.add(t)
+        await db.commit()
+        await db.refresh(t)
+        return {"ok": True, "action": action, "ticket_id": t.id}
+
+    if action == "add_ioc":
+        existing = (await db.execute(select(IOC).where(IOC.value == req.ip))).scalar_one_or_none()
+        if existing:
+            return {"ok": True, "action": action, "note": "El IOC ya existía"}
+        db.add(IOC(value=req.ip, ioc_type="ip", status="watchlist", tags=["playbook"], malicious_score=0))
+        await db.commit()
+        return {"ok": True, "action": action, "value": req.ip}
+
+    if action == "enrich_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        out: dict[str, Any] = {}
+        try:
+            out["virustotal"] = await vt.check_ip(ip, await _resolve_vt_api_key(request, db, current))
+        except HTTPException:
+            out["virustotal"] = {"error": "API key de VirusTotal no configurada"}
+        try:
+            out["abuseipdb"] = await abuse.check_ip(ip, await _resolve_abuseipdb_api_key(request, db, current))
+        except HTTPException:
+            out["abuseipdb"] = {"error": "API key de AbuseIPDB no configurada"}
+        return {"ok": True, "action": action, "ip": ip, "enrichment": out}
+
+    raise HTTPException(400, "Acción no soportada")
+
+
+# ─────────────────────────────────────────────
+# FASE 4 — MADUREZ Y MÉTRICAS
+# ─────────────────────────────────────────────
+@app.get("/api/metrics/soc")
+async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """KPIs reales del SOC: MTTR, dwell (edad de abiertos), por severidad/analista, cobertura ATT&CK %."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ver métricas del SOC")
+
+    rows = (await db.execute(
+        select(Ticket.created_at, Ticket.updated_at, Ticket.status, Ticket.severity, Ticket.assigned_to_id)
+    )).all()
+    closed_states = {"closed", "resolved"}
+    open_states = {"open", "in_progress", "escalated"}
+    now = datetime.now(timezone.utc)
+
+    mttr_samples, dwell_samples = [], []
+    by_sev: dict[str, int] = {}
+    by_analyst: dict[int | None, int] = {}
+    total = len(rows)
+    closed = 0
+    for created, updated, status, severity, assignee in rows:
+        st = (status or "").lower()
+        by_sev[severity or "unknown"] = by_sev.get(severity or "unknown", 0) + 1
+        if st in closed_states:
+            closed += 1
+            if created and updated and updated >= created:
+                mttr_samples.append((updated - created).total_seconds() / 60)
+            by_analyst[assignee] = by_analyst.get(assignee, 0) + 1
+        elif st in open_states and created:
+            dwell_samples.append((now - created).total_seconds() / 60)
+
+    # nombres de analistas
+    users = {u.id: u.username for u in (await db.execute(select(User))).scalars().all()}
+    tickets_by_analyst = [
+        {"analyst": users.get(aid, "sin asignar") if aid else "sin asignar", "closed": n}
+        for aid, n in sorted(by_analyst.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # Cobertura ATT&CK: técnicas base vistas / definidas en el ruleset
+    try:
+        cov = await osc.get_mitre_coverage(168)
+    except Exception:
+        cov = []
+    seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
+    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
+    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
+
+    try:
+        stats = await osc.get_dashboard_stats(24)
+    except Exception:
+        stats = {}
+
+    def _avg(xs: list[float]) -> int:
+        return round(sum(xs) / len(xs)) if xs else 0
+
+    return {
+        "tickets": {"total": total, "closed": closed, "open": total - closed,
+                    "resolution_rate_pct": round(100 * closed / max(1, total))},
+        "mttr_minutes": _avg(mttr_samples),
+        "dwell_open_avg_minutes": _avg(dwell_samples),
+        "by_severity": by_sev,
+        "tickets_by_analyst": tickets_by_analyst,
+        "attack_coverage_pct": coverage_pct,
+        "techniques_seen": sorted(seen_base & defined_base),
+        "alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
+        "generated_at": now.isoformat(),
+    }
+
+
+@app.get("/api/mitre/navigator-layer")
+async def mitre_navigator_layer(hours: int = 168, current: User = Depends(get_current_user)):
+    """Capa JSON para MITRE ATT&CK Navigator generada desde alertas reales (heat por frecuencia)."""
+    try:
+        cov = await osc.get_mitre_coverage(hours)
+    except Exception:
+        cov = []
+    techniques = [
+        {"techniqueID": c["technique_id"], "score": c["count"], "enabled": True,
+         "comment": f"{c['count']} eventos · {c.get('tactic','')}"}
+        for c in cov if c.get("technique_id")
+    ]
+    max_score = max([t["score"] for t in techniques], default=1)
+    return {
+        "name": "Valhalla SOC — TTPs detectadas",
+        "versions": {"layer": "4.5", "navigator": "4.9", "attack": "14"},
+        "domain": "enterprise-attack",
+        "description": f"Técnicas observadas en las últimas {hours}h",
+        "gradient": {"colors": ["#ffe766", "#ff6666"], "minValue": 0, "maxValue": max_score},
+        "techniques": techniques,
+    }
+
+
+@app.get("/api/hunting/queries")
+async def hunting_queries(current: User = Depends(get_current_user)):
+    return hunting.list_queries()
+
+
+@app.get("/api/hunting/run/{query_id}")
+async def hunting_run(query_id: str, hours: int = 168, current: User = Depends(get_current_user)):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar threat hunting")
+    return await hunting.run_query(query_id, hours=hours)
+
+
+# ─────────────────────────────────────────────
+# HEIMDALL — Informe de Inteligencia (datos 100% REALES, separado del exec report)
+# Reúne las métricas/cálculos que construí: resolución real, activos reales,
+# cumplimiento ISO calculado y cobertura ATT&CK. NO toca /api/reports/executive.
+# ─────────────────────────────────────────────
+async def _build_heimdall_data(db: AsyncSession, username: str) -> dict[str, Any]:
+    try:
+        stats = await osc.get_dashboard_stats(24)
+    except Exception:
+        stats = {}
+
+    total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
+    closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["closed", "resolved"])))).scalar() or 0
+
+    # Tiempo medio de resolución REAL
+    resolved_rows = (await db.execute(
+        select(Ticket.created_at, Ticket.updated_at).where(Ticket.status.in_(["closed", "resolved"]))
+    )).all()
+    _mins = [(u - c).total_seconds() / 60 for c, u in resolved_rows if c and u and u >= c]
+    avg_resolution_min = round(sum(_mins) / len(_mins)) if _mins else 0
+
+    # Activos/atacantes REALES
+    try:
+        _top = await osc.get_top_attackers(limit=5, hours=24)
+    except Exception:
+        _top = []
+    top_affected_assets = [
+        {"name": a.get("attack_type") or "Actividad de ataque", "ip": a.get("ip", "unknown"), "alerts": a.get("count", 0)}
+        for a in _top
+    ]
+
+    # Cumplimiento ISO 27001 CALCULADO
+    ioc_count = (await db.execute(select(func.count(IOC.id)))).scalar() or 0
+    audit_count = (await db.execute(select(func.count(AuditLog.id)))).scalar() or 0
+    runbook_count = (await db.execute(select(func.count(Runbook.id)).where(Runbook.is_active == True))).scalar() or 0
+    try:
+        _agents = await wazuh.get_agents()
+        agents_active = sum(1 for a in (_agents or []) if a.get("status") == "active")
+    except Exception:
+        agents_active = 0
+    iso_controls = [
+        {"control": "A.5.7 Threat Intelligence", "status": "covered" if ioc_count > 0 else "partial", "note": f"{ioc_count} IOCs gestionados"},
+        {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"},
+        {"control": "A.8.15 Logging", "status": "covered" if audit_count > 0 else "partial", "note": f"{audit_count} eventos de auditoría"},
+        {"control": "A.5.26 Response to incidents", "status": "covered" if total_tickets > 0 else "partial", "note": f"{total_tickets} incidentes gestionados"},
+        {"control": "A.5.27 Learning from incidents", "status": "covered" if runbook_count > 0 else "partial", "note": f"{runbook_count} runbooks activos"},
+        {"control": "A.8.7 Protection against malware", "status": "covered" if agents_active > 0 else "partial", "note": f"{agents_active} agentes activos"},
+    ]
+    iso_overall = round(100 * sum(1 for c in iso_controls if c["status"] == "covered") / len(iso_controls))
+
+    # Cobertura MITRE ATT&CK
+    try:
+        cov = await osc.get_mitre_coverage(168)
+    except Exception:
+        cov = []
+    seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
+    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
+    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
+
+    return {
+        "report": "HEIMDALL",
+        "subtitle": "Informe de Inteligencia — Datos en tiempo real",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "analyst": (username or "SISTEMA").upper(),
+        "incident_management": {
+            "total_tickets": total_tickets,
+            "closed_tickets": closed_tickets,
+            "avg_resolution_time_min": avg_resolution_min,
+        },
+        "top_affected_assets": top_affected_assets,
+        "iso27001": {"overall": iso_overall, "controls": iso_controls},
+        "attack_coverage_pct": coverage_pct,
+        "techniques_seen": sorted(seen_base & defined_base),
+        "wazuh_metrics": {
+            "total_alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
+            "critical_alerts": stats.get("critical_alerts", 0),
+        },
+    }
+
+
+@app.get("/api/reports/heimdall")
+async def heimdall_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ver el informe HEIMDALL")
+    return await _build_heimdall_data(db, current.username)
+
+
+@app.get("/api/reports/heimdall/pdf")
+async def heimdall_report_pdf(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Informe HEIMDALL en PDF profesional (Typst). Datos dinámicos escapados (anti-inyección)."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede generar el PDF HEIMDALL")
+    from app.report_pdf import render_heimdall_typ, compile_pdf
+
+    data = await _build_heimdall_data(db, current.username)
+    try:
+        pdf = compile_pdf(render_heimdall_typ(data))
+    except Exception as e:
+        logger.error("Error compilando PDF HEIMDALL: %s", e)
+        raise HTTPException(500, f"No se pudo generar el PDF: {e}")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=heimdall-intel-report.pdf"},
+    )

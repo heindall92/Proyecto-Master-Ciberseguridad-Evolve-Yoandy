@@ -49,8 +49,9 @@ export default function LSAMonitorView() {
       setAlerts(alertsRes);
     } catch (e) {
       logger.error("LSA fetch error:", e);
-      setEndpoints(generateMockData());
-      setAlerts(generateMockAlerts());
+      // Sin datos de demostración: mostrar vacío honesto en lugar de mocks.
+      setEndpoints([]);
+      setAlerts([]);
     } finally {
       setLoading(false);
     }
@@ -138,6 +139,13 @@ export default function LSAMonitorView() {
                 </tr>
               </thead>
               <tbody>
+                {endpoints.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", fontSize: "11px" }}>
+                      Sin endpoints Windows monitorizados — enrola un agente Wazuh con SCA para ver datos reales de LSA/RunAsPPL.
+                    </td>
+                  </tr>
+                )}
                 {endpoints.map(ep => (
                   <tr key={ep.hostname} style={{ borderBottom: "1px solid var(--line-faint)" }}>
                     <td style={{ padding: "8px" }}>{ep.hostname}</td>
@@ -264,21 +272,3 @@ export default function LSAMonitorView() {
   );
 }
 
-function generateMockData(): EndpointStatus[] {
-  return [
-    { hostname: "WS-ADMIN-01", runasppl_enabled: true, lsa_protected: true, suspicious_processes: [], admin_sessions: 3, risk_score: 25, sysmon_logged: 156 },
-    { hostname: "WS-FINANZAS-02", runasppl_enabled: false, lsa_protected: false, suspicious_processes: ["mimikatz"], admin_sessions: 5, risk_score: 85, sysmon_logged: 892 },
-    { hostname: "SRV-DB-01", runasppl_enabled: true, lsa_protected: true, suspicious_processes: [], admin_sessions: 1, risk_score: 10, sysmon_logged: 23 },
-    { hostname: "WS-VENTAS-03", runasppl_enabled: false, lsa_protected: false, suspicious_processes: ["procdump"], admin_sessions: 2, risk_score: 92, sysmon_logged: 1205 },
-    { hostname: "WS-DEV-04", runasppl_enabled: true, lsa_protected: true, suspicious_processes: [], admin_sessions: 0, risk_score: 5, sysmon_logged: 12 },
-  ];
-}
-
-function generateMockAlerts(): LSAAlert[] {
-  return [
-    { id: 1, timestamp: new Date().toISOString(), type: "mimikatz", source_ip: "192.168.1.105", hostname: "WS-FINANZAS-02", severity: "critical", blocked: false, target_process: "lsass.exe", source_process: "mimikatz.exe" },
-    { id: 2, timestamp: new Date(Date.now() - 60000).toISOString(), type: "sysmon_id10", source_ip: "192.168.1.108", hostname: "WS-VENTAS-03", severity: "critical", blocked: false, target_process: "lsass.exe", source_process: "powercat.exe" },
-    { id: 3, timestamp: new Date(Date.now() - 120000).toISOString(), type: "procdump", source_ip: "192.168.1.105", hostname: "WS-FINANZAS-02", severity: "high", blocked: true, target_process: "lsass.exe", source_process: "procdump.exe" },
-    { id: 4, timestamp: new Date(Date.now() - 180000).toISOString(), type: "lsass_access", source_ip: "192.168.1.202", hostname: "WS-ADMIN-01", severity: "medium", blocked: false, target_process: "lsass.exe", source_process: "svchost.exe" },
-  ];
-}

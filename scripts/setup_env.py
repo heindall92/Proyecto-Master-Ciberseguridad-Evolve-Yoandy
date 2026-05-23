@@ -136,7 +136,7 @@ def _prompt_admin_password(non_interactive: bool, provided: str | None) -> str:
         try:
             return _validate_admin_password(raw)
         except ValueError as e:
-            print(f"  ✗ {e}")
+            print(f"  [X] {e}")
 
 
 def _merge_env(
@@ -205,7 +205,7 @@ def run_setup(
 ) -> int:
     if ENV_PATH.exists() and not force and not env_needs_setup():
         if not quiet:
-            print(f"✓ {ENV_PATH} ya está configurado. Use --force para regenerar.")
+            print(f"[OK] {ENV_PATH} ya está configurado. Use --force para regenerar.")
         return 0
 
     if not quiet:
@@ -229,8 +229,8 @@ def run_setup(
 
     if not quiet:
         print()
-        print("✓ Archivo creado:", ENV_PATH)
-        print("✓ Copia de respaldo:", BACKUP_PATH)
+        print("[OK] Archivo creado:", ENV_PATH)
+        print("[OK] Copia de respaldo:", BACKUP_PATH)
         print()
         print("-" * 60)
         print("  GUARDE ESTOS VALORES EN UN LUGAR SEGURO (gestor de contraseñas)")

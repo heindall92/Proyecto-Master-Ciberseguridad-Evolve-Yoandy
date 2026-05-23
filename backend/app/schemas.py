@@ -379,6 +379,50 @@ class IocUpdate(BaseModel):
     malicious_score: int | None = Field(default=None, ge=0, le=100)
 
 
+# --- Firewall / Active Response (Fase 1) ---
+
+
+class FirewallBlockIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ip: str = Field(..., min_length=7, max_length=45)
+    timeout: int | None = Field(default=None, ge=0, le=604800)  # 0 = permanente, máx 7 días
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class FirewallUnblockIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ip: str = Field(..., min_length=7, max_length=45)
+
+
+class TriageRequest(BaseModel):
+    """Contexto de alerta para el triage IA estructurado (Fase 3)."""
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(..., min_length=1, max_length=2000)
+    source_ip: str | None = Field(default=None, max_length=45)
+    full_log: str | None = Field(default=None, max_length=8000)
+    rule_id: int | None = None
+    rule_level: int | None = Field(default=None, ge=0, le=16)
+
+
+class PlaybookActionIn(BaseModel):
+    """Acción ejecutable de un playbook/runbook (SOAR ligero, Fase 3).
+
+    El humano aprueba la acción (un clic en la UI) y el backend la ejecuta de verdad,
+    con auditoría. Solo acciones seguras y reversibles; nada irreversible automático.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["block_ip", "unblock_ip", "create_ticket", "add_ioc", "enrich_ip"]
+    ip: str | None = Field(default=None, max_length=45)
+    title: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    severity: str | None = Field(default=None, max_length=20)
+    runbook_id: int | None = None
+
+
 class ChatMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
