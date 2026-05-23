@@ -51,9 +51,9 @@ export default function IncidentsView() {
     const limit = SLA_LIMITS[ticket.severity] || SLA_LIMITS.medium;
     const now = Date.now();
     const remaining = start + limit - now;
-    
+
     if (remaining < 0) return "SLA BREACHED";
-    
+
     const hours = Math.floor(remaining / (1000 * 60 * 60));
     const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${mins}m`;
@@ -63,15 +63,15 @@ export default function IncidentsView() {
 
   return (
     <div className="view" style={{ display: 'flex', gap: '16px', height: '100%', padding: '0 8px 8px 0' }}>
-      
+
       {/* Left Column: Ticket List */}
       <div style={{ flex: selectedTicket ? 1 : 2, display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div className="panel" style={{ flex: 1 }}>
           <div className="panel__head">
             <span className="panel__title">Gestión de Incidentes</span>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={handleRefresh} style={{ padding: '6px 10px', background: 'transparent', border: '1px solid var(--signal)', color: 'var(--signal)', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>🔄 SYNC</button>
-              <button onClick={() => setShowCreate(true)} style={{ padding: '6px 10px', background: 'var(--signal)', border: '1px solid var(--signal)', color: '#000', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}>➕ NUEVO</button>
+              <button onClick={handleRefresh} style={{ padding: '6px 10px', background: 'transparent', border: '1px solid var(--signal)', color: 'var(--signal)', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}> SYNC</button>
+              <button onClick={() => setShowCreate(true)} style={{ padding: '6px 10px', background: 'var(--signal)', border: '1px solid var(--signal)', color: '#000', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--mono)' }}> NUEVO</button>
             </div>
           </div>
           <div className="panel__body" style={{ padding: 0 }}>
@@ -89,11 +89,11 @@ export default function IncidentsView() {
                 {tickets.map(t => {
                   const sla = calculateSLA(t);
                   return (
-                    <tr 
-                      key={t.id} 
+                    <tr
+                      key={t.id}
                       onClick={() => { setSelectedTicket(t); setVtResults(null); }}
-                      style={{ 
-                        borderBottom: '1px solid var(--line-faint)', 
+                      style={{
+                        borderBottom: '1px solid var(--line-faint)',
                         cursor: 'pointer',
                         background: selectedTicket?.id === t.id ? 'rgba(60,255,158,0.1)' : 'transparent'
                       }}
@@ -107,7 +107,7 @@ export default function IncidentsView() {
                         </span>
                       </td>
                       <td style={{ padding: '12px' }}>
-                        <span style={{ 
+                        <span style={{
                           padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.1)',
                           color: t.status === 'resolved' ? 'var(--signal)' : t.status === 'open' ? 'var(--danger)' : 'var(--amber)'
                         }}>
@@ -132,8 +132,8 @@ export default function IncidentsView() {
               <span className="panel__title">Detalle de Incidente #{selectedTicket.id}</span>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {currentUser?.role === 'admin' && (
-                  <button 
-                    className="action-btn" 
+                  <button
+                    className="action-btn"
                     onClick={async () => {
                       if (!window.confirm(`¿Eliminar este ticket permanentemente? Esta acción no se puede deshacer.`)) return;
                       try {
@@ -144,14 +144,14 @@ export default function IncidentsView() {
                     }}
                     style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
                   >
-                    🗑 ELIMINAR
+                     ELIMINAR
                   </button>
                 )}
-                <button className="action-btn" onClick={() => setSelectedTicket(null)}>✕ CERRAR</button>
+                <button className="action-btn" onClick={() => setSelectedTicket(null)}> CERRAR</button>
               </div>
             </div>
             <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
-              
+
               <div>
                 <h3 style={{ margin: '0 0 8px 0', color: 'var(--signal)', fontSize: '14px' }}>{selectedTicket.title}</h3>
                 <p style={{ color: 'var(--text-dim)', fontSize: '12px', lineHeight: 1.5 }}>{selectedTicket.description || 'Sin descripción adicional.'}</p>
@@ -161,8 +161,8 @@ export default function IncidentsView() {
                 <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '4px', border: '1px solid var(--line)' }}>
                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ fontSize: '12px' }}>IOC detectado: <strong>{selectedTicket.source_ip}</strong></div>
-                      <button 
-                        className="navbtn__badge" 
+                      <button
+                        className="navbtn__badge"
                         style={{ cursor: 'pointer', background: 'none', border: '1px solid var(--cyan)', color: 'var(--cyan)' }}
                         onClick={() => handleScanIOC(selectedTicket.source_ip!)}
                         disabled={vtLoading}
@@ -211,7 +211,7 @@ export default function IncidentsView() {
          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'center', zIndex: 9999 }}>
             <div className="panel" style={{ width: '500px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                <h3 style={{ margin: 0, color: 'var(--signal)', fontFamily: 'var(--mono)' }}>ABRIR NUEVO INCIDENTE</h3>
-               
+
                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '10px', color: 'var(--text-dim)' }}>TÍTULO DEL INCIDENTE</label>
                   <input type="text" id="new_title" style={{ flex: 1 }} placeholder="Ej: Posible exfiltración en DMZ" />
@@ -264,7 +264,7 @@ export default function IncidentsView() {
                      const ioc = (document.getElementById('new_ioc') as HTMLInputElement).value;
                      const desc = (document.getElementById('new_desc') as HTMLTextAreaElement).value;
                      if (!title) return alert("El título es obligatorio");
-                     
+
                      try {
                         await createTicket({ title, severity: sev, category: cat, affected_asset: asset, source_ip: ioc, description: desc });
                         setShowCreate(false);

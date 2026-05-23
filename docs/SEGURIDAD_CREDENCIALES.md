@@ -1,6 +1,6 @@
-# 🔐 Seguridad — Credenciales por defecto (LÉEME ANTES DE EXPONER)
+# Seguridad — Credenciales por defecto (LÉEME ANTES DE EXPONER)
 
-> ⚠️ **AVISO / USO BAJO TU PROPIO RIESGO**
+> **AVISO / USO BAJO TU PROPIO RIESGO**
 > Esta herramienta se entrega con **contraseñas por defecto** pensadas para un laboratorio
 > local. **Si la despliegas en una red accesible o en producción, DEBES cambiarlas.**
 > El equipo de Valhalla SOC no se responsabiliza de despliegues con credenciales por defecto.

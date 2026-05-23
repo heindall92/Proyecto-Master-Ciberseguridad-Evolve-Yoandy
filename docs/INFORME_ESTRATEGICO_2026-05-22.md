@@ -1,4 +1,4 @@
-# ⚔️ INFORME ESTRATÉGICO — VALHALLA SOC
+# INFORME ESTRATÉGICO — VALHALLA SOC
 
 **Fecha:** 2026-05-22
 **Autor:** Auditoría experta Blue/Red Team
@@ -35,7 +35,7 @@ es cerrar la brecha **"detecto" → "respondo"** y añadir correlación, detecci
 
 ---
 
-## 2. 🗺️ Roadmap de evolución (4 fases)
+## 2. Roadmap de evolución (4 fases)
 
 ### FASE 1 — Consolidación Defensiva (0–4 semanas) · **COMPLETADA (2026-05-22)**
 Cerrar la brecha entre detectar y responder. Active Response real en Wazuh (bloqueo de IP), reglas Sigma,
@@ -57,7 +57,7 @@ KPIs SOC reales (MTTD/MTTR/dwell time), reporting ISO 27001/NIS2, threat hunting
 
 ---
 
-## 3. 🛡️ 10 Integraciones / análisis para el SOC
+## 3. 10 Integraciones / análisis para el SOC
 
 1. **Active Response real (contención automática)** — `firewall-drop` sobre IP atacante tras N fallos, con whitelist y timeout.
 2. **Pipeline Sigma → reglas Wazuh** — acceso a miles de detecciones mantenidas por la comunidad.
@@ -72,7 +72,7 @@ KPIs SOC reales (MTTD/MTTR/dwell time), reporting ISO 27001/NIS2, threat hunting
 
 ---
 
-## 4. 🎨 10 Mejoras estéticas (manteniendo Tactical Cyberpunk)
+## 4. 10 Mejoras estéticas (manteniendo Tactical Cyberpunk)
 
 Identidad respetada: **Signal Green #3cff9e + Cyber Cyan #4ae3ff sobre Deep Void #0a0a0f, bordes afilados
 (borderRadius 0), Roboto Mono, glassmorphism.**
@@ -90,7 +90,7 @@ Identidad respetada: **Signal Green #3cff9e + Cyber Cyan #4ae3ff sobre Deep Void
 
 ---
 
-## 5. 🔍 5 Integraciones para Wazuh
+## 5. 5 Integraciones para Wazuh
 
 1. **Active Response `firewall-drop` + CDB lists** (whitelist de IPs confiables). *(Fase 1, Hito 1)*
 2. **Webhook a Slack / Telegram / Discord** para alertas nivel ≥12 (patrón `custom-valhalla`).
@@ -100,7 +100,7 @@ Identidad respetada: **Signal Green #3cff9e + Cyber Cyan #4ae3ff sobre Deep Void
 
 ---
 
-## 6. ⚠️ Hallazgos de auditoría (deuda de seguridad)
+## 6. Hallazgos de auditoría (deuda de seguridad)
 
 > Anotados como registro. **No se tocan en el Hito 1**; se abordan en una tarea de hardening dedicada.
 
@@ -110,7 +110,7 @@ Identidad respetada: **Signal Green #3cff9e + Cyber Cyan #4ae3ff sobre Deep Void
 
 ---
 
-## 7. 🛠️ Cómo se implementará cada fase
+## 7. Cómo se implementará cada fase
 
 ### FASE 1 — Consolidación Defensiva · **COMPLETADA**
 
@@ -160,7 +160,7 @@ Hallazgos resueltos durante la verificación (todos honestos, sin falsos "OK"):
   propio **`valhalla-fwdrop`** (`wazuh_config/active-response/valhalla-fwdrop.py`) que acepta ambos.
 - **Body vacío (error 1912)**: la CDB nunca queda vacía (línea centinela `valhalla-soc-managed:1`).
 
-⚠️ **Limitaciones documentadas:** (1) topología — el DROP actúa en el contenedor manager, no protege al de Cowrie;
+ **Limitaciones documentadas:** (1) topología — el DROP actúa en el contenedor manager, no protege al de Cowrie;
 el bloqueo perimetral real necesita agentes en hosts (Fase 2). (2) La CDB se resetea al recrear el contenedor
 (la fuente de verdad es Postgres/IOC; re-sync en arranque queda como mejora futura).
 
@@ -209,7 +209,7 @@ Complementa el GeoIP/ASN ya presente vía VT. (MISP/Shodan quedan como ampliaci�
 con defaults (deriva risk_score de la severity si falta; valida IDs MITRE). Nuevo endpoint
 `POST /api/triage/analyze` (rol admin/analista, rate-limit 20/min). **Verificado con modelo real** (qwen2.5:1.5b):
 sobre una alerta de descarga de malware devolvió `risk_score=90, mitre_ttp=['T1059'], severity=high`.
-⚠️ **Requisito operativo:** el stack actual NO tiene modelo Ollama descargado → las funciones IA caen al fallback
+ **Requisito operativo:** el stack actual NO tiene modelo Ollama descargado → las funciones IA caen al fallback
 (estructurado pero genérico). Para IA real: `docker compose exec ollama ollama pull qwen2.5-coder:7b`
 (o usar el ligero `qwen2.5:1.5b` ya descargado ajustando `OLLAMA_MODEL`).
 
@@ -222,7 +222,7 @@ Webhook `/api/webhook/wazuh` reconvertido en co-piloto por niveles:
   Verificado: triage 85 → CDB block + AR-API enviado al agente 001.
 - **Tier 2 (destructivo):** NO automático — requiere aprobación humana.
 - Helper `_apply_ip_block` reutilizado por el endpoint manual y el co-piloto. `auto_block_enabled=False` por defecto (seguro).
-⚠️ **Honesto:** el auto-bloqueo persiste en CDB + audita, pero el `iptables` *inmediato en el agente* aún no se aplica
+ **Honesto:** el auto-bloqueo persiste en CDB + audita, pero el `iptables` *inmediato en el agente* aún no se aplica
 (gap de propagación de config al agente vía `shared/agent.conf`); el enforcement fiable es el del manager (regla 100501).
 
 **Fix de cableado Ollama:** la integración de Wazuh apuntaba a `host.docker.internal:11434` (Ollama del host) mientras
@@ -288,4 +288,4 @@ purple team / simulación de adversario continua.
 
 ---
 
-*⚔️ Valhalla SOC — Donde los ataques vienen a morir.*
+* Valhalla SOC — Donde los ataques vienen a morir.*

@@ -97,7 +97,7 @@ export default function CowrieView() {
 
          {/* Cyber Deception Intel */}
          <div className="panel cowrie-deception" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '15px' }}>
-            <h4 style={{ margin: '0 0 10px', fontSize: '12px' }}>🛡️ ESTRATEGIA DE DECEPCIÓN</h4>
+            <h4 style={{ margin: '0 0 10px', fontSize: '12px' }}> ESTRATEGIA DE DECEPCIÓN</h4>
             <p style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
               El honeypot Cowrie está operando como un señuelo SSH/Telnet. Los datos mostrados son <strong>telemetría real</strong> de ataques en curso.
               Las IPs marcadas en el TTY feed pueden ser bloqueadas directamente desde el módulo de <em>Threat Intel</em>.
@@ -131,7 +131,7 @@ export default function CowrieView() {
                         <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: isDanger ? 'rgba(255,50,50,0.05)' : 'transparent' }}>
                            <td style={{ padding: '10px 15px', color: 'var(--text-faint)' }}>{new Date(c.timestamp).toLocaleTimeString()}</td>
                            <td style={{ padding: '10px 15px' }}>
-                              <span 
+                              <span
                                 onClick={() => handleIpClick(c.ip)}
                                 style={{ color: 'var(--cyan)', cursor: 'pointer', textDecoration: 'underline' }}
                                 title="Analizar en Threat Intel"
@@ -142,7 +142,7 @@ export default function CowrieView() {
                            </td>
                            <td style={{ padding: '10px 15px', color: 'var(--amber)' }}>{String(c.session || 'unknown').substring(0, 8)}</td>
                            <td style={{ padding: '10px 15px', color: isDanger ? 'var(--danger)' : '#fff', fontWeight: isDanger ? 'bold' : 'normal' }}>
-                             {isDanger ? '⚠️ ' : '$ '}{c.command}
+                             {isDanger ? ' ' : '$ '}{c.command}
                            </td>
                         </tr>
                      );

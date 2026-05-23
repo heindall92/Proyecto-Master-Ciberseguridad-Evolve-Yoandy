@@ -75,9 +75,9 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <svg 
-        viewBox={`0 0 ${W} ${H}`} 
-        preserveAspectRatio="none" 
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
         style={{ width: '100%', flex: 1, display: 'block', cursor: 'crosshair' }}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -92,16 +92,16 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
             <stop offset="100%" stopColor={color} stopOpacity="0.05" />
           </linearGradient>
         </defs>
-        <motion.path 
+        <motion.path
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          d={areaPath} fill={`url(#${gradientId})`} 
+          d={areaPath} fill={`url(#${gradientId})`}
         />
-        <motion.path 
+        <motion.path
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
           transition={{ duration: 1.5, ease: "easeInOut" }}
-          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" 
+          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"
         />
         {hoverIdx !== null && pts[hoverIdx] && (
           <g>
@@ -160,12 +160,12 @@ const DEFAULT_LAYOUT: any = {
 export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog = false, setShowWidgetCatalog, lang = "es" }: { isLockedProp?: boolean; showWidgetCatalog?: boolean; setShowWidgetCatalog?: (v: boolean) => void; lang?: "es" | "en" }) {
   const { ref, width } = useContainerWidth();
   const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
-  
+
   const [layouts, setLayouts] = useState(() => {
     const saved = localStorage.getItem("valhalla.dashboard.layout.v6");
     return saved ? JSON.parse(saved) : DEFAULT_LAYOUT;
   });
-  
+
   const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
     const saved = localStorage.getItem("valhalla.dashboard.widgets.v11");
     return saved ? JSON.parse(saved) : DEFAULT_ACTIVE;
@@ -209,12 +209,12 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         recentAlerts = await getRecentAlerts(100, timeRange) || [];
         setAlerts(recentAlerts);
       } catch(e) { setAlerts([]); }
-      
+
       try {
         const top = await getTopAttackers(10, timeRange);
         setTopAttackers(top || []);
       } catch(e) { setTopAttackers([]); }
-      
+
       let volPoints: number[] = [];
       let volLabels: string[] = [];
       try {
@@ -237,7 +237,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
       }
       setVolumePoints(volPoints);
       setVolumeLabels(volLabels);
-      
+
       try {
         const ags = await listAgents();
         setAgents(ags || []);
@@ -287,7 +287,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     try {
       const result = await syncWazuhAlerts(1);
       setSyncResult(result);
-      fetchData(); 
+      fetchData();
     } catch (err) {
       logger.error("Sync error:", err);
     } finally {
@@ -324,7 +324,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const currentAlerts = alerts.slice(siemPageState * pageSize, (siemPageState + 1) * pageSize);
 
   const WIDGET_REGISTRY = useMemo(() => ({
-    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "🚨", render: () => (
+    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--danger)' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
@@ -336,7 +336,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>LAST {timeRange}H</span>
       </div>
     )},
-    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "🔥", render: () => (
+    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: '#ff4757' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
@@ -348,7 +348,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>SEVERITY · CRIT</span>
       </div>
     )},
-    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => {
+    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "", render: () => {
       const active = agents.filter(a => a.status === 'active').length;
       const total = agents.length;
       return (
@@ -364,7 +364,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </div>
       );
     }},
-    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "🎫", render: () => (
+    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--amber)' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
@@ -376,7 +376,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>EN PROGRESO</span>
       </div>
     )},
-    "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "🌊", render: () => {
+    "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "", render: () => {
       const SEV_COLOR: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e', info: '#38bdf8' };
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -413,7 +413,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                 const color = SEV_COLOR[sev] || '#38bdf8';
                 const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
                 return (
-                  <motion.div 
+                  <motion.div
                     key={al.id || i}
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
@@ -448,11 +448,11 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                         {al.description || `Rule ${al.rule_id}`}
                       </span>
                       {isSshBrute && (
-                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}>⚠️ Check for "Accepted Password" follow-up</span>
+                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}> Check for "Accepted Password" follow-up</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => handleCreateTicketFromAlert(al)}
                         disabled={syncing}
@@ -470,7 +470,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "chart-vol": { name: "Volume", w: 4, h: 4, icon: "📈", render: () => {
+    "chart-vol": { name: "Volume", w: 4, h: 4, icon: "", render: () => {
       const lastVal = volumePoints?.slice(-1)?.[0] || 0;
       const maxVal = Math.max(...(volumePoints || [1]), 1);
       const trend = volumePoints.length >= 2 ? volumePoints[volumePoints.length - 1] - volumePoints[volumePoints.length - 2] : 0;
@@ -498,7 +498,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "chart-levels": { name: "Niveles", w: 4, h: 4, icon: "📊", render: () => {
+    "chart-levels": { name: "Niveles", w: 4, h: 4, icon: "", render: () => {
       const counts = { critical: 0, high: 0, medium: 0, low: 0 };
       alerts.forEach(al => {
         const s = (al.severity || '').toLowerCase();
@@ -520,7 +520,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "🛡️", render: () => {
+    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "", render: () => {
       const maxCount = Math.max(...(mitreData.map((m: any) => m.count || 0)), 1);
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -550,14 +550,14 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "stack-health": { name: "Health", w: 6, h: 8, icon: "💓", render: () => {
+    "stack-health": { name: "Health", w: 6, h: 8, icon: "", render: () => {
       const services = [
-        { name: t('manager'), status: wazuhServices?.manager || wazuhServices?.status || 'disconnected', icon: '🛡️' },
-        { name: t('indexer'), status: wazuhServices?.indexer || (summary.status === 'operational' ? 'active' : 'disconnected'), icon: '📊' },
-        { name: 'Cowrie SSH/Telnet', status: wazuhServices?.cowrie || 'disconnected', icon: '🍯', hint: wazuhServices?.cowrie_events_24h != null ? `${wazuhServices.cowrie_events_24h} evt/24h` : '' },
-        { name: lang === 'es' ? 'Honeypot (señuelo)' : 'Honeypot (decoy)', status: wazuhServices?.honeypot || wazuhServices?.cowrie || 'disconnected', icon: '🪤' },
-        { name: lang === 'es' ? 'Simulador atacante' : 'Attack simulator', status: wazuhServices?.attacker || 'disconnected', icon: '⚔️' },
-        { name: t('api'), status: wazuhServices?.api || 'active', icon: '🔌' },
+        { name: t('manager'), status: wazuhServices?.manager || wazuhServices?.status || 'disconnected', icon: '' },
+        { name: t('indexer'), status: wazuhServices?.indexer || (summary.status === 'operational' ? 'active' : 'disconnected'), icon: '' },
+        { name: 'Cowrie SSH/Telnet', status: wazuhServices?.cowrie || 'disconnected', icon: '', hint: wazuhServices?.cowrie_events_24h != null ? `${wazuhServices.cowrie_events_24h} evt/24h` : '' },
+        { name: lang === 'es' ? 'Honeypot (señuelo)' : 'Honeypot (decoy)', status: wazuhServices?.honeypot || wazuhServices?.cowrie || 'disconnected', icon: '' },
+        { name: lang === 'es' ? 'Simulador atacante' : 'Attack simulator', status: wazuhServices?.attacker || 'disconnected', icon: '' },
+        { name: t('api'), status: wazuhServices?.api || 'active', icon: '' },
       ];
       return (
         <section className="panel dash-stack-health" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -622,7 +622,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           { label: t('last_24h'), val: 24 },
           { label: t('last_7d'), val: 168 }
         ].map(r => (
-          <button 
+          <button
             type="button"
             key={r.val}
             onClick={() => setTimeRange(r.val)}
@@ -695,7 +695,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px', letterSpacing: '2px' }}>TODOS LOS WIDGETS ACTIVOS</div>
             )}
             <button onClick={() => setCatalogState(false)} className="action-btn" style={{ marginTop: '16px', width: '100%', padding: '12px', color: 'var(--danger)' }}>
-              ✕ {t('close')}
+               {t('close')}
             </button>
           </div>
         </div>

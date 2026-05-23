@@ -60,14 +60,14 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
 
-export default function AnalystWorkspace({ 
-  lang = "es", 
-  initialData, 
+export default function AnalystWorkspace({
+  lang = "es",
+  initialData,
   onClearInitialData,
   currentUser
-}: { 
-  lang?: "es" | "en", 
-  initialData?: any, 
+}: {
+  lang?: "es" | "en",
+  initialData?: any,
   onClearInitialData?: () => void,
   currentUser: UserOut
 }) {
@@ -582,7 +582,7 @@ export default function AnalystWorkspace({
                           const diff = Date.now() - new Date(ticket.created_at).getTime();
                           const hrs = Math.floor(diff / 3600000);
                           const mins = Math.floor((diff % 3600000) / 60000);
-                          return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}>🕒 {hrs}h {mins}m</span>;
+                          return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}> {hrs}h {mins}m</span>;
                         })()}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -942,7 +942,7 @@ export default function AnalystWorkspace({
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div className="ws-runbook-pick__title">{rb.name}</div>
-                    <span style={{ fontSize: '10px' }}>{activeRunbook?.id === rb.id ? '📖' : '👁️'}</span>
+                    <span style={{ fontSize: '10px' }}>{activeRunbook?.id === rb.id ? '' : ''}</span>
                   </div>
                   <div className="ws-runbook-pick__desc">{rb.description.substring(0, 60)}...</div>
                 </div>
@@ -956,15 +956,15 @@ export default function AnalystWorkspace({
             <div className="ws-runbook-procedure" style={{ marginBottom: '25px', padding: '15px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--signal)', fontWeight: 700 }}>PROCEDURE: {activeRunbook.name.toUpperCase()}</div>
-                <button onClick={() => setActiveRunbook(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => setActiveRunbook(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}></button>
               </div>
 
               {[
-                { label: 'Identification', steps: activeRunbook.identification_steps, icon: '🔍' },
-                { label: 'Containment', steps: activeRunbook.containment_steps, icon: '🛑' },
-                { label: 'Eradication', steps: activeRunbook.eradication_steps, icon: '🧹' },
-                { label: 'Recovery', steps: activeRunbook.recovery_steps, icon: '♻️' },
-                { label: 'Post-Mortem', steps: activeRunbook.post_mortem_steps, icon: '📝' }
+                { label: 'Identification', steps: activeRunbook.identification_steps, icon: '' },
+                { label: 'Containment', steps: activeRunbook.containment_steps, icon: '' },
+                { label: 'Eradication', steps: activeRunbook.eradication_steps, icon: '' },
+                { label: 'Recovery', steps: activeRunbook.recovery_steps, icon: '' },
+                { label: 'Post-Mortem', steps: activeRunbook.post_mortem_steps, icon: '' }
               ].map(phase => phase.steps && phase.steps.length > 0 && (
                 <div key={phase.label} style={{ marginBottom: '15px' }}>
                   <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>
@@ -978,12 +978,12 @@ export default function AnalystWorkspace({
                           {interpolate(step.text || step)}
                         </div>
                         {(step.command) && (
-                          <div style={{ 
-                            padding: '6px 10px', 
-                            background: '#000', 
-                            borderRadius: '4px', 
-                            fontFamily: 'var(--mono)', 
-                            fontSize: '10px', 
+                          <div style={{
+                            padding: '6px 10px',
+                            background: '#000',
+                            borderRadius: '4px',
+                            fontFamily: 'var(--mono)',
+                            fontSize: '10px',
                             color: 'var(--signal)',
                             border: '1px solid rgba(0,255,136,0.2)',
                             display: 'flex',
@@ -991,7 +991,7 @@ export default function AnalystWorkspace({
                             alignItems: 'center'
                           }}>
                             <code>{interpolate(step.command)}</code>
-                            <button 
+                            <button
                               onClick={() => navigator.clipboard.writeText(interpolate(step.command))}
                               style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '8px', cursor: 'pointer' }}
                             >
@@ -1012,20 +1012,20 @@ export default function AnalystWorkspace({
             <label className="ws-detail-section-label">
               Evidence & Artifacts
             </label>
-            
+
             {/* File List */}
             {selectedTicket.evidence && selectedTicket.evidence.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
                 {selectedTicket.evidence.map(ev => (
                   <div key={ev.id} className="ws-evidence-file">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px' }}>📄</span>
+                      <span style={{ fontSize: '14px' }}></span>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="ws-evidence-file__name">{ev.filename}</span>
                         <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{(ev.file_size / 1024).toFixed(1)} KB</span>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={async () => {
                         const { getEvidenceDownloadUrl } = await import('../lib/api');
                         window.open(getEvidenceDownloadUrl(ev.id), '_blank');
@@ -1041,11 +1041,11 @@ export default function AnalystWorkspace({
 
             <div className="ws-evidence-drop">
               <div className="ws-evidence-drop__hint">Upload logs or screenshots</div>
-              <input 
-                type="file" 
-                id="evidence-upload" 
-                hidden 
-                onChange={handleFileUpload} 
+              <input
+                type="file"
+                id="evidence-upload"
+                hidden
+                onChange={handleFileUpload}
                 disabled={saving}
               />
               <button
