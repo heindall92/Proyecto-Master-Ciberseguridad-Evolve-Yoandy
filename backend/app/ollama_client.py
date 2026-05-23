@@ -283,7 +283,7 @@ async def chat_assistant(question: str, history: list[dict[str, str]] | None = N
 SYSTEM_PROMPT_SOCIAL = (
     "Eres el responsable de divulgación técnica de un SOC. Redacta un post profesional para LinkedIn "
     "en español que difunda las vulnerabilidades CVE más relevantes para una audiencia de ciberseguridad. "
-    "Tono profesional y claro, 120-180 palabras. Incluye 3-5 hashtags al final (por ejemplo #Ciberseguridad #CVE). "
+    "Tono profesional y claro, 90-130 palabras. Incluye 3-5 hashtags al final (por ejemplo #Ciberseguridad #CVE). "
     "Usa SOLO los CVE proporcionados, no inventes datos. NO uses emojis."
 )
 
@@ -304,13 +304,14 @@ async def draft_social_post(cves: list[dict[str, Any]]) -> str:
             {"role": "user", "content": f"CVEs destacados de hoy:\n{lines}\n\nRedacta el post de LinkedIn."},
         ],
     }
+    POST_TIMEOUT = 150.0  # generar un post es más largo que el chat
     try:
-        r = await client.post(f"{base}/api/chat", json=payload)
+        r = await client.post(f"{base}/api/chat", json=payload, timeout=POST_TIMEOUT)
         if r.status_code == 404:
             r = await client.post(f"{base}/api/generate", json={
                 "model": settings.ollama_model, "stream": False, "options": {"temperature": 0.6},
                 "prompt": SYSTEM_PROMPT_SOCIAL + f"\n\nCVEs:\n{lines}\n\nPost:",
-            })
+            }, timeout=POST_TIMEOUT)
         r.raise_for_status()
         body = r.json()
         content = (body.get("message") or {}).get("content") if isinstance(body.get("message"), dict) else None
