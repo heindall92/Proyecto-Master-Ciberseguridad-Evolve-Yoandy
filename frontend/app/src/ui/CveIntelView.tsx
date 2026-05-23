@@ -13,7 +13,15 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
   const [post, setPost] = useState<string>("");
   const [postLoading, setPostLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const t = (es: string, en: string) => (lang === "es" ? es : en);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
 
   const load = async () => {
     setLoading(true);
@@ -33,7 +41,7 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
     setPostLoading(true);
     setCopied(false);
     try {
-      const r = await generateCveSocialPost();
+      const r = await generateCveSocialPost(Array.from(selected));
       setPost(r.post);
     } catch (e) {
       logger.error("post error:", e);
@@ -64,8 +72,8 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
           </span>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={genPost} disabled={postLoading} style={{ padding: "8px 16px", background: "rgba(60,255,158,0.12)", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "1px" }}>
-            {postLoading ? "..." : t("GENERAR POST IA", "GENERATE AI POST")}
+          <button onClick={genPost} disabled={postLoading} title={selected.size ? t("Post sobre las CVE seleccionadas", "Post about selected CVEs") : t("Sin selección: usa las más recientes", "No selection: uses most recent")} style={{ padding: "8px 16px", background: "rgba(60,255,158,0.12)", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "1px" }}>
+            {postLoading ? "..." : selected.size ? t(`GENERAR POST IA (${selected.size})`, `GENERATE AI POST (${selected.size})`) : t("GENERAR POST IA", "GENERATE AI POST")}
           </button>
           <button onClick={load} style={{ padding: "8px 12px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "4px", cursor: "pointer", fontSize: "11px" }}>SYNC</button>
         </div>
@@ -96,9 +104,10 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {cves.map((c) => (
-              <div key={c.id} style={{ padding: "10px", background: "rgba(0,0,0,0.25)", borderRadius: "6px", borderLeft: `3px solid ${sevColor(c.severity)}` }}>
+              <div key={c.id} style={{ padding: "10px", background: selected.has(c.id) ? "rgba(60,255,158,0.08)" : "rgba(0,0,0,0.25)", borderRadius: "6px", borderLeft: `3px solid ${sevColor(c.severity)}`, border: selected.has(c.id) ? "1px solid var(--signal)" : "1px solid transparent" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} title={t("Seleccionar para el post", "Select for post")} style={{ cursor: "pointer", accentColor: "var(--signal)" }} />
                     <a href={`https://nvd.nist.gov/vuln/detail/${c.id}`} target="_blank" rel="noopener noreferrer" style={{ color: sevColor(c.severity), fontWeight: 700, fontFamily: "var(--mono)", fontSize: "12px", textDecoration: "none" }}>{c.id}</a>
                     <span style={{ fontSize: "10px", color: "var(--text-dim)" }}>{c.product}</span>
                     {c.ransomware && <span style={{ fontSize: "9px", padding: "2px 6px", background: "rgba(255,58,58,0.15)", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "3px", fontWeight: 700 }}>RANSOMWARE</span>}

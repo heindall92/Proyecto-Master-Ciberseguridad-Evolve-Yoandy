@@ -556,10 +556,10 @@ export function getLatestCves(limit = 15) {
   return http<CveItem[]>(`/api/cve/latest?limit=${limit}`);
 }
 
-export function generateCveSocialPost() {
+export function generateCveSocialPost(cveIds: string[] = []) {
   return http<{ post: string; cves_used: Array<{ id: string; severity: string }>; auto_published: boolean }>(
     "/api/cve/social-post",
-    { method: "POST" }
+    { method: "POST", body: JSON.stringify({ cve_ids: cveIds }) }
   );
 }
 
