@@ -234,6 +234,44 @@ async def analyze_alert(alert_id: int, context: dict[str, Any]) -> OllamaResult:
         return OllamaResult(ok=False, data=_fallback(alert_id))
 
 
+SYSTEM_PROMPT_CHAT = (
+    "Eres VALHALLA-IA, un asistente integrado en el chat interno de un SOC (Security Operations Center). "
+    "Respondes a los analistas de forma BREVE (máximo 4-5 frases), técnica y útil, en español. "
+    "Ayudas con dudas de seguridad, interpretación de alertas, comandos, MITRE ATT&CK y procedimientos de respuesta. "
+    "Si no estás seguro de algo, dilo claramente. No inventes datos."
+)
+
+
+async def chat_assistant(question: str, history: list[dict[str, str]] | None = None) -> str:
+    """Asistente IA conversacional para el chat interno del SOC (texto plano)."""
+    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
+    for h in (history or [])[-6:]:
+        messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
+    messages.append({"role": "user", "content": question})
+
+    base = settings.ollama_base_url.rstrip("/")
+    client = get_ollama_client()
+    try:
+        r = await client.post(f"{base}/api/chat", json={
+            "model": settings.ollama_model, "stream": False,
+            "options": {"temperature": 0.4}, "messages": messages,
+        })
+        if r.status_code == 404:
+            r = await client.post(f"{base}/api/generate", json={
+                "model": settings.ollama_model, "stream": False,
+                "options": {"temperature": 0.4},
+                "prompt": SYSTEM_PROMPT_CHAT + "\n\nAnalista: " + question + "\nVALHALLA-IA:",
+            })
+        r.raise_for_status()
+        body = r.json()
+        content = (body.get("message") or {}).get("content") if isinstance(body.get("message"), dict) else None
+        content = content or body.get("response") or ""
+        return content.strip() or "No tengo una respuesta en este momento."
+    except Exception as e:
+        logger.warning("chat_assistant failed: %s", e)
+        return "El asistente IA no está disponible ahora mismo (¿modelo Ollama cargado?)."
+
+
 async def generate_executive_summary(metrics_context: dict[str, Any]) -> str:
     """Generates a high-level executive report summary using Ollama."""
     chat_payload = {

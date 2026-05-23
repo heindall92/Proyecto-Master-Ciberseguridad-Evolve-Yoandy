@@ -58,7 +58,7 @@ from app.security import (
 from app.crypto import encrypt_secret, decrypt_secret
 from app import opensearch_client as osc
 from app.wazuh_client import wazuh
-from app.ollama_client import analyze_alert, generate_executive_summary
+from app.ollama_client import analyze_alert, generate_executive_summary, chat_assistant
 from app import virustotal_client as vt
 from app import abuseipdb_client as abuse
 from app.rag import build_knowledge, MITRE_TECHNIQUES
@@ -312,6 +312,16 @@ async def on_startup():
                     "Sin usuario admin y ADMIN_PASSWORD vacío — cree un admin con scripts/reset_admin.py"
                 )
         
+        # Usuario de sistema para el asistente IA del chat (VALHALLA-IA)
+        if not (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none():
+            db.add(User(
+                username="valhalla-ia",
+                password_hash=get_password_hash(secrets.token_urlsafe(32)),
+                role="viewer",
+                rank="AI",
+            ))
+            logger.info("Usuario de sistema VALHALLA-IA creado")
+
         if not (await db.execute(select(Monitor))).scalars().first():
             defaults = [
                 ("SSH Bruteforce", "Intentos masivos SSH — reglas 5710/5712", 5, "high", "5710,5712"),
@@ -1348,7 +1358,44 @@ async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_d
         "attachment": new_msg.attachment
     }
     await manager.broadcast(json.dumps(broadcast_data))
+
+    # Chatbot IA: si mencionan al asistente (@ia / @valhalla / @heimdall), responde en background
+    if _AI_CHAT_TRIGGER.search(msg.text or ""):
+        asyncio.create_task(_ai_chat_reply(chat_id, msg.text or ""))
+
     return broadcast_data
+
+
+_AI_CHAT_TRIGGER = _re.compile(r"@(ia|valhalla|heimdall)\b", _re.IGNORECASE)
+
+
+async def _ai_chat_reply(chat_id: str, question: str) -> None:
+    """Genera y publica la respuesta del asistente IA en el chat interno."""
+    try:
+        answer = await chat_assistant(question)
+    except Exception as e:
+        logger.warning("AI chat reply falló: %s", e)
+        return
+    async with SessionLocal() as db:
+        ai = (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none()
+        if not ai:
+            return
+        m = ChatMessage(
+            id=f"ai-{secrets.token_hex(8)}",
+            user_id=ai.id,
+            username="VALHALLA-IA",
+            text=answer,
+            chat_id=chat_id,
+            mentions=[],
+        )
+        db.add(m)
+        await db.commit()
+        await db.refresh(m)
+        await manager.broadcast(json.dumps({
+            "id": m.id, "userId": ai.id, "username": "VALHALLA-IA", "rank": "AI",
+            "text": answer, "timestamp": m.timestamp.isoformat(),
+            "chatId": chat_id, "mentions": [], "attachment": None,
+        }))
 
 # WEBHOOKS
 @app.post("/api/webhook/wazuh")
