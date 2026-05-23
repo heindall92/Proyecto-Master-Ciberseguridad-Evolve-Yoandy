@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
-import { getLatestCves, generateCveSocialPost, CveItem } from "../lib/api";
+import { getLatestCves, generateCveSocialPost, getCveExploits, CveItem, ExploitResult } from "../lib/api";
 
 const CARD: React.CSSProperties = {
   background: "var(--bg-panel)", border: "1px solid var(--line)",
@@ -16,12 +16,24 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const t = (es: string, en: string) => (lang === "es" ? es : en);
 
+  const [exploits, setExploits] = useState<Record<string, ExploitResult | "loading">>({});
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
+
+  const fetchExploits = async (id: string) => {
+    setExploits((p) => ({ ...p, [id]: "loading" }));
+    try {
+      setExploits((p) => ({ ...p, [id]: await getCveExploits(id) }));
+    } catch (e) {
+      logger.error("exploits error:", e);
+      setExploits((p) => ({ ...p, [id]: { cve: id, count: 0, exploits: [], error: "error" } }));
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -112,9 +124,34 @@ export default function CveIntelView({ lang = "es" }: { lang?: string }) {
                     <span style={{ fontSize: "10px", color: "var(--text-dim)" }}>{c.product}</span>
                     {c.ransomware && <span style={{ fontSize: "9px", padding: "2px 6px", background: "rgba(255,58,58,0.15)", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "3px", fontWeight: 700 }}>RANSOMWARE</span>}
                   </div>
-                  <span style={{ fontSize: "9px", color: "var(--text-faint)" }}>{c.published}</span>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    {exploits[c.id] && exploits[c.id] !== "loading" && (exploits[c.id] as ExploitResult).count > 0 && (
+                      <span style={{ fontSize: "9px", padding: "2px 6px", background: "rgba(255,58,58,0.18)", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "3px", fontWeight: 700 }}>
+                        {(exploits[c.id] as ExploitResult).count} EXPLOIT{(exploits[c.id] as ExploitResult).count > 1 ? "S" : ""}
+                      </span>
+                    )}
+                    <button onClick={() => fetchExploits(c.id)} disabled={exploits[c.id] === "loading"} style={{ fontSize: "9px", padding: "3px 8px", background: "transparent", border: "1px solid var(--signal)", color: "var(--signal)", borderRadius: "3px", cursor: "pointer", fontFamily: "var(--mono)" }}>
+                      {exploits[c.id] === "loading" ? "..." : t("EXPLOITS", "EXPLOITS")}
+                    </button>
+                    <span style={{ fontSize: "9px", color: "var(--text-faint)" }}>{c.published}</span>
+                  </div>
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--text)", marginTop: "6px", lineHeight: 1.4 }}>{c.summary}</div>
+                {exploits[c.id] && exploits[c.id] !== "loading" && (
+                  <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid var(--line-faint)" }}>
+                    {(exploits[c.id] as ExploitResult).count === 0 ? (
+                      <span style={{ fontSize: "10px", color: "var(--text-dim)" }}>{(exploits[c.id] as ExploitResult).error ? t("Servicio de exploits no disponible", "Exploit service unavailable") : t("Sin exploits públicos en Exploit-DB", "No public exploits in Exploit-DB")}</span>
+                    ) : (
+                      (exploits[c.id] as ExploitResult).exploits.map((e) => (
+                        <div key={e.edb_id} style={{ fontSize: "10px", marginBottom: "3px" }}>
+                          <a href={e.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--danger)", textDecoration: "none" }}>EDB-{e.edb_id}</a>
+                          <span style={{ color: "var(--text)", marginLeft: "6px" }}>{e.title}</span>
+                          <span style={{ color: "var(--text-faint)", marginLeft: "6px" }}>[{e.platform}/{e.type}]</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

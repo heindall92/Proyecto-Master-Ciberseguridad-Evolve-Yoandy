@@ -2067,6 +2067,13 @@ async def cve_latest(limit: int = Query(15, ge=1, le=50), _=Depends(get_current_
     return await cve_feed.get_latest_cves(limit)
 
 
+@app.get("/api/cve/{cve_id}/exploits")
+async def cve_exploits(cve_id: str, _=Depends(get_current_user)):
+    """Exploits públicos (Exploit-DB / searchsploit en Kali) para una CVE."""
+    from app import exploit_search
+    return await exploit_search.search_exploits(cve_id)
+
+
 @app.post("/api/cve/social-post")
 @limiter.limit("10/minute")
 async def cve_social_post(request: Request, req: SocialPostIn | None = None, current: User = Depends(get_current_user)):
