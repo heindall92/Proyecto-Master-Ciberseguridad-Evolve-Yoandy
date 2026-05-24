@@ -301,7 +301,7 @@ async def on_startup():
                     username="admin",
                     password_hash=get_password_hash(settings.admin_password),
                     role="admin",
-                    rank="Commander",
+                    security_rank="Commander",
                 ))
                 logger.info("Usuario admin creado desde ADMIN_PASSWORD")
             elif settings.env.lower() == "production":
@@ -319,7 +319,7 @@ async def on_startup():
                 username="valhalla-ia",
                 password_hash=get_password_hash(secrets.token_urlsafe(32)),
                 role="viewer",
-                rank="AI",
+                security_rank="AI",
             ))
             logger.info("Usuario de sistema VALHALLA-IA creado")
 
@@ -504,7 +504,7 @@ async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), cu
         email=req.email,
         password_hash=get_password_hash(req.password),
         role=req.role,
-        rank=req.rank
+        security_rank=req.security_rank
     )
     db.add(new_user)
     await db.commit()
@@ -1367,7 +1367,7 @@ async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_d
     return broadcast_data
 
 
-_AI_CHAT_TRIGGER = _re.compile(r"@(chatbotr|chatbot|ia|valhalla|heimdall)\b", _re.IGNORECASE)
+_AI_CHAT_TRIGGER = _re.compile(r"@(chatbot|ia|valhalla|heimdall)\b", _re.IGNORECASE)
 _AI_CHAT_MAX_QUESTION_CHARS = 1200
 _IP_RE = _re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _TICKET_RE = _re.compile(r"\b(?:ticket|incidente|caso)\s*#?\s*(\d{1,10})\b", _re.IGNORECASE)
