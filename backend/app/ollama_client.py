@@ -246,8 +246,9 @@ SYSTEM_PROMPT_CHAT = (
     "Eres VALHALLA-IA, un asistente integrado en el chat interno de un SOC (Security Operations Center). "
     "Respondes a los analistas de forma breve (maximo 4-5 frases), tecnica y util, en espanol. "
     "Tu ambito es resolver dudas generales de ciberseguridad, integracion segura y publicacion responsable. "
-    "No tienes acceso al codigo, secretos, base de datos, configuracion interna ni estado real de la aplicacion; "
-    "si te preguntan por datos internos, dilo y pide que revisen fuentes autorizadas. "
+    "Solo puedes usar el contexto interno autorizado que se incluya explicitamente en el mensaje; "
+    "no tienes acceso libre al codigo, secretos, base de datos, configuracion interna ni estado real de la aplicacion. "
+    "Si faltan datos internos para responder, dilo y pide revisar fuentes autorizadas. "
     "No ejecutes acciones, no generes instrucciones ofensivas completas, no ayudes a evadir controles ni a exfiltrar datos. "
     "Prioriza siempre la integridad de la integracion, validacion, minimo privilegio, trazabilidad y seguridad de la publicacion. "
     "Si la peticion es demasiado amplia, peligrosa o ambigua, responde con una alternativa segura y acotada. "
@@ -255,10 +256,23 @@ SYSTEM_PROMPT_CHAT = (
 )
 
 
-async def chat_assistant(question: str, history: list[dict[str, str]] | None = None) -> str:
+async def chat_assistant(
+    question: str,
+    history: list[dict[str, str]] | None = None,
+    app_context: str | None = None,
+) -> str:
     """Asistente IA conversacional para el chat interno del SOC (texto plano)."""
     question = (question or "").strip()[:1200]
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
+    if app_context:
+        messages.append({
+            "role": "system",
+            "content": (
+                "Contexto interno autorizado, de solo lectura y resumido. "
+                "Usalo solo para responder la pregunta; no infieras secretos ni datos no presentes:\n"
+                + app_context[:3000]
+            ),
+        })
     for h in (history or [])[-6:]:
         messages.append({"role": h.get("role", "user"), "content": (h.get("content", "") or "")[:800]})
     messages.append({"role": "user", "content": question})
@@ -274,7 +288,9 @@ async def chat_assistant(question: str, history: list[dict[str, str]] | None = N
             r = await client.post(f"{base}/api/generate", json={
                 "model": settings.ollama_light_model, "stream": False,
                 "options": {"temperature": 0.25, "num_predict": 220},
-                "prompt": SYSTEM_PROMPT_CHAT + "\n\nAnalista: " + question + "\nVALHALLA-IA:",
+                "prompt": SYSTEM_PROMPT_CHAT
+                + ("\n\nContexto autorizado:\n" + app_context[:3000] if app_context else "")
+                + "\n\nAnalista: " + question + "\nVALHALLA-IA:",
             })
         r.raise_for_status()
         body = r.json()
