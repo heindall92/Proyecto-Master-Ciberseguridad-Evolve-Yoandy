@@ -1369,6 +1369,104 @@ async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_d
 
 _AI_CHAT_TRIGGER = _re.compile(r"@(chatbotr|chatbot|ia|valhalla|heimdall)\b", _re.IGNORECASE)
 _AI_CHAT_MAX_QUESTION_CHARS = 1200
+_IP_RE = _re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_TICKET_RE = _re.compile(r"\b(?:ticket|incidente|caso)\s*#?\s*(\d{1,10})\b", _re.IGNORECASE)
+_ALERT_RE = _re.compile(r"\b(?:alerta|alert|wazuh)\s*#?\s*([A-Za-z0-9_.:-]{2,80})\b", _re.IGNORECASE)
+
+
+def _chat_context_needed(question: str) -> bool:
+    q = (question or "").lower()
+    return bool(
+        _IP_RE.search(q)
+        or _TICKET_RE.search(q)
+        or _ALERT_RE.search(q)
+        or any(word in q for word in ("ioc", "alerta", "incidente", "ticket", "paso", "pasado", "ocurrio", "ocurrió"))
+    )
+
+
+async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) -> str:
+    """Contexto interno acotado para el chatbot: solo lectura, pocos registros y sin secretos."""
+    if not _chat_context_needed(question):
+        return ""
+
+    context: list[str] = []
+    ips = []
+    for raw_ip in _IP_RE.findall(question or "")[:3]:
+        try:
+            ips.append(InputValidator.validate_ip(raw_ip))
+        except HTTPException:
+            continue
+
+    ticket_ids = [int(x) for x in _TICKET_RE.findall(question or "")[:3]]
+    alert_refs = [x.strip() for x in _ALERT_RE.findall(question or "")[:3]]
+
+    ticket_q = select(Ticket).order_by(desc(Ticket.created_at)).limit(5)
+    filters = []
+    if ips:
+        filters.append(Ticket.source_ip.in_(ips))
+    if ticket_ids:
+        filters.append(Ticket.id.in_(ticket_ids))
+    if alert_refs:
+        filters.append(Ticket.wazuh_alert_id.in_(alert_refs))
+    if filters:
+        ticket_q = select(Ticket).where(or_(*filters)).order_by(desc(Ticket.created_at)).limit(5)
+    elif any(word in (question or "").lower() for word in ("incidente", "ticket", "alerta")):
+        ticket_q = select(Ticket).order_by(desc(Ticket.created_at)).limit(5)
+    else:
+        ticket_q = None
+
+    if ticket_q is not None:
+        ticket_q = _tickets_assignee_filter(ticket_q, user)
+        tickets = (await db.execute(ticket_q)).scalars().all()
+        if tickets:
+            context.append("Tickets visibles:")
+            for t in tickets:
+                context.append(
+                    f"- ticket={t.id} estado={t.status} severidad={t.severity} ip={t.source_ip or 'N/A'} "
+                    f"wazuh_alert_id={t.wazuh_alert_id or 'N/A'} titulo={t.title[:160]} "
+                    f"resumen={(t.ai_summary or t.description or '')[:240]}"
+                )
+
+    if ips:
+        iocs = (await db.execute(select(IOC).where(IOC.value.in_(ips)).limit(5))).scalars().all()
+        if iocs:
+            context.append("IOCs:")
+            for ioc in iocs:
+                context.append(
+                    f"- value={ioc.value} tipo={ioc.ioc_type} estado={ioc.status} score={ioc.malicious_score}/{ioc.total_engines} "
+                    f"pais={ioc.country or 'N/A'} as_owner={ioc.as_owner or 'N/A'} tags={','.join(ioc.tags or [])}"
+                )
+
+    if ips:
+        alerts = (await db.execute(
+            select(Alert).join(Event, Alert.event_id == Event.id, isouter=True)
+            .where(Event.source_ip.in_(ips))
+            .order_by(desc(Alert.timestamp))
+            .limit(5)
+        )).scalars().all()
+        if alerts:
+            context.append("Alertas locales:")
+            for a in alerts:
+                context.append(
+                    f"- alert_id={a.id} rule_id={a.rule_id or 'N/A'} severidad={a.severity} "
+                    f"fecha={a.timestamp.isoformat()} descripcion={(a.description or '')[:220]}"
+                )
+
+    if ips:
+        try:
+            recent = await osc.get_recent_alerts(limit=50, hours=168)
+            matches = [a for a in recent if a.get("source_ip") in ips][:5]
+            if matches:
+                context.append("Alertas Wazuh recientes:")
+                for a in matches:
+                    context.append(
+                        f"- rule_id={a.get('rule_id')} severidad={a.get('severity')} ip={a.get('source_ip')} "
+                        f"agente={a.get('agent_name')} descripcion={str(a.get('description') or '')[:220]}"
+                    )
+        except Exception as e:
+            logger.debug("AI chat Wazuh context unavailable: %s", e)
+
+    return "\n".join(context)[:3000]
 
 
 async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None:
@@ -1378,7 +1476,10 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
     if not clean_question:
         clean_question = "Explica como usar el asistente de forma segura en el chat del SOC."
     try:
-        answer = await chat_assistant(clean_question)
+        async with SessionLocal() as db:
+            requester = (await db.execute(select(User).where(User.id == requester_id))).scalar_one_or_none()
+            app_context = await _build_ai_chat_context(db, requester, clean_question) if requester else ""
+        answer = await chat_assistant(clean_question, app_context=app_context)
     except Exception as e:
         logger.warning("AI chat reply falló: %s", e)
         return
