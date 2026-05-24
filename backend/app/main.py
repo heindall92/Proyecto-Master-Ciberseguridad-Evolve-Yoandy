@@ -1,19 +1,23 @@
 from __future__ import annotations
+
 import os
 import time
 import asyncio
 import logging
 import shutil
 import re as _re
+import hmac
+import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import json
+import secrets
 from starlette.middleware.base import BaseHTTPMiddleware
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -23,7 +27,25 @@ from slowapi.errors import RateLimitExceeded
 from app.db import get_db, engine, SessionLocal
 from app.models import *
 from app.schemas import *
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, require_role
+from app.auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token_with_meta,
+    create_refresh_token_with_meta,
+    get_current_user,
+    get_current_user_optional,
+    require_role,
+    require_admin,
+    get_user_from_token,
+    decode_token_payload,
+    validate_access_token,
+    revoke_tokens_from_request,
+    revoke_token_jti,
+    purge_expired_revoked_tokens,
+    set_auth_cookies,
+    TOKEN_TYPE_REFRESH,
+    is_token_revoked,
+)
 from app.settings import settings
 from app.logger import logger
 from app.security import (
@@ -36,10 +58,17 @@ from app.security import (
 from app.crypto import encrypt_secret, decrypt_secret
 from app import opensearch_client as osc
 from app.wazuh_client import wazuh
-from app.ollama_client import analyze_alert, generate_executive_summary
+from app.ollama_client import analyze_alert, generate_executive_summary, chat_assistant, draft_social_post
+from app import cve_feed
 from app import virustotal_client as vt
+from app import abuseipdb_client as abuse
+from app.rag import build_knowledge, MITRE_TECHNIQUES
+from app import hunting
 from app.lsa_monitor import router as lsa_router
 from app.health import router as health_router
+from app.threat_map import get_threat_map_data
+from app.runbooks_seed import seed_runbooks_if_empty
+from app.http_tls import httpx_verify
 
 # --- MIDDLEWARES ---
 
@@ -76,124 +105,243 @@ class AuditMiddleware(BaseHTTPMiddleware):
 # --- APP INIT ---
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="Valhalla SOC API", version="2.0.0")
+_docs_url = None if settings.env.lower() == "production" else "/docs"
+_openapi_url = None if settings.env.lower() == "production" else "/openapi.json"
+app = FastAPI(title="Valhalla SOC API", version="2.0.0", docs_url=_docs_url, openapi_url=_openapi_url)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.middleware("http")(rate_limit_middleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(AuditMiddleware)
 
-ALLOWED_ORIGINS = settings.cors_origins.split(",") if hasattr(settings, "cors_origins") else ["http://localhost:3000"]
+_cors_origins = settings.cors_origins_list()
+_cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_cors_headers = ["Content-Type", "Authorization", "X-CSRF-Token", "Accept"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=_cors_methods,
+    allow_headers=_cors_headers,
 )
 
 app.include_router(lsa_router)
 app.include_router(health_router)
 
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    if settings.env.lower() == "production":
+        return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
 # --- BACKGROUND TASKS ---
 
+async def _sync_wazuh_alerts_to_tickets(hours: int = 1) -> dict[str, Any]:
+    """Crea tickets desde alertas Wazuh high/critical no duplicadas."""
+    alerts = await osc.get_recent_alerts(limit=50, hours=hours)
+    created = 0
+    skipped = 0
+    error: str | None = None
+    try:
+        async with SessionLocal() as db:
+            admin_res = await db.execute(select(User).where(User.username == "admin"))
+            admin = admin_res.scalar_one_or_none()
+            if not admin:
+                return {"created": 0, "skipped": 0, "error": "Usuario admin no encontrado"}
+            for alert in alerts:
+                alert_id = alert.get("rule_id")
+                if not alert_id:
+                    skipped += 1
+                    continue
+                if alert.get("severity") not in ("high", "critical"):
+                    skipped += 1
+                    continue
+                existing = (
+                    await db.execute(
+                        select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id))
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    skipped += 1
+                    continue
+                db.add(
+                    Ticket(
+                        title=f"Wazuh: {alert.get('description', 'Alert')}",
+                        description=alert.get("description", ""),
+                        severity=alert.get("severity"),
+                        category="wazuh-detected",
+                        source_ip=alert.get("source_ip"),
+                        affected_asset=alert.get("agent_name") or "Manager",
+                        wazuh_alert_id=str(alert_id),
+                        reporter_id=admin.id,
+                        status="open",
+                    )
+                )
+                created += 1
+            if created:
+                await db.commit()
+                logger.info(f"Wazuh sync: created {created} tickets")
+    except Exception as e:
+        error = str(e)
+        logger.warning(f"Wazuh sync failed: {e}")
+    return {"created": created, "skipped": skipped, "error": error}
+
+
 async def _auto_sync_loop():
-    """Background task: sync Wazuh alerts every 2 minutes."""
+    """Background task: sync Wazuh alerts (solo si AUTO_SYNC_WAZUH_TICKETS=true)."""
+    if not settings.auto_sync_wazuh_tickets:
+        return
     await asyncio.sleep(30)
     while True:
-        try:
-            alerts = await osc.get_recent_alerts(limit=50, hours=1)
-            async with SessionLocal() as db:
-                admin_res = await db.execute(select(User).where(User.username == "admin"))
-                admin = admin_res.scalar_one_or_none()
-                if admin:
-                    created = 0
-                    for alert in alerts:
-                        alert_id = alert.get("rule_id")
-                        if not alert_id: continue
-                        if alert.get("severity") not in ("high", "critical"): continue
-                        
-                        existing = (await db.execute(select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id)))).scalar_one_or_none()
-                        if existing: continue
-                        
-                        ticket = Ticket(
-                            title=f"Wazuh: {alert.get('description', 'Alert')}",
-                            description=alert.get("description", ""),
-                            severity=alert.get("severity"),
-                            category="wazuh-detected",
-                            source_ip=alert.get("source_ip"),
-                            affected_asset=alert.get("agent_name") or "Manager",
-                            wazuh_alert_id=str(alert_id),
-                            reporter_id=admin.id,
-                            status="open"
-                        )
-                        db.add(ticket)
-                        created += 1
-                    if created:
-                        await db.commit()
-                        logger.info(f"Auto-sync: created {created} tickets")
-        except Exception as e:
-            logger.warning(f"Auto-sync failed: {e}")
+        await _sync_wazuh_alerts_to_tickets(hours=1)
         await asyncio.sleep(120)
 
-async def _threat_intel_loop():
-    """Analiza proactivamente atacantes del honeypot con VirusTotal."""
-    while True:
-        try:
-            async with SessionLocal() as db:
-                # 1. Obtener atacantes recientes del honeypot
-                attackers = await osc.get_cowrie_sessions(limit=20, hours=1)
-                ips = {a["ip"] for a in attackers if a["ip"] != "unknown"}
-                
-                # 2. Obtener API Key de VT
-                s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-                if s:
-                    vt_key = decrypt_secret(s.value)
-                    for ip in ips:
-                        # Ver si ya esta en IOCs
-                        existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
-                        if not existing:
-                            report = await vt.check_ip(ip, vt_key)
-                            if "error" not in report:
-                                stats = report.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-                                ioc = IOC(
-                                    value=ip,
-                                    ioc_type="ip",
-                                    malicious_score=stats.get("malicious", 0),
-                                    total_engines=sum(stats.values()) if stats else 0,
-                                    country=report.get("data", {}).get("attributes", {}).get("country"),
-                                    as_owner=report.get("data", {}).get("attributes", {}).get("as_owner"),
-                                    status="malicious" if stats.get("malicious", 0) > 0 else "watchlist",
-                                    vt_report=report
-                                )
-                                db.add(ioc)
-                                logger.info(f"Proactive TI: Added IOC {ip} (score: {ioc.malicious_score})")
-                    await db.commit()
-        except Exception as e:
-            logger.error(f"Threat Intel Loop error: {e}")
-        await asyncio.sleep(3600) # Una vez por hora
 
-_report_cache = {"timestamp": None, "content": None}
+def _can_access_ticket(user: User, ticket: Ticket) -> bool:
+    if user.role in ("admin", "analyst", "analista", "reporter"):
+        return True
+    if user.role == "viewer":
+        return ticket.assigned_to_id == user.id or ticket.reporter_id == user.id
+    return False
+
+
+def _require_ticket_access(user: User, ticket: Ticket) -> None:
+    if not _can_access_ticket(user, ticket):
+        raise HTTPException(403, "No tienes permiso para acceder a este ticket")
+
+
+ACTIVE_TICKET_STATUSES = frozenset({"open", "in_progress", "escalated"})
+
+
+def _can_delete_tickets(user: User) -> bool:
+    return user.role.lower() in ("admin", "analyst", "analista")
+
+
+def _tickets_assignee_filter(q, user: User):
+    """Q ya es select(Ticket)... Restringe visibilidad como en workspace."""
+    if user.role == "viewer":
+        return q.where(
+            or_(
+                Ticket.assigned_to_id == user.id,
+                Ticket.reporter_id == user.id,
+            )
+        )
+    if user.role.lower() in ("analista", "analyst"):
+        return q.where(
+            or_(Ticket.assigned_to_id.is_(None), Ticket.assigned_to_id == user.id)
+        )
+    return q
+
+
+def _can_access_chat(user: User, chat_id: str) -> bool:
+    if chat_id == "global":
+        return True
+    if chat_id.startswith("dm:"):
+        parts = chat_id.replace("dm:", "").split("-")
+        try:
+            ids = {int(p) for p in parts if p.isdigit()}
+            return user.id in ids or user.role == "admin"
+        except ValueError:
+            return False
+    return user.role == "admin"
+
+
+def _require_chat_access(user: User, chat_id: str) -> None:
+    if not _can_access_chat(user, chat_id):
+        raise HTTPException(403, "No tienes permiso para acceder a este chat")
+
+
+def _verify_webhook_auth(request: Request, body: bytes) -> None:
+    """Token compartido o firma HMAC-SHA256 del cuerpo (X-Valhalla-Signature)."""
+    if not settings.webhook_secret:
+        logger.error("WEBHOOK_SECRET no configurado — rechazando webhook")
+        raise HTTPException(503, "Webhook no configurado")
+    secret = settings.webhook_secret.encode()
+    token = request.headers.get("X-Valhalla-Webhook-Token") or request.headers.get("X-Wazuh-Integration-Key")
+    if token and secrets.compare_digest(token, settings.webhook_secret):
+        return
+    sig_header = (request.headers.get("X-Valhalla-Signature") or "").strip()
+    if sig_header and body:
+        expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+        provided = sig_header.removeprefix("sha256=").strip()
+        if secrets.compare_digest(provided, expected):
+            return
+    raise HTTPException(401, "Webhook no autorizado")
+
+
+ALLOWED_AVATAR_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _safe_evidence_filename(raw: str) -> str:
+    base = os.path.basename(raw or "file")
+    base = _re.sub(r"[^\w.\-]", "_", base)
+    return base[:200] or "evidence.bin"
+
+
+ALLOWED_EVIDENCE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".txt", ".log", ".json", ".csv", ".pcap", ".zip"}
 
 @app.on_event("startup")
 async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
-    # Defaults
+    # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
         if not (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none():
-            db.add(User(username="admin", password_hash=get_password_hash("admin"), role="admin", security_rank="Commander"))
+            if settings.admin_password:
+                InputValidator.validate_password(settings.admin_password)
+                db.add(User(
+                    username="admin",
+                    password_hash=get_password_hash(settings.admin_password),
+                    role="admin",
+                    rank="Commander",
+                ))
+                logger.info("Usuario admin creado desde ADMIN_PASSWORD")
+            elif settings.env.lower() == "production":
+                raise RuntimeError(
+                    "CRITICAL: No existe usuario admin y ADMIN_PASSWORD vacío con ENV=production."
+                )
+            else:
+                logger.warning(
+                    "Sin usuario admin y ADMIN_PASSWORD vacío — cree un admin con scripts/reset_admin.py"
+                )
         
+        # Usuario de sistema para el asistente IA del chat (VALHALLA-IA)
+        if not (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none():
+            db.add(User(
+                username="valhalla-ia",
+                password_hash=get_password_hash(secrets.token_urlsafe(32)),
+                role="viewer",
+                rank="AI",
+            ))
+            logger.info("Usuario de sistema VALHALLA-IA creado")
+
         if not (await db.execute(select(Monitor))).scalars().first():
-            db.add(Monitor(name="SSH Bruteforce", threshold=5, severity_floor="high", rule_id_pattern="5710,5712"))
-            db.add(Monitor(name="Web Attack", threshold=1, severity_floor="high", rule_id_pattern="31103,31106"))
-            
+            defaults = [
+                ("SSH Bruteforce", "Intentos masivos SSH — reglas 5710/5712", 5, "high", "5710,5712"),
+                ("Cowrie Honeypot", "Eventos en señuelo Cowrie", 10, "medium", "cowrie"),
+                ("Web Attack", "Inyección SQL/XSS en aplicaciones", 1, "high", "31103,31106"),
+                ("Privilege Escalation", "Escalada de privilegios", 3, "critical", "550,551"),
+                ("Malware Detection", "Ejecutables o scripts sospechosos", 1, "critical", "554,750"),
+            ]
+            for name, desc, thr, sev, pat in defaults:
+                db.add(Monitor(
+                    name=name, description=desc, threshold=thr,
+                    severity_floor=sev, rule_id_pattern=pat, enabled=True,
+                ))
+        await seed_runbooks_if_empty(db)
+        await purge_expired_revoked_tokens(db)
         await db.commit()
     
-    asyncio.create_task(_auto_sync_loop())
-    asyncio.create_task(_threat_intel_loop())
+    if settings.auto_sync_wazuh_tickets:
+        asyncio.create_task(_auto_sync_loop())
     logger.info("Valhalla SOC API Started")
 
 # --- WEBSOCKET CHAT ---
@@ -207,7 +355,8 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: Any):
         if not isinstance(message, str):
@@ -222,10 +371,25 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.cookies.get("access_token")
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+    async with SessionLocal() as db:
+        try:
+            await validate_access_token(token or "", db)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+        user = await get_user_from_token(token, db)
+        if not user:
+            await websocket.close(code=1008)
+            return
     await manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text() # Keep alive
+            await websocket.receive_text()  # Keep alive
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -243,6 +407,7 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
     # Validate and sanitize
     username = InputValidator.validate_username(req.username)
     InputValidator.validate_password(req.password)
+    check_user_blocked(username)
     
     user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
     
@@ -250,12 +415,80 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
         rate_limiter.record_failed_login(req.username, client_ip)
         raise HTTPException(401, "Credenciales inválidas")
     
-    access_token = create_access_token(data={"sub": user.username})
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="strict")
-    return Token(access_token=access_token)
+    rate_limiter.record_successful_login(username)
+    access_token, _, _ = create_access_token_with_meta(user.username)
+    refresh_token, _, _ = create_refresh_token_with_meta(user.username)
+    csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    return Token(
+        access_token=access_token,
+        expires_in=settings.access_token_expire_minutes * 60,
+    )
+
+
+@app.post("/api/auth/refresh", response_model=Token)
+@limiter.limit("30/minute")
+async def refresh_session(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    raw = request.cookies.get("refresh_token")
+    if not raw:
+        raise HTTPException(401, "Refresh token no presente")
+    payload = decode_token_payload(raw)
+    if not payload or payload.get("typ") != TOKEN_TYPE_REFRESH:
+        raise HTTPException(401, "Refresh token inválido")
+    if await is_token_revoked(payload.get("jti"), db):
+        raise HTTPException(401, "Sesión revocada")
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(401, "Refresh token inválido")
+    user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(401, "Usuario no encontrado")
+
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)):
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        await revoke_token_jti(payload.get("jti", ""), expires_at, db)
+
+    access_token, _, _ = create_access_token_with_meta(user.username)
+    refresh_token, _, refresh_exp = create_refresh_token_with_meta(user.username)
+    csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    return Token(
+        access_token=access_token,
+        expires_in=settings.access_token_expire_minutes * 60,
+    )
+
+
+@app.post("/api/auth/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user_optional),
+):
+    await revoke_tokens_from_request(request, db)
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/api/auth")
+    response.delete_cookie("csrf_token", path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me/session")
+async def my_session(request: Request, current: User = Depends(get_current_user)):
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    return {
+        "username": current.username,
+        "ip": client_ip,
+        "user_agent": request.headers.get("User-Agent", "unknown"),
+        "expires_minutes": settings.access_token_expire_minutes,
+    }
+
 
 @app.get("/api/users", response_model=list[UserOut])
-async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depends(require_admin)):
     rows = (await db.execute(select(User))).scalars().all()
     return rows
 
@@ -271,7 +504,7 @@ async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), cu
         email=req.email,
         password_hash=get_password_hash(req.password),
         role=req.role,
-        security_rank=req.security_rank
+        rank=req.rank
     )
     db.add(new_user)
     await db.commit()
@@ -287,7 +520,7 @@ async def update_user_ep(user_id: int, req: UserUpdate, db: AsyncSession = Depen
     if req.username: u.username = req.username
     if req.email: u.email = req.email
     if req.role and current.role == "admin": u.role = req.role
-    if req.security_rank: u.security_rank = req.security_rank
+    if req.rank: u.rank = req.rank
     if req.avatar_url is not None: u.avatar_url = req.avatar_url
     if req.password: u.password_hash = get_password_hash(req.password)
     
@@ -300,13 +533,28 @@ async def upload_my_avatar(
     db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_user)
 ):
-    upload_dir = "uploads/avatars"
+    upload_dir = os.path.abspath("uploads/avatars")
     os.makedirs(upload_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1]
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_AVATAR_EXT:
+        raise HTTPException(400, f"Extensión no permitida. Use: {', '.join(sorted(ALLOWED_AVATAR_EXT))}")
+    header = await file.read(2048)
+    try:
+        import magic
+
+        mime = magic.from_buffer(header, mime=True) or ""
+        if not mime.startswith("image/"):
+            raise HTTPException(400, "El archivo no es una imagen válida")
+    except ImportError:
+        pass
     filename = f"avatar_{current.id}{ext}"
     file_path = os.path.join(upload_dir, filename)
-    
-    with open(file_path, "wb") as buffer:
+    real_path = os.path.realpath(file_path)
+    if not real_path.startswith(upload_dir):
+        raise HTTPException(400, "Ruta de archivo inválida")
+
+    with open(real_path, "wb") as buffer:
+        buffer.write(header)
         shutil.copyfileobj(file.file, buffer)
     
     current.avatar_url = f"/api/avatars/{filename}"
@@ -314,10 +562,12 @@ async def upload_my_avatar(
     return {"avatar_url": current.avatar_url}
 
 @app.get("/api/avatars/{filename}")
-async def get_avatar_file(filename: str):
-    from fastapi.responses import FileResponse
-    path = os.path.join("uploads/avatars", filename)
-    if not os.path.exists(path): raise HTTPException(404)
+async def get_avatar_file(filename: str, current: User = Depends(get_current_user)):
+    safe_name = os.path.basename(filename)
+    upload_dir = os.path.abspath("uploads/avatars")
+    path = os.path.realpath(os.path.join(upload_dir, safe_name))
+    if not path.startswith(upload_dir) or not os.path.isfile(path):
+        raise HTTPException(404)
     return FileResponse(path)
 
 @app.delete("/api/users/{user_id}")
@@ -334,6 +584,7 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if not u: raise HTTPException(404, "User not found")
+    InputValidator.validate_password(req.new_password)
     u.password_hash = get_password_hash(req.new_password)
     await db.commit()
     return {"ok": True}
@@ -341,45 +592,82 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
 @app.get("/api/auth/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)): return current_user
 
-# TICKETS
+# TICKETS (rutas fijas antes de /{ticket_id} para no capturar "count" como id)
+@app.get("/api/tickets/count/open")
+async def count_open_tickets(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    q = select(func.count(Ticket.id)).where(Ticket.status.in_(ACTIVE_TICKET_STATUSES))
+    q = _tickets_assignee_filter(q, current)
+    n = (await db.execute(q)).scalar() or 0
+    return {"open": int(n)}
+
+
 @app.get("/api/tickets", response_model=list[TicketOut])
-async def list_tickets(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def list_tickets(
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+    status: str | None = None,
+    active_only: bool = False,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
     from sqlalchemy.orm import selectinload
-    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).order_by(desc(Ticket.created_at))
+
+    q = (
+        select(Ticket)
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .order_by(desc(Ticket.created_at))
+    )
+    q = _tickets_assignee_filter(q, current)
+    if active_only:
+        q = q.where(Ticket.status.in_(ACTIVE_TICKET_STATUSES))
+    elif status:
+        q = q.where(Ticket.status == status)
+    q = q.limit(limit).offset(offset)
     rows = (await db.execute(q)).scalars().all()
     for t in rows:
-        if t.assignee: t.assignee_username = t.assignee.username
-        if t.reporter: t.reporter_username = t.reporter.username
+        if t.assignee:
+            t.assignee_username = t.assignee.username
+        if t.reporter:
+            t.reporter_username = t.reporter.username
     return rows
 
+
 @app.get("/api/tickets/{ticket_id}", response_model=TicketOut)
-async def get_ticket(ticket_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def get_ticket(
+    ticket_id: int,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
     from sqlalchemy.orm import selectinload
     t = (await db.execute(select(Ticket).options(
         selectinload(Ticket.assignee), 
         selectinload(Ticket.reporter), 
         selectinload(Ticket.evidence)
     ).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
-    
-    # Asegurar que los nombres de usuario se pueblen para el frontend
-    if t.assignee: t.assignee_username = t.assignee.username
-    if t.reporter: t.reporter_username = t.reporter.username
-    
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    if t.assignee:
+        t.assignee_username = t.assignee.username
+    if t.reporter:
+        t.reporter_username = t.reporter.username
     return t
 
 @app.post("/api/tickets", response_model=TicketOut)
-async def create_ticket(req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def create_ticket(req: TicketCreate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     ticket = Ticket(
-        title=req.get("title"),
-        description=req.get("description"),
-        severity=req.get("severity", "medium"),
-        category=req.get("category"),
-        source_ip=req.get("source_ip"),
-        affected_asset=req.get("affected_asset"),
+        title=req.title,
+        description=req.description,
+        severity=req.severity,
+        category=req.category,
+        source_ip=req.source_ip,
+        affected_asset=req.affected_asset,
+        affected_user=req.affected_user,
+        mitre_technique=req.mitre_technique,
+        wazuh_alert_id=req.wazuh_alert_id,
         status="open",
         reporter_id=current.id,
-        assigned_to_id=req.get("assigned_to_id")
+        assigned_to_id=req.assigned_to_id,
     )
     db.add(ticket)
     await db.commit()
@@ -387,45 +675,45 @@ async def create_ticket(req: dict, db: AsyncSession = Depends(get_db), current: 
     return await get_ticket(ticket.id, db, current)
 
 @app.put("/api/tickets/{ticket_id}", response_model=TicketOut)
-async def update_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def update_ticket_ep(ticket_id: int, req: TicketUpdate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
-    
-    # Update fields if provided
-    if "title" in req: t.title = req["title"]
-    if "description" in req: t.description = req["description"]
-    if "severity" in req: t.severity = req["severity"]
-    if "status" in req: t.status = req["status"]
-    if "category" in req: t.category = req["category"]
-    if "analysis_notes" in req: t.analysis_notes = req["analysis_notes"]
-    if "resolution_notes" in req: t.resolution_notes = req["resolution_notes"]
-    if "assigned_to_id" in req: t.assigned_to_id = req["assigned_to_id"]
-    
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    for field, value in req.model_dump(exclude_unset=True).items():
+        setattr(t, field, value)
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.post("/api/tickets/{ticket_id}/assign", response_model=TicketOut)
-async def assign_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def assign_ticket_ep(ticket_id: int, req: TicketAssign, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
-    t.assigned_to_id = req.get("assigned_to_id")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    t.assigned_to_id = req.assigned_to_id
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.post("/api/tickets/{ticket_id}/resolve", response_model=TicketOut)
-async def resolve_ticket_ep(ticket_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def resolve_ticket_ep(ticket_id: int, req: TicketResolve, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
-    t.status = "resolved"
-    t.resolution_notes = req.get("resolution_notes")
-    t.resolved_at = datetime.now(timezone.utc)
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    t.status = req.status
+    t.resolution_notes = req.resolution_notes
     await db.commit()
     return await get_ticket(t.id, db, current)
 
 @app.delete("/api/tickets/{ticket_id}")
 async def delete_ticket_ep(ticket_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if not _can_delete_tickets(current):
+        raise HTTPException(403, "Solo admin o analista puede eliminar tickets")
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
-    if not t: raise HTTPException(404, "Ticket not found")
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
     await db.delete(t)
     await db.commit()
     return {"ok": True}
@@ -437,19 +725,36 @@ async def upload_evidence(
     db: AsyncSession = Depends(get_db), 
     current: User = Depends(get_current_user)
 ):
-    upload_dir = "uploads/evidence"
+    t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+
+    upload_dir = os.path.abspath(settings.evidence_dir)
     os.makedirs(upload_dir, exist_ok=True)
-    
-    file_path = os.path.join(upload_dir, f"{ticket_id}_{file.filename}")
+    safe_name = _safe_evidence_filename(file.filename or "file")
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext not in ALLOWED_EVIDENCE_EXT:
+        raise HTTPException(400, f"Tipo de archivo no permitido: {ext}")
+
     file_content = await file.read()
-    file_size = len(file_content)
-    with open(file_path, "wb") as buffer:
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(file_content) > max_bytes:
+        raise HTTPException(400, f"Archivo supera {settings.max_upload_size_mb} MB")
+
+    file_path = os.path.join(upload_dir, f"{ticket_id}_{safe_name}")
+    real_path = os.path.realpath(file_path)
+    if not real_path.startswith(upload_dir):
+        raise HTTPException(400, "Ruta de archivo inválida")
+
+    with open(real_path, "wb") as buffer:
         buffer.write(file_content)
+    file_size = len(file_content)
     
     evidence = Evidence(
         ticket_id=ticket_id,
-        filename=file.filename,
-        file_path=file_path,
+        filename=safe_name,
+        file_path=real_path,
         file_size=file_size,
         content_type=file.content_type
     )
@@ -458,9 +763,15 @@ async def upload_evidence(
     return {"status": "ok", "filename": file.filename}
 
 @app.get("/api/incidents", response_model=list[TicketOut])
-async def list_incidents(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def list_incidents(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     from sqlalchemy.orm import selectinload
-    q = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence)).where(Ticket.severity.in_(["high", "critical"])).order_by(desc(Ticket.created_at))
+    q = (
+        select(Ticket)
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .where(Ticket.severity.in_(["high", "critical"]))
+        .order_by(desc(Ticket.created_at))
+    )
+    q = _tickets_assignee_filter(q, current)
     rows = (await db.execute(q)).scalars().all()
     return rows
 
@@ -508,7 +819,7 @@ async def agent_scan(agent_id: str, _=Depends(get_current_user)):
     return res
 
 @app.get("/api/wazuh/recent-alerts")
-async def recent_alerts(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
+async def recent_alerts(limit: int = 50, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_recent_alerts(limit, hours)
 
 @app.get("/api/wazuh/top-attackers")
@@ -521,111 +832,195 @@ async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_curr
 
 @app.get("/api/wazuh/mitre")
 async def mitre_coverage(hours: int = 168, _=Depends(get_current_user)):
-    return await osc.get_mitre_stats(hours)
+    return await osc.get_mitre_coverage(hours)
 
 @app.get("/api/wazuh/cowrie-stats")
-async def cowrie_stats_ep(hours: int = 168, _=Depends(get_current_user)):
+async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_stats(hours)
 
 @app.get("/api/wazuh/cowrie-sessions")
-async def cowrie_sessions_ep(limit: int = 100, hours: int = 168, _=Depends(get_current_user)):
+async def cowrie_sessions(limit: int = 100, hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_sessions(limit, hours)
 
 @app.get("/api/wazuh/cowrie-timeline")
-async def cowrie_timeline_ep(hours: int = 168, interval: str = "1h", _=Depends(get_current_user)):
+async def cowrie_timeline(hours: int = 24, interval: str = "1h", _=Depends(get_current_user)):
     return await osc.get_cowrie_timeline(hours, interval)
 
-@app.get("/api/threat-map")
-async def threat_map_ep(hours: int = 168, _=Depends(get_current_user)):
-    return await osc.get_threat_map(hours)
+
+async def _tcp_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+    try:
+        async with asyncio.timeout(timeout):
+            _r, w = await asyncio.open_connection(host, port)
+            w.close()
+            await w.wait_closed()
+            return True
+    except Exception:
+        return False
+
 
 @app.get("/api/wazuh/services")
 async def wazuh_services(_=Depends(get_current_user)):
-    # Mocking status since manager might not be fully reachable in all setups
+    """Estado del stack para el widget Salud del Stack (dashboard)."""
+    manager_status = "disconnected"
     try:
-        manager_status = await wazuh.get_manager_status()
-    except:
-        manager_status = {"status": "disconnected", "error": "Unable to reach manager"}
-    return manager_status
-
-@app.get("/api/dashboard")
-async def dashboard_summary(hours: int = 24, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    try:
-        stats = await osc.get_dashboard_stats(hours)
+        agents = await wazuh.get_agents()
+        manager_status = "active" if agents is not None else "disconnected"
     except Exception as e:
-        logger.error(f"Dashboard stats error: {e}")
-        stats = {}
-    tickets_open = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status != "closed"))).scalar() or 0
-    
+        logger.debug("Wazuh manager check failed: %s", e)
+
+    indexer_status = "disconnected"
+    try:
+        import httpx
+        async with asyncio.timeout(3):
+            async with httpx.AsyncClient(verify=httpx_verify()) as client:
+                res = await client.get(
+                    f"{settings.opensearch_url}/",
+                    auth=(settings.opensearch_user, settings.opensearch_pass),
+                )
+                indexer_status = "active" if res.status_code == 200 else "disconnected"
+    except Exception as e:
+        logger.debug("Indexer check failed: %s", e)
+
+    cowrie_host = os.getenv("COWRIE_HOST", "cowrie")
+    cowrie_ssh = int(os.getenv("COWRIE_SSH_PORT", "2222"))
+    cowrie_events = 0
+    try:
+        stats = await osc.get_cowrie_stats(24)
+        cowrie_events = int(stats.get("total") or 0)
+    except Exception:
+        pass
+
+    cowrie_port_up = await _tcp_reachable(cowrie_host, cowrie_ssh)
+    if cowrie_port_up:
+        cowrie_status = "active" if cowrie_events > 0 else "warning"
+    elif cowrie_events > 0:
+        cowrie_status = "active"
+    else:
+        cowrie_status = "disconnected"
+
+    attacker_host = os.getenv("ATTACKER_HOST", "attacker")
+    attacker_up = await _tcp_reachable(attacker_host, 22, timeout=1.5)
+
     return {
-        "status": "operational",
-        "metrics": {
-            "total_alerts_24h": stats.get("total_alerts_24h", 0),
-            "critical_alerts": stats.get("critical_alerts", 0),
-            "high_alerts": stats.get("high_alerts", 0),
-            "unique_agents": stats.get("unique_agents", 0),
-            "unique_attackers": stats.get("unique_attackers", 0),
-            "tickets_open": tickets_open
-        }
+        "status": manager_status,
+        "manager": manager_status,
+        "indexer": indexer_status,
+        "api": "active",
+        "cowrie": cowrie_status,
+        "honeypot": cowrie_status,
+        "cowrie_events_24h": cowrie_events,
+        "attacker": "active" if attacker_up else "disconnected",
     }
 
-from fastapi import Header
 
-@app.get("/api/virustotal/ip/{ip}")
-async def vt_check_ip_ep(ip: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
-    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
-    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
-    res = await vt.check_ip(ip, api_key)
-    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
-    return res
+@app.get("/api/threat-map")
+async def threat_map(hours: int = 24, _=Depends(get_current_user)):
+    return await get_threat_map_data(hours)
 
-@app.get("/api/virustotal/hash/{file_hash}")
-async def vt_check_hash_ep(file_hash: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
-    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
-    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
-    res = await vt.check_hash(file_hash, api_key)
-    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
-    return res
+# ─────────────────────────────────────────────
+# TRIAGE IA ESTRUCTURADO (Fase 3 — SOAR + IA táctica)
+# Ollama devuelve scoring accionable: risk_score, mitre_ttp, recommended_action, fp_likelihood
+# ─────────────────────────────────────────────
+@app.post("/api/triage/analyze")
+@limiter.limit("20/minute")
+async def triage_analyze(request: Request, req: TriageRequest, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar triage IA")
+    # RAG: recuperar runbooks + MITRE relevantes para fundamentar la recomendación
+    knowledge = await build_knowledge(db, f"{req.description} {req.full_log or ''}", [])
+    context = {
+        "rule": {"id": req.rule_id, "level": req.rule_level, "description": req.description},
+        "data": {"srcip": req.source_ip} if req.source_ip else {},
+        "full_log": req.full_log or "",
+        "knowledge": knowledge,
+    }
+    res = await analyze_alert(req.rule_id or 0, context)
+    return {"ok": res.ok, "analysis": res.data, "knowledge": knowledge}
 
-@app.get("/api/virustotal/domain/{domain}")
-async def vt_check_domain_ep(domain: str, x_vt_api_key: str = Header(None), _=Depends(get_current_user)):
-    api_key = x_vt_api_key or getattr(settings, "virustotal_api_key", None)
-    if not api_key: raise HTTPException(400, "VirusTotal API Key no configurada")
-    res = await vt.check_domain(domain, api_key)
-    if not res.get("found") and "error" in res: raise HTTPException(500, res["error"])
-    return res
+@app.get("/api/wazuh/sync-alerts")
+async def sync_alerts_manual(hours: int = 1, _=Depends(get_current_user)):
+    return await _sync_wazuh_alerts_to_tickets(hours=hours)
 
 
-# USERS
-@app.get("/api/users", response_model=list[UserOut])
-async def list_users(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return (await db.execute(select(User))).scalars().all()
+@app.get("/api/dashboard")
+async def get_dashboard(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    wazuh_stats = await osc.get_dashboard_stats(24)
+    tickets_open = (
+        await db.execute(
+            select(func.count(Ticket.id)).where(
+                Ticket.status.in_(["open", "in_progress", "escalated"])
+            )
+        )
+    ).scalar() or 0
+    tickets_total = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
+
+    return {
+        "metrics": {
+            "alerts": wazuh_stats.get("total_alerts_24h", 0),
+            "tickets_open": tickets_open,
+            "tickets_total": tickets_total,
+            **wazuh_stats,
+        },
+        "status": "operational",
+    }
+
+# MONITORS (reglas SOC configurables)
+@app.get("/api/monitors", response_model=list[MonitorOut])
+async def list_monitors(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403, "Solo admin puede ver monitores")
+    return (await db.execute(select(Monitor).order_by(Monitor.name))).scalars().all()
+
+@app.put("/api/monitors/{monitor_id}", response_model=MonitorOut)
+async def update_monitor_ep(
+    monitor_id: int,
+    payload: MonitorUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role != "admin":
+        raise HTTPException(403, "Solo admin puede editar monitores")
+    m = (await db.execute(select(Monitor).where(Monitor.id == monitor_id))).scalar_one_or_none()
+    if not m:
+        raise HTTPException(404, "Monitor no encontrado")
+    if payload.enabled is not None:
+        m.enabled = payload.enabled
+    if payload.threshold is not None:
+        m.threshold = payload.threshold
+    if payload.severity_floor is not None:
+        m.severity_floor = payload.severity_floor
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(m)
+    return m
 
 # AUDIT
 @app.get("/api/audit")
-async def list_audit(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role != "admin": raise HTTPException(403)
-    return (await db.execute(select(AuditLog).order_by(desc(AuditLog.timestamp)))).scalars().all()
-
-# MONITORS
-@app.get("/api/monitors")
-async def list_monitors(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return (await db.execute(select(Monitor))).scalars().all()
-
-@app.put("/api/monitors/{monitor_id}")
-async def update_monitor(monitor_id: int, req: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role != "admin": raise HTTPException(403)
-    m = (await db.execute(select(Monitor).where(Monitor.id == monitor_id))).scalar_one_or_none()
-    if not m: raise HTTPException(404, "Monitor not found")
-    if "enabled" in req: m.enabled = req["enabled"]
-    if "threshold" in req: m.threshold = req["threshold"]
-    await db.commit()
-    return m
+async def list_audit(
+    page: int = 1,
+    size: int = 50,
+    user: str | None = None,
+    action: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role != "admin":
+        raise HTTPException(403)
+    q = select(AuditLog).order_by(desc(AuditLog.timestamp))
+    if user:
+        q = q.where(AuditLog.username.ilike(f"%{user}%"))
+    if action:
+        q = q.where(AuditLog.action.ilike(f"%{action}%"))
+    offset = max(0, (page - 1) * size)
+    q = q.offset(offset).limit(min(size, 200))
+    return (await db.execute(q)).scalars().all()
 
 # REPORTS
 @app.get("/api/reports/executive")
-async def executive_report(db: AsyncSession = Depends(get_db), current: User | None = Depends(get_current_user_optional)):
+async def executive_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     """Genera el informe ejecutivo completo con datos reales e IA."""
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403, "Solo admin o analista puede ver el informe ejecutivo")
     try:
         # 1. Obtener estadisticas de OpenSearch
         stats = await osc.get_dashboard_stats(24)
@@ -635,16 +1030,10 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
         # 2. Obtener estadisticas de Tickets desde DB
         total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
         closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status == "closed"))).scalar() or 0
-        
-        # 3. Generar resumen ejecutivo con IA (Ollama) con Cache de 30min
-        now_ts = time.time()
-        if _report_cache["timestamp"] and (now_ts - _report_cache["timestamp"] < 1800):
-            ai_summary = _report_cache["content"]
-        else:
-            ai_summary = await generate_executive_summary(stats)
-            _report_cache["timestamp"] = now_ts
-            _report_cache["content"] = ai_summary
-        
+
+        # 3. Generar resumen ejecutivo con IA (Ollama)
+        ai_summary = await generate_executive_summary(stats)
+
         # 4. Estructurar respuesta para el frontend (ValhallaReportJSON)
         report = {
             "source": "api",
@@ -681,10 +1070,10 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
                 "key_finding": ai_summary
             },
             "wazuh_metrics": {
-                "total_alerts": stats.get("total_alerts_24h", 0),
+                "total_alerts": stats.get("total_alerts", 0),
                 "critical_alerts": stats.get("critical_alerts", 0),
                 "top_affected_assets": [
-                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245}, 
+                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245},
                     {"name": "GW-FIREWALL-01", "ip": "10.0.1.1", "alerts": 840}
                 ]
             },
@@ -700,7 +1089,7 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
             "incident_management": {
                 "total_tickets": total_tickets,
                 "closed_tickets": closed_tickets,
-                "avg_resolution_time_min": 15 
+                "avg_resolution_time_min": 15
             },
             "remediation_steps": [
                 {"task": "Actualizar parches de seguridad en activos criticos."},
@@ -711,7 +1100,6 @@ async def executive_report(db: AsyncSession = Depends(get_db), current: User | N
     except Exception as e:
         logger.error(f"Error generando informe ejecutivo: {e}")
         raise HTTPException(500, f"Error interno: {str(e)}")
-
 
 # FORENSICS
 @app.get("/api/forensics/attack-path/{ip}")
@@ -732,79 +1120,228 @@ async def get_ai_settings(db: AsyncSession = Depends(get_db), _=Depends(get_curr
     }
 
 @app.post("/api/settings/ai")
-async def update_ai_settings(data: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def update_ai_settings(
+    data: AiSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(require_admin),
+):
     """Actualiza la configuracion de IA."""
-    for key in ["ollama_model", "ollama_temperature"]:
-        if key in data:
-            s = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
-            if not s:
-                s = SystemSetting(key=key, value=str(data[key]))
-                db.add(s)
-            else:
-                s.value = str(data[key])
+    payload = data.model_dump(exclude_unset=True)
+    for key, val in payload.items():
+        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+        if not s:
+            s = SystemSetting(key=key, value=str(val))
+            db.add(s)
+        else:
+            s.value = str(val)
     await db.commit()
     return {"status": "updated"}
-@app.get("/api/runbooks")
+@app.get("/api/runbooks", response_model=list[RunbookOut])
 async def list_runbooks(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    return (await db.execute(select(Runbook))).scalars().all()
+    return (await db.execute(select(Runbook).where(Runbook.is_active == True).order_by(Runbook.category))).scalars().all()
+
+@app.post("/api/runbooks", response_model=RunbookOut)
+async def create_runbook_ep(payload: RunbookIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403, "Solo admin o analista")
+    rb = Runbook(**payload.model_dump(), created_by_id=current.id, is_active=True)
+    db.add(rb)
+    await db.commit()
+    await db.refresh(rb)
+    return rb
+
+@app.put("/api/runbooks/{runbook_id}", response_model=RunbookOut)
+async def update_runbook_ep(
+    runbook_id: int,
+    payload: RunbookIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role not in ("admin", "analyst"):
+        raise HTTPException(403)
+    rb = (await db.execute(select(Runbook).where(Runbook.id == runbook_id))).scalar_one_or_none()
+    if not rb:
+        raise HTTPException(404, "Runbook no encontrado")
+    for k, v in payload.model_dump().items():
+        setattr(rb, k, v)
+    await db.commit()
+    await db.refresh(rb)
+    return rb
+
+@app.delete("/api/runbooks/{runbook_id}")
+async def delete_runbook_ep(runbook_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403)
+    rb = (await db.execute(select(Runbook).where(Runbook.id == runbook_id))).scalar_one_or_none()
+    if not rb:
+        raise HTTPException(404, "Runbook no encontrado")
+    rb.is_active = False
+    await db.commit()
+    return {"ok": True}
+
+@app.post("/api/runbooks/seed")
+async def seed_runbooks_ep(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role != "admin":
+        raise HTTPException(403)
+    n = await seed_runbooks_if_empty(db)
+    await db.commit()
+    return {"seeded": n, "message": f"{n} runbooks creados" if n else "Ya existían runbooks"}
+
+async def _resolve_vt_api_key(request: Request, db: AsyncSession, user: User) -> str:
+    key = request.headers.get("X-VT-API-Key")
+    if key and settings.env.lower() == "development":
+        return key
+    user_key = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"vt_api_key_user_{user.id}")
+        )
+    ).scalar_one_or_none()
+    if user_key:
+        return decrypt_secret(user_key.value)
+    global_key = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
+    if global_key:
+        return decrypt_secret(global_key.value)
+    if settings.virustotal_api_key:
+        return settings.virustotal_api_key
+    raise HTTPException(404, "API Key de VirusTotal no configurada. Añádala en Threat Intel.")
+
+@app.get("/api/users/me/vt-api-key")
+async def get_my_vt_key_status(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    row = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"vt_api_key_user_{current.id}")
+        )
+    ).scalar_one_or_none()
+    return {"configured": row is not None}
+
+@app.put("/api/users/me/vt-api-key")
+async def set_my_vt_key(data: VtKeyIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = data.api_key.strip()
+    setting_key = f"vt_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    enc = encrypt_secret(key)
+    if row:
+        row.value = enc
+        row.is_sensitive = True
+    else:
+        db.add(SystemSetting(key=setting_key, value=enc, is_sensitive=True))
+    await db.commit()
+    test = await vt.check_ip("8.8.8.8", key)
+    if "error" in test and ("401" in str(test["error"]) or "Forbidden" in str(test["error"])):
+        raise HTTPException(401, "API Key inválida")
+    return {"status": "ok", "configured": True}
+
+@app.delete("/api/users/me/vt-api-key")
+async def delete_my_vt_key(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    setting_key = f"vt_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        await db.commit()
+    return {"ok": True}
 
 # VIRUSTOTAL
 @app.get("/api/virustotal/check-key")
-async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    # Check header first (for testing from frontend)
-    key = request.headers.get("X-VT-API-Key")
-    if not key:
-        s = (await db.execute(select(SystemSetting).where(SystemSetting.key == "vt_api_key"))).scalar_one_or_none()
-        if not s: raise HTTPException(404, "API Key no configurada")
-        key = decrypt_secret(s.value)
-    
-    # Ping simple a Google DNS para validar key
+async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
     res = await vt.check_ip("8.8.8.8", key)
-    if "error" in res and ("401" in res["error"] or "Forbidden" in res["error"]):
+    if "error" in res and ("401" in str(res["error"]) or "Forbidden" in str(res["error"])):
         raise HTTPException(401, "API Key inválida")
     return {"status": "ok", "message": "API Key válida"}
 
+@app.get("/api/virustotal/ip/{ip}")
+async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
+    return await vt.check_ip(ip, key)
+
+@app.get("/api/virustotal/hash/{file_hash}")
+async def vt_scan_hash(file_hash: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
+    return await vt.check_hash(file_hash, key)
+
+@app.get("/api/virustotal/domain/{domain}")
+async def vt_scan_domain(domain: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = await _resolve_vt_api_key(request, db, current)
+    return await vt.check_domain(domain, key)
+
+# ─────────────────────────────────────────────
+# ABUSEIPDB (Fase 2 — enriquecimiento IOC multi-fuente)
+# ─────────────────────────────────────────────
+
+async def _resolve_abuseipdb_api_key(request: Request, db: AsyncSession, user: User) -> str:
+    header_key = request.headers.get("X-AbuseIPDB-API-Key")
+    if header_key and settings.env.lower() == "development":
+        return header_key
+    user_key = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"abuseipdb_api_key_user_{user.id}")
+        )
+    ).scalar_one_or_none()
+    if user_key:
+        return decrypt_secret(user_key.value)
+    global_key = (await db.execute(select(SystemSetting).where(SystemSetting.key == "abuseipdb_api_key"))).scalar_one_or_none()
+    if global_key:
+        return decrypt_secret(global_key.value)
+    if settings.abuseipdb_api_key:
+        return settings.abuseipdb_api_key
+    raise HTTPException(404, "API Key de AbuseIPDB no configurada. Añádela en Threat Intel.")
 
 
-# HEALTH INTEGRATIONS
-@app.get("/api/health/integrations")
-async def health_integrations(_=Depends(get_current_user)):
-    # Verificamos Wazuh y OpenSearch (ahora que el indexer está activo)
-    wazuh_status = "online"
-    try:
-        await wazuh.get_agents()
-    except: wazuh_status = "offline"
-    
-    os_status = "online"
-    try:
-        await osc.get_recent_alerts(limit=1)
-    except: os_status = "offline"
+@app.put("/api/users/me/abuseipdb-api-key")
+async def set_my_abuseipdb_key(data: VtKeyIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    key = data.api_key.strip()
+    setting_key = f"abuseipdb_api_key_user_{current.id}"
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == setting_key))).scalar_one_or_none()
+    enc = encrypt_secret(key)
+    if row:
+        row.value = enc
+        row.is_sensitive = True
+    else:
+        db.add(SystemSetting(key=setting_key, value=enc, is_sensitive=True))
+    await db.commit()
+    test = await abuse.check_ip("8.8.8.8", key)
+    if "error" in test and ("401" in str(test["error"]) or "403" in str(test["error"])):
+        raise HTTPException(401, "API Key inválida")
+    return {"status": "ok", "configured": True}
 
-    return [
-        {"name": "Wazuh Manager", "status": wazuh_status, "latency": "12ms"},
-        {"name": "OpenSearch Indexer", "status": os_status, "latency": "5ms"},
-        {"name": "PostgreSQL DB", "status": "online", "latency": "1ms"},
-        {"name": "Ollama AI", "status": "online", "latency": "450ms"}
-    ]
+
+@app.get("/api/users/me/abuseipdb-api-key")
+async def get_my_abuseipdb_key_status(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    row = (
+        await db.execute(
+            select(SystemSetting).where(SystemSetting.key == f"abuseipdb_api_key_user_{current.id}")
+        )
+    ).scalar_one_or_none()
+    return {"configured": row is not None}
+
+
+@app.get("/api/abuseipdb/ip/{ip}")
+async def abuseipdb_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    ip = InputValidator.validate_ip(ip)
+    key = await _resolve_abuseipdb_api_key(request, db, current)
+    return await abuse.check_ip(ip, key)
 
 # CHAT PERSISTENCE
 @app.get("/api/chat/{chat_id}")
-async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    _require_chat_access(current, chat_id)
     q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
     rows = (await db.execute(q)).scalars().all()
     # Return in chronological order
     return sorted(rows, key=lambda x: x.timestamp)
 
 @app.post("/api/chat")
-async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    chat_id = msg.chat_id
+    _require_chat_access(current, chat_id)
     new_msg = ChatMessage(
-        id=msg.get("id"),
+        id=msg.id,
         user_id=current.id,
         username=current.username,
-        text=msg.get("text"),
-        chat_id=msg.get("chatId"),
-        mentions=msg.get("mentions", []),
-        attachment=msg.get("attachment")
+        text=msg.text,
+        chat_id=chat_id,
+        mentions=msg.mentions,
+        attachment=msg.attachment,
     )
     db.add(new_msg)
     await db.commit()
@@ -822,15 +1359,59 @@ async def save_chat_message(msg: dict, db: AsyncSession = Depends(get_db), curre
         "attachment": new_msg.attachment
     }
     await manager.broadcast(json.dumps(broadcast_data))
+
+    # Chatbot IA: si mencionan al asistente, responde en background.
+    if _AI_CHAT_TRIGGER.search(msg.text or ""):
+        asyncio.create_task(_ai_chat_reply(chat_id, current.id, msg.text or ""))
+
     return broadcast_data
+
+
+_AI_CHAT_TRIGGER = _re.compile(r"@(chatbotr|chatbot|ia|valhalla|heimdall)\b", _re.IGNORECASE)
+_AI_CHAT_MAX_QUESTION_CHARS = 1200
+
+
+async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None:
+    """Genera y publica la respuesta del asistente IA en el chat interno."""
+    clean_question = _AI_CHAT_TRIGGER.sub("", question or "").strip()
+    clean_question = clean_question[:_AI_CHAT_MAX_QUESTION_CHARS]
+    if not clean_question:
+        clean_question = "Explica como usar el asistente de forma segura en el chat del SOC."
+    try:
+        answer = await chat_assistant(clean_question)
+    except Exception as e:
+        logger.warning("AI chat reply falló: %s", e)
+        return
+    async with SessionLocal() as db:
+        ai = (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none()
+        if not ai:
+            return
+        m = ChatMessage(
+            id=f"ai-{secrets.token_hex(8)}",
+            user_id=ai.id,
+            username="VALHALLA-IA",
+            text=answer,
+            chat_id=chat_id,
+            mentions=[str(requester_id)],
+        )
+        db.add(m)
+        await db.commit()
+        await db.refresh(m)
+        await manager.broadcast(json.dumps({
+            "id": m.id, "userId": ai.id, "username": "VALHALLA-IA", "rank": "AI",
+            "text": answer, "timestamp": m.timestamp.isoformat(),
+            "chatId": chat_id, "mentions": [str(requester_id)], "attachment": None,
+        }))
 
 # WEBHOOKS
 @app.post("/api/webhook/wazuh")
 async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """Real-time alert webhook from Wazuh integrations."""
+    body = await request.body()
+    _verify_webhook_auth(request, body)
     try:
-        alert = await request.json()
-    except:
+        alert = json.loads(body.decode("utf-8") if body else "{}")
+    except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON")
     
     rule = alert.get("rule", {})
@@ -846,36 +1427,94 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     elif level >= 5: severity = "medium"
     else: severity = "low"
 
-    # 1. Background IA Analysis for high severity
-    ai_insight = None
-    if level >= 7:
-        async def run_ai():
+    # ── CO-PILOTO IA (Fase 3): triage estructurado con barreras ──
+    # Hacemos el triage SÍNCRONO solo cuando hay que tomar una decisión (ticket/bloqueo);
+    # si no, en background para no bloquear el webhook de Wazuh.
+    ai = None
+    need_decision = (settings.auto_create_webhook_tickets and level >= 9) or (
+        settings.auto_block_enabled and level >= 7
+    )
+    if level >= 7 and need_decision:
+        try:
+            alert["knowledge"] = await build_knowledge(db, description, [])
             res = await analyze_alert(int(rule_id), alert)
             if res.ok:
-                # Update ticket or broadcast insight later if needed
-                # For now we just log it
-                logger.info(f"AI Insight for alert {rule_id}: {res.data.get('summary')}")
+                ai = res.data
+        except Exception as e:
+            logger.warning("Co-piloto: triage falló para %s: %s", rule_id, e)
+    elif level >= 7:
+        async def run_ai():
+            try:
+                res = await analyze_alert(int(rule_id), alert)
+                if res.ok:
+                    logger.info("AI Insight %s: rs=%s %s", rule_id, res.data.get("risk_score"), res.data.get("summary"))
+            except Exception:
+                pass
         asyncio.create_task(run_ai())
 
-    # 2. Create Ticket automatically for high level alerts
-    if level >= 9:
+    risk_score = int(ai.get("risk_score", 0)) if ai else None
+    mitre_ttp = ai.get("mitre_ttp", []) if ai else []
+    # La IA puede refinar la severidad según el riesgo real
+    if risk_score is not None:
+        severity = "critical" if risk_score >= 85 else "high" if risk_score >= 60 else "medium" if risk_score >= 30 else "low"
+
+    # Tier 0 (auto, seguro): ticket auto-priorizado con contexto IA
+    if settings.auto_create_webhook_tickets and level >= 9:
         admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
         if admin:
-            ticket = Ticket(
+            desc = description
+            if ai:
+                desc = (
+                    f"{description}\n\n[Triage IA] risk_score={risk_score} · "
+                    f"fp_likelihood={ai.get('false_positive_likelihood')}\n"
+                    f"Resumen: {ai.get('summary')}\n"
+                    f"Acción recomendada: {ai.get('recommended_action')}"
+                )
+            db.add(Ticket(
                 title=f"Wazuh Real-time: {description}",
-                description=description,
+                description=desc,
                 severity=severity,
                 category="wazuh-realtime",
-                source_ip=source_ip,
+                source_ip=source_ip if source_ip != "N/A" else None,
                 affected_asset=agent_name,
+                mitre_technique=",".join(mitre_ttp) if mitre_ttp else None,
                 wazuh_alert_id=str(alert.get("id") or rule_id),
                 reporter_id=admin.id,
-                status="open"
-            )
-            db.add(ticket)
+                status="open",
+            ))
             await db.commit()
 
-    # 3. Broadcast to UI
+    # Tier 1 (auto CON BARRERAS): bloqueo de IP reversible y auditado.
+    # Solo si: habilitado + risk_score alto + baja prob. de falso positivo + IP válida + NO whitelist.
+    auto_blocked = False
+    block_reason = None
+    if (settings.auto_block_enabled and ai and source_ip and source_ip != "N/A"
+            and risk_score is not None and risk_score >= settings.auto_block_risk_threshold
+            and ai.get("false_positive_likelihood") == "low"):
+        try:
+            ip = InputValidator.validate_ip(source_ip)
+            wl = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+            if wl and any("whitelist" in (t or "").lower() for t in (wl.tags or [])):
+                block_reason = "omitido: IP en whitelist"
+            else:
+                r = await _apply_ip_block(db, ip)
+                if r["cdb_ok"] or r["ar_ok"]:
+                    db.add(AuditLog(user_id=None, username="ai-copilot",
+                                    action="AUTO_BLOCK", route="/api/webhook/wazuh", ip_address=ip))
+                    await db.commit()
+                    auto_blocked = True
+                    block_reason = f"auto-bloqueo IA (risk={risk_score}, reversible {settings.auto_block_timeout_seconds}s)"
+                else:
+                    await db.rollback()
+                    block_reason = "fallo: Wazuh no confirmó"
+        except HTTPException:
+            block_reason = "omitido: IP inválida"
+        except Exception as e:
+            await db.rollback()
+            block_reason = f"error: {e}"
+            logger.warning("Co-piloto auto-block falló: %s", e)
+
+    # Broadcast a la UI con scoring IA y estado de la acción autónoma
     broadcast_payload = {
         "type": "NEW_ALERT",
         "data": {
@@ -884,12 +1523,17 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             "description": description,
             "severity": severity,
             "source_ip": source_ip,
-            "agent_name": agent_name
-        }
+            "agent_name": agent_name,
+            "risk_score": risk_score,
+            "mitre_ttp": mitre_ttp,
+            "recommended_action": ai.get("recommended_action") if ai else None,
+            "auto_blocked": auto_blocked,
+            "block_reason": block_reason,
+        },
     }
     await manager.broadcast(broadcast_payload)
-    
-    return {"status": "processed"}
+
+    return {"status": "processed", "risk_score": risk_score, "auto_blocked": auto_blocked}
 
 @app.get("/api/ioc")
 async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
@@ -899,21 +1543,32 @@ async def list_iocs_ep(status: str = None, ioc_type: str = None, db: AsyncSessio
     return (await db.execute(q)).scalars().all()
 
 @app.post("/api/ioc")
-async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    existing = (await db.execute(select(IOC).where(IOC.value == req.get("value")))).scalar_one_or_none()
-    if existing: raise HTTPException(400, "IOC ya existe en la lista")
-    
+async def add_ioc_ep(req: IocCreate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    existing = (await db.execute(select(IOC).where(IOC.value == req.value))).scalar_one_or_none()
+    if existing:
+        if req.status:
+            existing.status = req.status
+            if req.tags:
+                existing.tags = list(set((existing.tags or []) + req.tags))
+            if req.vt_report:
+                existing.vt_report = req.vt_report
+            existing.malicious_score = req.malicious_score
+            await db.commit()
+            await db.refresh(existing)
+            return existing
+        raise HTTPException(400, "IOC ya existe en la lista")
+
     ioc = IOC(
-        value=req.get("value"),
-        ioc_type=req.get("ioc_type"),
-        malicious_score=req.get("malicious_score", 0),
-        total_engines=req.get("total_engines", 0),
-        country=req.get("country"),
-        asn=str(req.get("asn")) if req.get("asn") else None,
-        as_owner=req.get("as_owner"),
-        tags=req.get("tags", []),
-        status=req.get("status", "watchlist"),
-        vt_report=req.get("vt_report")
+        value=req.value,
+        ioc_type=req.ioc_type,
+        malicious_score=req.malicious_score,
+        total_engines=req.total_engines,
+        country=req.country,
+        asn=req.asn,
+        as_owner=req.as_owner,
+        tags=req.tags,
+        status=req.status,
+        vt_report=req.vt_report,
     )
     db.add(ioc)
     try:
@@ -924,12 +1579,15 @@ async def add_ioc_ep(req: dict, db: AsyncSession = Depends(get_db), _=Depends(ge
     return ioc
 
 @app.patch("/api/ioc/{id}")
-async def update_ioc_ep(id: int, req: dict, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def update_ioc_ep(id: int, req: IocUpdate, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     ioc = (await db.execute(select(IOC).where(IOC.id == id))).scalar_one_or_none()
-    if not ioc: raise HTTPException(404, "IOC no encontrado")
-    if "status" in req: ioc.status = req["status"]
-    if "analyst_notes" in req: ioc.analyst_notes = req["analyst_notes"]
-    if "related_ticket_id" in req: ioc.related_ticket_id = req["related_ticket_id"]
+    if not ioc:
+        raise HTTPException(404, "IOC no encontrado")
+    for field, value in req.model_dump(exclude_unset=True).items():
+        if field == "tags" and value is not None:
+            ioc.tags = list(set((ioc.tags or []) + value))
+        else:
+            setattr(ioc, field, value)
     await db.commit()
     return ioc
 
@@ -940,3 +1598,501 @@ async def delete_ioc_ep(id: int, db: AsyncSession = Depends(get_db), _=Depends(g
     await db.delete(ioc)
     await db.commit()
     return {"ok": True}
+
+# ─────────────────────────────────────────────
+# FIREWALL / ACTIVE RESPONSE (Fase 1 — Consolidación Defensiva)
+# Flujo: UI → endpoint → API Wazuh (CDB blocked-ips + firewall-drop) → iptables DROP
+# La tabla IOC (Postgres) es la fuente de verdad; la lista CDB es su proyección.
+# ─────────────────────────────────────────────
+
+def _can_block_ips(user: User) -> bool:
+    return user.role.lower() in ("admin", "analyst", "analista")
+
+
+async def _build_blocked_cdb(db: AsyncSession) -> str:
+    """Contenido de la lista CDB 'blocked-ips' desde los IOC bloqueados (formato key:value).
+
+    Incluye siempre una línea de cabecera para que el archivo nunca quede vacío: la API
+    de Wazuh rechaza subir un cuerpo vacío (error 1912) cuando se desbloquea la última IP.
+    """
+    rows = (
+        await db.execute(
+            select(IOC.value).where(IOC.status == "blocked", IOC.ioc_type == "ip")
+        )
+    ).scalars().all()
+    header = "valhalla-soc-managed:1\n"  # entrada centinela inocua (no es una IP)
+    return header + "".join(f"{ip}:drop\n" for ip in sorted(set(rows)))
+
+
+async def _push_blocked_cdb(db: AsyncSession) -> dict:
+    return await wazuh.upload_cdb_list("blocked-ips", await _build_blocked_cdb(db))
+
+
+async def _apply_ip_block(db: AsyncSession, ip: str) -> dict[str, Any]:
+    """Núcleo de bloqueo reutilizable (endpoint manual y co-piloto IA).
+
+    Upsert del IOC como blocked + proyección a la lista CDB + firewall-drop.
+    NO hace commit/rollback (lo gestiona el llamante). Devuelve estado real.
+    """
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing:
+        existing.status = "blocked"
+        existing.tags = list({*(existing.tags or []), "blocked-firewall"})
+    else:
+        db.add(IOC(value=ip, ioc_type="ip", status="blocked", tags=["blocked-firewall"], malicious_score=0))
+    await db.flush()
+
+    cdb_ok = ar_ok = ar_skipped = False
+    detail: dict[str, Any] = {}
+    try:
+        cdb_res = await _push_blocked_cdb(db)
+        cdb_ok = int(cdb_res.get("error", 1)) == 0
+        detail["cdb"] = cdb_res
+    except Exception as e:
+        detail["cdb_error"] = str(e)
+        logger.warning("Block — CDB upload falló para %s: %s", ip, e)
+    try:
+        ar_res = await wazuh.run_firewall_drop(ip)
+        ar_skipped = bool(ar_res.get("skipped"))
+        ar_ok = int(ar_res.get("error", 1)) == 0 and not ar_skipped
+        detail["active_response"] = ar_res
+    except Exception as e:
+        detail["ar_error"] = str(e)
+        logger.warning("Block — firewall-drop falló para %s: %s", ip, e)
+
+    return {"cdb_ok": cdb_ok, "ar_ok": ar_ok, "ar_skipped": ar_skipped, "detail": detail}
+
+
+@app.get("/api/firewall/blocked")
+async def list_blocked_ips(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    rows = (
+        await db.execute(
+            select(IOC)
+            .where(IOC.status == "blocked", IOC.ioc_type == "ip")
+            .order_by(desc(IOC.updated_at))
+        )
+    ).scalars().all()
+    return [
+        {
+            "ip": r.value,
+            "country": r.country,
+            "as_owner": r.as_owner,
+            "tags": r.tags,
+            "since": r.updated_at,
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/firewall/block")
+async def firewall_block(
+    req: FirewallBlockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _can_block_ips(current):
+        raise HTTPException(403, "Solo admin o analista puede bloquear IPs")
+    ip = InputValidator.validate_ip(req.ip.strip())
+
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing and any("whitelist" in (t or "").lower() for t in (existing.tags or [])):
+        raise HTTPException(409, "La IP está en lista blanca; retírala antes de bloquear")
+
+    r = await _apply_ip_block(db, ip)
+    cdb_ok, ar_ok, ar_skipped, detail = r["cdb_ok"], r["ar_ok"], r["ar_skipped"], r["detail"]
+
+    # Éxito = la IP quedó persistida en la lista CDB (regla 100500 la aplicará en el
+    # manager al reaparecer; en agentes reales el AR-API la bloquea de inmediato).
+    # Solo es fallo real si la CDB no se pudo actualizar Y el AR tampoco se ejecutó.
+    if not cdb_ok and not ar_ok:
+        await db.rollback()
+        raise HTTPException(502, f"Wazuh no confirmó el bloqueo de {ip}. Detalle: {detail}")
+
+    await db.commit()
+    return {
+        "ok": True,
+        "ip": ip,
+        "cdb_applied": cdb_ok,
+        "active_response": ar_ok,
+        "active_response_skipped": ar_skipped,
+        "timeout": req.timeout,
+        "detail": detail,
+    }
+
+
+@app.post("/api/cowrie/block")
+async def cowrie_block_alias(
+    req: FirewallBlockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    """Alias de compatibilidad citado en docs/WAZUH_ACTIVE_RESPONSE.md."""
+    return await firewall_block(req, db, current)
+
+
+@app.post("/api/firewall/unblock")
+async def firewall_unblock(
+    req: FirewallUnblockIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _can_block_ips(current):
+        raise HTTPException(403, "Solo admin o analista puede desbloquear IPs")
+    ip = InputValidator.validate_ip(req.ip.strip())
+
+    existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+    if existing:
+        existing.status = "cleared"
+        existing.tags = [t for t in (existing.tags or []) if t != "blocked-firewall"]
+    await db.flush()
+
+    cdb_ok = False
+    detail: dict[str, Any] = {}
+    try:
+        cdb_res = await _push_blocked_cdb(db)
+        cdb_ok = int(cdb_res.get("error", 1)) == 0
+        detail["cdb"] = cdb_res
+    except Exception as e:
+        detail["cdb_error"] = str(e)
+        logger.warning("Firewall unblock — CDB upload falló para %s: %s", ip, e)
+
+    await db.commit()
+    # iptables: el DROP activo expira por el <timeout> del active-response configurado en ossec.conf
+    return {"ok": True, "ip": ip, "cdb_applied": cdb_ok, "detail": detail}
+
+
+# ─────────────────────────────────────────────
+# SOAR — PLAYBOOKS EJECUTABLES (Fase 3)
+# Los pasos de un runbook dejan de ser texto: el operador aprueba (1 clic) y el
+# backend ejecuta la acción REAL, con auditoría. Solo acciones seguras/reversibles.
+# ─────────────────────────────────────────────
+@app.post("/api/playbooks/execute")
+@limiter.limit("30/minute")
+async def playbook_execute(
+    request: Request,
+    req: PlaybookActionIn,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar playbooks")
+
+    action = req.action
+    if action in ("block_ip", "unblock_ip", "enrich_ip", "add_ioc") and not req.ip:
+        raise HTTPException(400, "Falta 'ip' para esta acción")
+
+    if action == "block_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        wl = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+        if wl and any("whitelist" in (t or "").lower() for t in (wl.tags or [])):
+            raise HTTPException(409, "La IP está en whitelist")
+        r = await _apply_ip_block(db, ip)
+        if not r["cdb_ok"] and not r["ar_ok"]:
+            await db.rollback()
+            raise HTTPException(502, f"Wazuh no confirmó el bloqueo: {r['detail']}")
+        await db.commit()
+        return {"ok": True, "action": action, "ip": ip, "cdb_applied": r["cdb_ok"], "active_response": r["ar_ok"]}
+
+    if action == "unblock_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        existing = (await db.execute(select(IOC).where(IOC.value == ip))).scalar_one_or_none()
+        if existing:
+            existing.status = "cleared"
+            existing.tags = [t for t in (existing.tags or []) if t != "blocked-firewall"]
+        await db.flush()
+        try:
+            await _push_blocked_cdb(db)
+        except Exception as e:
+            logger.warning("Playbook unblock CDB falló: %s", e)
+        await db.commit()
+        return {"ok": True, "action": action, "ip": ip}
+
+    if action == "create_ticket":
+        if not req.title:
+            raise HTTPException(400, "Falta 'title' para crear el ticket")
+        sev = (req.severity or "medium").lower()
+        if sev not in ("low", "medium", "high", "critical"):
+            sev = "medium"
+        t = Ticket(
+            title=req.title,
+            description=req.description or "",
+            severity=sev,
+            category="playbook",
+            source_ip=req.ip,
+            status="open",
+            reporter_id=current.id,
+        )
+        db.add(t)
+        await db.commit()
+        await db.refresh(t)
+        return {"ok": True, "action": action, "ticket_id": t.id}
+
+    if action == "add_ioc":
+        existing = (await db.execute(select(IOC).where(IOC.value == req.ip))).scalar_one_or_none()
+        if existing:
+            return {"ok": True, "action": action, "note": "El IOC ya existía"}
+        db.add(IOC(value=req.ip, ioc_type="ip", status="watchlist", tags=["playbook"], malicious_score=0))
+        await db.commit()
+        return {"ok": True, "action": action, "value": req.ip}
+
+    if action == "enrich_ip":
+        ip = InputValidator.validate_ip(req.ip)
+        out: dict[str, Any] = {}
+        try:
+            out["virustotal"] = await vt.check_ip(ip, await _resolve_vt_api_key(request, db, current))
+        except HTTPException:
+            out["virustotal"] = {"error": "API key de VirusTotal no configurada"}
+        try:
+            out["abuseipdb"] = await abuse.check_ip(ip, await _resolve_abuseipdb_api_key(request, db, current))
+        except HTTPException:
+            out["abuseipdb"] = {"error": "API key de AbuseIPDB no configurada"}
+        return {"ok": True, "action": action, "ip": ip, "enrichment": out}
+
+    raise HTTPException(400, "Acción no soportada")
+
+
+# ─────────────────────────────────────────────
+# FASE 4 — MADUREZ Y MÉTRICAS
+# ─────────────────────────────────────────────
+@app.get("/api/metrics/soc")
+async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """KPIs reales del SOC: MTTR, dwell (edad de abiertos), por severidad/analista, cobertura ATT&CK %."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ver métricas del SOC")
+
+    rows = (await db.execute(
+        select(Ticket.created_at, Ticket.updated_at, Ticket.status, Ticket.severity, Ticket.assigned_to_id)
+    )).all()
+    closed_states = {"closed", "resolved"}
+    open_states = {"open", "in_progress", "escalated"}
+    now = datetime.now(timezone.utc)
+
+    mttr_samples, dwell_samples = [], []
+    by_sev: dict[str, int] = {}
+    by_analyst: dict[int | None, int] = {}
+    total = len(rows)
+    closed = 0
+    for created, updated, status, severity, assignee in rows:
+        st = (status or "").lower()
+        by_sev[severity or "unknown"] = by_sev.get(severity or "unknown", 0) + 1
+        if st in closed_states:
+            closed += 1
+            if created and updated and updated >= created:
+                mttr_samples.append((updated - created).total_seconds() / 60)
+            by_analyst[assignee] = by_analyst.get(assignee, 0) + 1
+        elif st in open_states and created:
+            dwell_samples.append((now - created).total_seconds() / 60)
+
+    # nombres de analistas
+    users = {u.id: u.username for u in (await db.execute(select(User))).scalars().all()}
+    tickets_by_analyst = [
+        {"analyst": users.get(aid, "sin asignar") if aid else "sin asignar", "closed": n}
+        for aid, n in sorted(by_analyst.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # Cobertura ATT&CK: técnicas base vistas / definidas en el ruleset
+    try:
+        cov = await osc.get_mitre_coverage(168)
+    except Exception:
+        cov = []
+    seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
+    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
+    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
+
+    try:
+        stats = await osc.get_dashboard_stats(24)
+    except Exception:
+        stats = {}
+
+    def _avg(xs: list[float]) -> int:
+        return round(sum(xs) / len(xs)) if xs else 0
+
+    return {
+        "tickets": {"total": total, "closed": closed, "open": total - closed,
+                    "resolution_rate_pct": round(100 * closed / max(1, total))},
+        "mttr_minutes": _avg(mttr_samples),
+        "dwell_open_avg_minutes": _avg(dwell_samples),
+        "by_severity": by_sev,
+        "tickets_by_analyst": tickets_by_analyst,
+        "attack_coverage_pct": coverage_pct,
+        "techniques_seen": sorted(seen_base & defined_base),
+        "alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
+        "generated_at": now.isoformat(),
+    }
+
+
+@app.get("/api/mitre/navigator-layer")
+async def mitre_navigator_layer(hours: int = 168, current: User = Depends(get_current_user)):
+    """Capa JSON para MITRE ATT&CK Navigator generada desde alertas reales (heat por frecuencia)."""
+    try:
+        cov = await osc.get_mitre_coverage(hours)
+    except Exception:
+        cov = []
+    techniques = [
+        {"techniqueID": c["technique_id"], "score": c["count"], "enabled": True,
+         "comment": f"{c['count']} eventos · {c.get('tactic','')}"}
+        for c in cov if c.get("technique_id")
+    ]
+    max_score = max([t["score"] for t in techniques], default=1)
+    return {
+        "name": "Valhalla SOC — TTPs detectadas",
+        "versions": {"layer": "4.5", "navigator": "4.9", "attack": "14"},
+        "domain": "enterprise-attack",
+        "description": f"Técnicas observadas en las últimas {hours}h",
+        "gradient": {"colors": ["#ffe766", "#ff6666"], "minValue": 0, "maxValue": max_score},
+        "techniques": techniques,
+    }
+
+
+@app.get("/api/hunting/queries")
+async def hunting_queries(current: User = Depends(get_current_user)):
+    return hunting.list_queries()
+
+
+@app.get("/api/hunting/run/{query_id}")
+async def hunting_run(query_id: str, hours: int = 168, current: User = Depends(get_current_user)):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ejecutar threat hunting")
+    return await hunting.run_query(query_id, hours=hours)
+
+
+# ─────────────────────────────────────────────
+# HEIMDALL — Informe de Inteligencia (datos 100% REALES, separado del exec report)
+# Reúne las métricas/cálculos que construí: resolución real, activos reales,
+# cumplimiento ISO calculado y cobertura ATT&CK. NO toca /api/reports/executive.
+# ─────────────────────────────────────────────
+async def _build_heimdall_data(db: AsyncSession, username: str) -> dict[str, Any]:
+    try:
+        stats = await osc.get_dashboard_stats(24)
+    except Exception:
+        stats = {}
+
+    total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
+    closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["closed", "resolved"])))).scalar() or 0
+
+    # Tiempo medio de resolución REAL
+    resolved_rows = (await db.execute(
+        select(Ticket.created_at, Ticket.updated_at).where(Ticket.status.in_(["closed", "resolved"]))
+    )).all()
+    _mins = [(u - c).total_seconds() / 60 for c, u in resolved_rows if c and u and u >= c]
+    avg_resolution_min = round(sum(_mins) / len(_mins)) if _mins else 0
+
+    # Activos/atacantes REALES
+    try:
+        _top = await osc.get_top_attackers(limit=5, hours=24)
+    except Exception:
+        _top = []
+    top_affected_assets = [
+        {"name": a.get("attack_type") or "Actividad de ataque", "ip": a.get("ip", "unknown"), "alerts": a.get("count", 0)}
+        for a in _top
+    ]
+
+    # Cumplimiento ISO 27001 CALCULADO
+    ioc_count = (await db.execute(select(func.count(IOC.id)))).scalar() or 0
+    audit_count = (await db.execute(select(func.count(AuditLog.id)))).scalar() or 0
+    runbook_count = (await db.execute(select(func.count(Runbook.id)).where(Runbook.is_active == True))).scalar() or 0
+    try:
+        _agents = await wazuh.get_agents()
+        agents_active = sum(1 for a in (_agents or []) if a.get("status") == "active")
+    except Exception:
+        agents_active = 0
+    iso_controls = [
+        {"control": "A.5.7 Threat Intelligence", "status": "covered" if ioc_count > 0 else "partial", "note": f"{ioc_count} IOCs gestionados"},
+        {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"},
+        {"control": "A.8.15 Logging", "status": "covered" if audit_count > 0 else "partial", "note": f"{audit_count} eventos de auditoría"},
+        {"control": "A.5.26 Response to incidents", "status": "covered" if total_tickets > 0 else "partial", "note": f"{total_tickets} incidentes gestionados"},
+        {"control": "A.5.27 Learning from incidents", "status": "covered" if runbook_count > 0 else "partial", "note": f"{runbook_count} runbooks activos"},
+        {"control": "A.8.7 Protection against malware", "status": "covered" if agents_active > 0 else "partial", "note": f"{agents_active} agentes activos"},
+    ]
+    iso_overall = round(100 * sum(1 for c in iso_controls if c["status"] == "covered") / len(iso_controls))
+
+    # Cobertura MITRE ATT&CK
+    try:
+        cov = await osc.get_mitre_coverage(168)
+    except Exception:
+        cov = []
+    seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
+    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
+    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
+
+    return {
+        "report": "HEIMDALL",
+        "subtitle": "Informe de Inteligencia — Datos en tiempo real",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "analyst": (username or "SISTEMA").upper(),
+        "incident_management": {
+            "total_tickets": total_tickets,
+            "closed_tickets": closed_tickets,
+            "avg_resolution_time_min": avg_resolution_min,
+        },
+        "top_affected_assets": top_affected_assets,
+        "iso27001": {"overall": iso_overall, "controls": iso_controls},
+        "attack_coverage_pct": coverage_pct,
+        "techniques_seen": sorted(seen_base & defined_base),
+        "wazuh_metrics": {
+            "total_alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
+            "critical_alerts": stats.get("critical_alerts", 0),
+        },
+    }
+
+
+@app.get("/api/reports/heimdall")
+async def heimdall_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ver el informe HEIMDALL")
+    return await _build_heimdall_data(db, current.username)
+
+
+@app.get("/api/reports/heimdall/pdf")
+async def heimdall_report_pdf(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Informe HEIMDALL en PDF profesional (Typst). Datos dinámicos escapados (anti-inyección)."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede generar el PDF HEIMDALL")
+    from app.report_pdf import render_heimdall_typ, compile_pdf
+
+    data = await _build_heimdall_data(db, current.username)
+    try:
+        pdf = compile_pdf(render_heimdall_typ(data))
+    except Exception as e:
+        logger.error("Error compilando PDF HEIMDALL: %s", e)
+        raise HTTPException(500, f"No se pudo generar el PDF: {e}")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=heimdall-intel-report.pdf"},
+    )
+
+
+# ─────────────────────────────────────────────
+# CVE INTEL — feed de vulnerabilidades + post IA para redes (Fase 5)
+# La IA redacta un BORRADOR (no publica). Difusión la decide el analista.
+# ─────────────────────────────────────────────
+@app.get("/api/cve/latest")
+async def cve_latest(limit: int = Query(15, ge=1, le=50), _=Depends(get_current_user)):
+    return await cve_feed.get_latest_cves(limit)
+
+
+@app.get("/api/cve/{cve_id}/exploits")
+async def cve_exploits(cve_id: str, _=Depends(get_current_user)):
+    """Exploits públicos (Exploit-DB / searchsploit en Kali) para una CVE."""
+    from app import exploit_search
+    return await exploit_search.search_exploits(cve_id)
+
+
+@app.post("/api/cve/social-post")
+@limiter.limit("10/minute")
+async def cve_social_post(request: Request, req: SocialPostIn | None = None, current: User = Depends(get_current_user)):
+    """La IA redacta un post de difusión. Si se indican cve_ids, sobre esas; si no, top recientes."""
+    if current.role.lower() not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede generar el post")
+    cves = await cve_feed.get_latest_cves(50)
+    ids = (req.cve_ids if req else []) or []
+    if ids:
+        idset = {i.upper() for i in ids}
+        selected = [c for c in cves if c["id"].upper() in idset][:8]
+        if not selected:
+            raise HTTPException(404, "No se encontraron las CVE seleccionadas en el feed actual")
+    else:
+        selected = sorted(cves, key=lambda c: c.get("published", ""), reverse=True)[:5]
+    post = await draft_social_post(selected)
+    return {"post": post, "cves_used": [{"id": c["id"], "severity": c.get("severity")} for c in selected], "auto_published": False}

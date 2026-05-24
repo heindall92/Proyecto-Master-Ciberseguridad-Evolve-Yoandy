@@ -60,19 +60,39 @@ export type AgentEnrollOut = {
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
 const fallbackApiBase =
   typeof window !== "undefined" && window.location.protocol !== "file:"
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    ? `${window.location.protocol}//${window.location.host}`
     : "http://localhost:8000";
-const API_BASE = envApiBase || fallbackApiBase;
+/** Base URL vacía en build prod → mismo origen (nginx gateway HTTPS). */
+export const API_BASE = envApiBase || fallbackApiBase;
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function http<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> || {}),
   };
 
-  // Add CSRF token if available
   if (typeof document !== "undefined") {
-    const match = document.cookie.match(new RegExp('(^| )csrf_token=([^;]+)'));
+    const match = document.cookie.match(new RegExp("(^| )csrf_token=([^;]+)"));
     if (match) {
       headers["X-CSRF-Token"] = match[2];
     }
@@ -84,9 +104,16 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: "include",
   });
 
-  if (res.status === 401 && !path.includes("/auth/login")) {
-    localStorage.removeItem("token");
-    // No reloading — let callers handle the 401 via .catch()
+  if (
+    res.status === 401 &&
+    !retried &&
+    !path.includes("/auth/login") &&
+    !path.includes("/auth/refresh")
+  ) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      return http<T>(path, init, true);
+    }
   }
 
   if (!res.ok) {
@@ -174,6 +201,10 @@ export async function login(username: string, password: string) {
 
 export function getCurrentUser() {
   return http<UserOut>("/api/auth/me");
+}
+
+export function refreshSession() {
+  return http<{ access_token: string }>("/api/auth/refresh", { method: "POST" });
 }
 
 export async function uploadMyAvatar(file: File): Promise<{avatar_url: string}> {
@@ -285,10 +316,17 @@ export interface EvidenceOut {
   created_at: string;
 }
 
-export function listTickets(status?: string, severity?: string, limit = 50, offset = 0) {
+export function listTickets(
+  status?: string,
+  severity?: string,
+  limit = 50,
+  offset = 0,
+  activeOnly = false
+) {
   let url = `/api/tickets?limit=${limit}&offset=${offset}`;
-  if (status) url += `&status=${status}`;
-  if (severity) url += `&severity=${severity}`;
+  if (status) url += `&status=${encodeURIComponent(status)}`;
+  if (severity) url += `&severity=${encodeURIComponent(severity)}`;
+  if (activeOnly) url += `&active_only=true`;
   return http<TicketOut[]>(url);
 }
 
@@ -317,6 +355,7 @@ export function resolveTicket(ticketId: number, notes: string) {
 export function deleteTicket(ticketId: number) {
   return http<{ ok: boolean }>(`/api/tickets/${ticketId}`, { method: "DELETE" });
 }
+
 
 export function purgeResolvedTickets(days = 30) {
   return http<{ deleted: number; cutoff_days: number }>(`/api/tickets/purge/resolved?days=${days}`, { method: "DELETE" });
@@ -359,23 +398,32 @@ export function getWazuhServices() {
   return http<any>("/api/wazuh/services");
 }
 
-// VirusTotal
+// VirusTotal — clave almacenada cifrada en el servidor por operador
+export function getVtKeyStatus() {
+  return http<{ configured: boolean }>("/api/users/me/vt-api-key");
+}
+
+export function setMyVtApiKey(api_key: string) {
+  return http<{ status: string; configured: boolean }>("/api/users/me/vt-api-key", {
+    method: "PUT",
+    body: JSON.stringify({ api_key }),
+  });
+}
+
+export function deleteMyVtApiKey() {
+  return http<{ ok: boolean }>("/api/users/me/vt-api-key", { method: "DELETE" });
+}
+
 export function vtCheckIp(ip: string) {
-  const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/ip/${ip}`, { headers });
+  return http<any>(`/api/virustotal/ip/${ip}`);
 }
 
 export function vtCheckHash(hash: string) {
-  const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/hash/${hash}`, { headers });
+  return http<any>(`/api/virustotal/hash/${hash}`);
 }
 
 export function vtCheckDomain(domain: string) {
-  const key = localStorage.getItem("vt_api_key");
-  const headers = key ? { "X-VT-API-Key": key } : undefined;
-  return http<any>(`/api/virustotal/domain/${domain}`, { headers });
+  return http<any>(`/api/virustotal/domain/${domain}`);
 }
 
 // Ollama Status
@@ -415,6 +463,115 @@ export function updateIOC(id: number, payload: { status?: string; analyst_notes?
 
 export function deleteIOC(id: number) {
   return http<void>(`/api/ioc/${id}`, { method: "DELETE" });
+}
+
+// Firewall / Active Response (Fase 1)
+export interface FirewallBlockResult {
+  ok: boolean;
+  ip: string;
+  cdb_applied: boolean;
+  active_response: boolean;
+  timeout?: number | null;
+  detail?: any;
+}
+
+export function blockIp(ip: string, timeout?: number, reason?: string) {
+  return http<FirewallBlockResult>("/api/firewall/block", {
+    method: "POST",
+    body: JSON.stringify({ ip, ...(timeout != null ? { timeout } : {}), ...(reason ? { reason } : {}) }),
+  });
+}
+
+export function unblockIp(ip: string) {
+  return http<{ ok: boolean; ip: string; cdb_applied: boolean }>("/api/firewall/unblock", {
+    method: "POST",
+    body: JSON.stringify({ ip }),
+  });
+}
+
+export function getBlockedIps() {
+  return http<Array<{ ip: string; country?: string; as_owner?: string; tags?: string[]; since?: string }>>(
+    "/api/firewall/blocked"
+  );
+}
+
+// Fase 4 — Madurez y Métricas SOC
+export interface SocMetrics {
+  tickets: { total: number; closed: number; open: number; resolution_rate_pct: number };
+  mttr_minutes: number;
+  dwell_open_avg_minutes: number;
+  by_severity: Record<string, number>;
+  tickets_by_analyst: Array<{ analyst: string; closed: number }>;
+  attack_coverage_pct: number;
+  techniques_seen: string[];
+  alerts_24h: number;
+  generated_at: string;
+}
+
+export function getSocMetrics() {
+  return http<SocMetrics>("/api/metrics/soc");
+}
+
+export function getNavigatorLayer(hours = 720) {
+  return http<any>(`/api/mitre/navigator-layer?hours=${hours}`);
+}
+
+export function listHuntQueries() {
+  return http<Array<{ id: string; name: string; description: string }>>("/api/hunting/queries");
+}
+
+export function runHuntQuery(id: string, hours = 720) {
+  return http<{ query_id: string; name: string; type: string; count: number; results: any[] }>(
+    `/api/hunting/run/${id}?hours=${hours}`
+  );
+}
+
+// HEIMDALL — Informe de Inteligencia (datos reales; separado del informe ejecutivo)
+export function getHeimdallReport() {
+  return http<any>("/api/reports/heimdall");
+}
+
+// HEIMDALL en PDF profesional (Typst)
+export async function downloadHeimdallPdf(): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/reports/heimdall/pdf`, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.blob();
+}
+
+// CVE Intel (Fase 5) — feed CISA KEV + post IA (borrador)
+export interface CveItem {
+  id: string;
+  summary: string;
+  product: string;
+  name: string;
+  published: string;
+  due_date: string;
+  required_action: string;
+  ransomware: boolean;
+  severity: string;
+  source: string;
+}
+
+export function getLatestCves(limit = 15) {
+  return http<CveItem[]>(`/api/cve/latest?limit=${limit}`);
+}
+
+export interface ExploitResult {
+  cve: string;
+  count: number;
+  exploits: Array<{ title: string; edb_id: string; type: string; platform: string; url: string }>;
+  error?: string;
+}
+
+export function getCveExploits(cveId: string) {
+  return http<ExploitResult>(`/api/cve/${encodeURIComponent(cveId)}/exploits`);
+}
+
+export function generateCveSocialPost(cveIds: string[] = []) {
+  return http<{ post: string; cves_used: Array<{ id: string; severity: string }>; auto_published: boolean }>(
+    "/api/cve/social-post",
+    { method: "POST", body: JSON.stringify({ cve_ids: cveIds }) }
+  );
 }
 
 
@@ -486,7 +643,23 @@ export function postChatMessage(msg: any) {
 }
 
 export const getChatWsUrl = () => {
-  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  if (typeof window === "undefined") return "ws://localhost:8000/ws/chat";
+  const useSameOrigin = !envApiBase;
+  if (useSameOrigin) {
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${window.location.host}/ws/chat`;
+  }
+  const wsProto = API_BASE.startsWith("https") ? "wss:" : "ws:";
   const host = API_BASE.replace(/^https?:\/\//, "");
   return `${wsProto}//${host}/ws/chat`;
 };
+
+export function logout() {
+  return http<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+}
+
+export function getMySession() {
+  return http<{ username: string; ip: string; user_agent: string; expires_minutes: number }>(
+    "/api/auth/me/session"
+  );
+}

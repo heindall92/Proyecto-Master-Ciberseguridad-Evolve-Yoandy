@@ -1,0 +1,26 @@
+# Exponer Postgres y OpenSearch al host SOLO para desarrollo local.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev-expose.yml up -d
+# No usar en producción ni en redes no confiables.
+
+services:
+  wazuh.indexer:
+    ports:
+      - "${OPENSEARCH_PORT:-9200}:9200"
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  backend:
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--loop",
+        "app.uvicorn_loop:selector_loop_factory",
+      ]

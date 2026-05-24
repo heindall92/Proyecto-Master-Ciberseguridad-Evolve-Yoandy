@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
+import { sanitizePlainText } from "../lib/sanitize";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
+import "./light-theme-overrides.css";
 import { getAudioContext, playNotificationSound, playResolvedSound, playChatSound, playMentionSound } from "./audio";
 
 import {
@@ -14,11 +16,30 @@ import {
   assignTicket,
   listUsers,
   UserOut,
-  TicketOut,
   getChatHistory,
   postChatMessage,
-  getChatWsUrl
+  getChatWsUrl,
+  logout as apiLogout,
 } from "../lib/api";
+
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import {
+  setUser, setToken, setProfilePic, setLoading, setIsOffline, logout, loginOffline,
+} from "../store/authSlice";
+import {
+  setView, setScheme, setScanlines, setTvMode, setTheme, setLang,
+  navigateToIntel, navigateToWorkspace, clearWorkspaceData,
+} from "../store/uiSlice";
+import {
+  setStats, patchStats, setRecentOpenTickets, setLastTicketCount, setNotifSeen,
+} from "../store/dashboardSlice";
+import {
+  setChatOpen, setActiveChatId, upsertMessage, setHistoryForChat, clearChat,
+  setTeamUsers, setDmUserIds, addDmUser,
+  setUnreadForChat, incrementUnread, clearUnread,
+  setChatInput, setMentionFilter, setShowMentionDrop, setPendingAttachment,
+  ChatMessage, ChatAttachment,
+} from "../store/chatSlice";
 
 import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
@@ -36,6 +57,9 @@ import AnalystWorkspace from "./AnalystWorkspace";
 import ThreatMapView from "./ThreatMapView";
 import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
+import SocMaturityView from "./SocMaturityView";
+import HeimdallReportView from "./HeimdallReportView";
+import CveIntelView from "./CveIntelView";
 import ExecutiveReport from "./ExecutiveReport";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
@@ -94,59 +118,64 @@ const AlexanaWord = ({ word, color = "#fff", height = "40px" }: { word: string, 
   );
 };
 
+const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
+const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
+
 export default function App() {
-  const [user, setUser] = useState<UserOut | null>(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
-  const [view, setView] = useState("overview");
-  const [loading, setLoading] = useState(true);
+  const dispatch = useAppDispatch();
+
+  // ── Auth ──
+  const user = useAppSelector((s) => s.auth.user);
+  const token = useAppSelector((s) => s.auth.token);
+  const profilePic = useAppSelector((s) => s.auth.profilePic);
+  const loading = useAppSelector((s) => s.auth.loading);
+  const isOffline = useAppSelector((s) => s.auth.isOffline);
+
+  // ── UI ──
+  const view = useAppSelector((s) => s.ui.view);
+  const scheme = useAppSelector((s) => s.ui.scheme);
+  const scanlines = useAppSelector((s) => s.ui.scanlines);
+  const tvMode = useAppSelector((s) => s.ui.tvMode);
+  const theme = useAppSelector((s) => s.ui.theme);
+  const lang = useAppSelector((s) => s.ui.lang);
+  const intelIp = useAppSelector((s) => s.ui.intelIp);
+  const workspaceData = useAppSelector((s) => s.ui.workspaceData);
+
+  // ── Dashboard ──
+  const stats = useAppSelector((s) => s.dashboard.stats);
+  const recentOpenTickets = useAppSelector((s) => s.dashboard.recentOpenTickets);
+  const lastTicketCount = useAppSelector((s) => s.dashboard.lastTicketCount);
+  const notifSeen = useAppSelector((s) => s.dashboard.notifSeen);
+
+  // ── Chat ──
+  const chatOpen = useAppSelector((s) => s.chat.chatOpen);
+  const activeChatId = useAppSelector((s) => s.chat.activeChatId);
+  const chatMsgsByChat = useAppSelector((s) => s.chat.chatMsgsByChat);
+  const dmUserIds = useAppSelector((s) => s.chat.dmUserIds);
+  const teamUsers = useAppSelector((s) => s.chat.teamUsers);
+  const unreadByChat = useAppSelector((s) => s.chat.unreadByChat);
+  const chatInput = useAppSelector((s) => s.chat.chatInput);
+  const mentionFilter = useAppSelector((s) => s.chat.mentionFilter);
+  const showMentionDrop = useAppSelector((s) => s.chat.showMentionDrop);
+  const pendingAttachment = useAppSelector((s) => s.chat.pendingAttachment);
+
+  // ── Local UI state (no necesita store global) ──
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [scheme, setScheme] = useState("green");
-  const [scanlines, setScanlines] = useState(true);
-  const [stats, setStats] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
-  const [notifSeen, setNotifSeen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
-  const [lang, setLang] = useState<"es" | "en">(localStorage.getItem('valhalla_lang') as "es" | "en" || "es");
-  const [lastTicketCount, setLastTicketCount] = useState(0);
-  const [intelIp, setIntelIp] = useState<string | undefined>(undefined);
-  const [workspaceData, setWorkspaceData] = useState<any>(null);
-  const [tvMode, setTvMode] = useState(false);
-  const [recentOpenTickets, setRecentOpenTickets] = useState<TicketOut[]>([]);
-  const [profilePic, setProfilePic] = useState<string | null>(null);
-  const [theme, setTheme] = useState<"dark" | "light">(localStorage.getItem('valhalla_theme') as "dark" | "light" || "dark");
-  const [showCinematic, setShowCinematic] = useState(() => !sessionStorage.getItem('valhalla_intro_played'));
+  const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
+  const [showCinematic, setShowCinematic] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('valhalla_sidebar_collapsed') === 'true';
+  });
 
-  // ── Chat interno enterprise ──
-  interface ChatAttachment { name: string; type: string; size: number; data: string; }
-  interface ChatMessage {
-    id: string; userId: number; username: string; security_rank: string;
-    text: string; timestamp: string; chatId: string;
-    mentions: string[]; attachment?: ChatAttachment;
-  }
-
-  const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
-  const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
-
-  const [chatOpen, setChatOpen] = useState(false);
-  const [activeChatId, setActiveChatId] = useState<string>('global');
-  const [chatMsgsByChat, setChatMsgsByChat] = useState<Record<string, ChatMessage[]>>({});
-  const [dmUserIds, setDmUserIds] = useState<number[]>([]);
-  const [teamUsers, setTeamUsers] = useState<UserOut[]>([]);
-  const [unreadByChat, setUnreadByChat] = useState<Record<string, number>>({});
-  const [chatInput, setChatInput] = useState('');
-  const [mentionFilter, setMentionFilter] = useState('');
-  const [showMentionDrop, setShowMentionDrop] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatChannelRef = useRef<BroadcastChannel | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
 
-  // Update Tab Title when unread (Safe hook placement)
   useEffect(() => {
     const originalTitle = "Valhalla SOC";
     if (totalUnread > 0) {
@@ -160,21 +189,11 @@ export default function App() {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
 
   const toggleLang = () => {
-    const newLang = lang === "es" ? "en" : "es";
-    setLang(newLang);
-    localStorage.setItem('valhalla_lang', newLang);
-  };
-  const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-
-  const updateProfilePic = (newPic: string | null) => {
-    setProfilePic(newPic);
+    dispatch(setLang(lang === "es" ? "en" : "es"));
   };
 
   const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    localStorage.setItem('valhalla_theme', newTheme);
+    dispatch(setTheme(theme === "dark" ? "light" : "dark"));
   };
 
   useEffect(() => {
@@ -183,28 +202,27 @@ export default function App() {
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
-    // Si hay más tickets de los que teníamos, o si es la primera carga y hay tickets críticos
     if (ticketsNow > lastTicketCount || (lastTicketCount === 0 && ticketsNow > 0)) {
       if (lastTicketCount > 0) playNotificationSound();
-      if (!notifSeen) setNotifSeen(false);
+      if (!notifSeen) dispatch(setNotifSeen(false));
     }
-    setLastTicketCount(ticketsNow);
+    dispatch(setLastTicketCount(ticketsNow));
   }, [stats?.metrics?.tickets_open]);
 
   useEffect(() => {
-    const handleNavigateIntel = (e: any) => {
-      setIntelIp(e.detail.ip);
-      setView("threat");
-    };
-    const handleNavigateWorkspace = (e: any) => {
-      setWorkspaceData(e.detail);
-      setView("workspace");
+    const handleNavigateIntel = (e: any) => dispatch(navigateToIntel(e.detail.ip));
+    const handleNavigateWorkspace = (e: any) => dispatch(navigateToWorkspace(e.detail));
+    const handleNavigateView = (e: Event) => {
+      const viewId = (e as CustomEvent<{ view: string }>).detail?.view;
+      if (viewId) dispatch(setView(viewId));
     };
     window.addEventListener('navigate-to-intel', handleNavigateIntel);
     window.addEventListener('navigate-to-workspace', handleNavigateWorkspace);
+    window.addEventListener('navigate-to-view', handleNavigateView);
     return () => {
       window.removeEventListener('navigate-to-intel', handleNavigateIntel);
       window.removeEventListener('navigate-to-workspace', handleNavigateWorkspace);
+      window.removeEventListener('navigate-to-view', handleNavigateView);
     };
   }, []);
 
@@ -212,31 +230,35 @@ export default function App() {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     try {
-      const res = await login(fd.get("u") as string, fd.get("p") as string);
-      localStorage.setItem("token", res.access_token);
-      setToken(res.access_token);
+      await login(fd.get("u") as string, fd.get("p") as string);
+      dispatch(setToken("session"));
+      const u = await getCurrentUser();
+      dispatch(setUser(u));
+      dispatch(setProfilePic((u as { avatar_url?: string }).avatar_url || null));
       setUserMenuOpen(false);
       setNotifMenuOpen(false);
-      setView("overview");
+      dispatch(setView("overview"));
     } catch (err: any) {
-      if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
-        setIsOffline(true);
-        alert("ALERTA: Servidor SOC no alcanzable. Entrando al MODO OFFLINE.");
-        setToken("offline-mode-token");
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", security_rank: "L3 Blue Team" });
-        setView("overview");
-        setLoading(false);
+      const devDemoOffline =
+        import.meta.env.DEV && import.meta.env.VITE_ALLOW_OFFLINE_DEMO === "true";
+      if (
+        devDemoOffline &&
+        err.message &&
+        (err.message.includes("fetch") || err.message.includes("Network"))
+      ) {
+        alert("DEV: Servidor no alcanzable. Modo offline demo (solo desarrollo).");
+        dispatch(loginOffline());
+        dispatch(setView("overview"));
       } else {
-        alert("ERROR: Credenciales inválidas.");
+        alert(err.message?.includes("401") ? "ERROR: Credenciales inválidas." : `ERROR: ${err.message || "Login fallido"}`);
       }
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    setProfilePic(null);
+  const handleLogout = () => {
+    apiLogout().catch(() => {});
+    dispatch(logout());
+    dispatch(setProfilePic(null));
     setIsLocked(true);
   };
 
@@ -245,7 +267,7 @@ export default function App() {
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') {
         ctx.resume().then(() => {
-          playNotificationSound(); // Play test sound
+          playNotificationSound();
           console.log("Audio unlocked and tested");
         });
       } else {
@@ -264,90 +286,74 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    if (!token) {
-      setLoading(false);
+    if (import.meta.env.DEV && token === "offline-mode-token") {
+      dispatch(setIsOffline(true));
+      dispatch(setLoading(false));
       return;
-    }
-    if (token === "offline-mode-token") {
-        setIsOffline(true);
-        setUser({ id: 1, username: "admin_offline", email: "admin@valhalla", full_name: "Admin Offline", is_active: true, is_superuser: true, role: "admin", security_rank: "L3 Blue Team" });
-        setLoading(false);
-        return;
     }
     getCurrentUser()
       .then(u => {
-         if (isMounted) {
-           setUser(u);
-           setProfilePic(u.avatar_url || null);
-           setLoading(false);
-         }
+        if (isMounted) {
+          dispatch(setUser(u));
+          dispatch(setToken("session"));
+          dispatch(setProfilePic((u as { avatar_url?: string }).avatar_url || null));
+          dispatch(setLoading(false));
+        }
       })
       .catch((err: any) => {
-         if (err.message && (err.message.includes('fetch') || err.message.includes('Network'))) {
-           setIsOffline(true);
-           setLoading(false);
-           return;
-         }
-         logger.error("Token invalid, showing login:", err);
-         if (isMounted) {
-           localStorage.removeItem("token");
-           setToken(null);
-           setUser(null);
-           setLoading(false);
-         }
+        if (
+          import.meta.env.DEV &&
+          import.meta.env.VITE_ALLOW_OFFLINE_DEMO === "true" &&
+          err.message &&
+          (err.message.includes("fetch") || err.message.includes("Network"))
+        ) {
+          dispatch(setIsOffline(true));
+          dispatch(setLoading(false));
+          return;
+        }
+        logger.error("Token invalid, showing login:", err);
+        if (isMounted) {
+          dispatch(logout());
+          dispatch(setLoading(false));
+        }
       });
     return () => { isMounted = false; };
-  }, [token]);
+  }, [token, dispatch]);
 
   useEffect(() => {
     document.body.setAttribute("data-scheme", scheme);
     document.body.setAttribute("data-scan", scanlines ? "on" : "off");
   }, [scheme, scanlines]);
 
-  const fetchStats = () => {
-      getOpenTicketsCount()
-        .then((r) => { 
-          setStats((prev: any) => ({...prev, metrics: {...(prev?.metrics || {}), tickets_open: r.open}})); 
-        })
-        .catch((e) => { logger.error('[Dashboard] Error:', e); });
-      
-      listTickets('open', undefined, 10)
-        .then(allOpen => {
-          console.log('[DEBUG] Notif raw tickets:', allOpen.map(t => ({id: t.id, aid: (t as any).assigned_to_id})));
-          // Filtrado inteligente según rol
-          let filtered = allOpen;
-          if (user?.role !== 'admin') {
-            // En la campana mostramos:
-            // 1. Lo que no tiene dueño (para que cualquiera lo tome)
-            // 2. Lo que me han asignado a MI (directamente por el admin)
-            filtered = allOpen.filter(tk => !tk.assigned_to_id || tk.assigned_to_id === user.id);
-          }
-          
-          // Lógica de alerta: Si hay tickets nuevos que me corresponden
-          const oldIds = new Set(recentOpenTickets.map(t => t.id));
-          const hasNew = filtered.some(t => !oldIds.has(t.id));
-          
-          if (hasNew) {
-            // Siempre poner el punto rojo si hay algo nuevo que no hemos visto
-            setNotifSeen(false);
-            
-            // Solo pitar si ya teníamos la lista cargada (evita pitar al loguearse)
-            if (recentOpenTickets.length > 0) {
-              playNotificationSound();
-              // Si hay algún ticket crítico nuevo, pitar una segunda vez para urgencia
-              const hasCritical = filtered.some(t => t.severity === 'critical' && !oldIds.has(t.id));
-              if (hasCritical) {
-                setTimeout(playNotificationSound, 800);
-              }
+  const fetchStats = useCallback(() => {
+    getOpenTicketsCount()
+      .then((r) => {
+        dispatch(patchStats({ metrics: { tickets_open: r.open } }));
+      })
+      .catch((e) => { logger.error('[Dashboard] Error:', e); });
+
+    listTickets(undefined, undefined, 10, 0, true)
+      .then(activeTickets => {
+        const oldIds = new Set(recentOpenTickets.map(t => t.id));
+        const hasNew = activeTickets.some(t => !oldIds.has(t.id));
+
+        if (hasNew) {
+          dispatch(setNotifSeen(false));
+          if (recentOpenTickets.length > 0) {
+            playNotificationSound();
+            const hasCritical = activeTickets.some(t => t.severity === 'critical' && !oldIds.has(t.id));
+            if (hasCritical) {
+              setTimeout(playNotificationSound, 800);
             }
           }
-          
-          setRecentOpenTickets(filtered);
-        })
-        .catch((e) => logger.error('[Dashboard] Tickets error:', e));
+        }
 
-      getDashboardSummary().then(s => setStats(s)).catch((e) => logger.error('[Dashboard] Summary error:', e));
-  }
+        dispatch(setRecentOpenTickets(activeTickets));
+      })
+      .catch((e) => logger.error('[Dashboard] Tickets error:', e));
+
+    getDashboardSummary().then(s => dispatch(setStats(s))).catch((e) => logger.error('[Dashboard] Summary error:', e));
+  }, [user, recentOpenTickets, dispatch]);
 
   useEffect(() => {
     if (user) {
@@ -363,7 +369,7 @@ export default function App() {
       await assignTicket(ticketId, user.id);
       fetchStats();
       playResolvedSound();
-      setNotifMenuOpen(false); // Cierra el menú al asignar
+      setNotifMenuOpen(false);
       alert(lang === 'es' ? "Incidente asignado correctamente" : "Incident assigned successfully");
     } catch (err) {
       logger.error("Error assigning ticket", err);
@@ -373,120 +379,134 @@ export default function App() {
   // Load team users & DM list
   useEffect(() => {
     if (!user) return;
-    listUsers().then(setTeamUsers).catch(() => {});
-    try { setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')); } catch {}
+    listUsers().then(u => dispatch(setTeamUsers(u))).catch(() => {});
+    try {
+      dispatch(setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')));
+    } catch {}
   }, [user?.id]);
 
-  // WebSocket / Sync logic (Real-time cross-browser)
+  // WebSocket / Sync logic
   useEffect(() => {
     if (!user) return;
 
-    // 1. Sync from Backend when switching chat
     getChatHistory(activeChatId).then(history => {
-       if (history?.length > 0) {
-          setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: history }));
-       }
+      if (history?.length > 0) {
+        dispatch(setHistoryForChat({ chatId: activeChatId, messages: history }));
+      }
     }).catch(() => {});
 
-    // 2. Real-time WebSocket
     const wsUrl = getChatWsUrl();
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket;
+    let reconnectDelay = 1000;
+    let disposed = false;
+    let pingInterval: ReturnType<typeof setInterval>;
 
-    ws.onmessage = (e) => {
+    const connect = () => {
+      if (disposed) return;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        reconnectDelay = 1000;
+      };
+
+      ws.onmessage = (e) => {
       try {
-        const data = JSON.parse(e.data);
-        
-        // Handle New Alerts (Real-time integration)
-        if (data.type === "NEW_ALERT") {
-          window.dispatchEvent(new CustomEvent('valhalla-new-alert', { detail: data.data }));
-          if (data.data.severity === 'critical' || data.data.severity === 'high') {
-             playNotificationSound();
+        const payload = JSON.parse(e.data);
+        if (payload?.type === "NEW_ALERT") {
+          const sev = payload.data?.severity || "medium";
+          if (sev === "critical" || sev === "high") {
+            playNotificationSound();
           }
+          dispatch(setNotifSeen(false));
           return;
         }
 
-        // Handle Chat Messages
-        const msg: ChatMessage = data;
-        
-        // Update messages state (avoid duplicates)
-        setChatMsgsByChat(prev => {
-          const list = prev[msg.chatId] || [];
-          if (list.some(m => m.id === msg.id)) return prev;
-          const next = [...list, msg].slice(-200);
-          return { ...prev, [msg.chatId]: next };
-        });
+        const msg: ChatMessage = payload;
+
+        dispatch(upsertMessage(msg));
 
         const myId = user?.id ?? -1;
         const myUsername = (user?.username || '').toLowerCase();
-        
+
         const isFromMe = msg.userId === myId;
         if (isFromMe) return;
 
-        const isMentionOfMe = Array.isArray(msg.mentions) && 
+        const isMentionOfMe = Array.isArray(msg.mentions) &&
           msg.mentions.some(m => m.toLowerCase() === myUsername);
-        
+
         const isDmToMe = msg.chatId.startsWith('dm:') &&
           msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
-        
+
         const isGlobal = msg.chatId === 'global';
         const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
 
         if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
-          setUnreadByChat(prev => {
-            const next = { ...prev, [msg.chatId]: (prev[msg.chatId] || 0) + 1 };
-            localStorage.setItem('valhalla.unread', JSON.stringify(next));
-            return next;
-          });
+          dispatch(incrementUnread(msg.chatId));
+          const stored = JSON.parse(localStorage.getItem('valhalla.unread') || '{}');
+          stored[msg.chatId] = (stored[msg.chatId] || 0) + 1;
+          localStorage.setItem('valhalla.unread', JSON.stringify(stored));
           if (isMentionOfMe) playMentionSound();
           else playChatSound();
         }
 
-        // Add to DM list if it's a new DM for me
         if (msg.chatId.startsWith('dm:') && !isFromMe) {
-           const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
-           const otherId = parts.find(id => id !== myId);
-           if (otherId) {
-             setDmUserIds(prev => {
-               if (prev.includes(otherId)) return prev;
-               const next = [...prev, otherId];
-               localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify(next));
-               return next;
-             });
-           }
+          const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
+          const otherId = parts.find(id => id !== myId);
+          if (otherId) {
+            dispatch(addDmUser(otherId));
+            const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(myId)) || '[]');
+            if (!stored.includes(otherId)) {
+              localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify([...stored, otherId]));
+            }
+          }
         }
-      } catch (err) { console.error("WS Message Error", err); }
+      } catch (err) {
+        if (import.meta.env.DEV) console.error("WS Message Error", err);
+      }
     };
 
-    const pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 30000);
+      ws.onclose = () => {
+        if (disposed) return;
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      };
+
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      }, 30000);
+    };
+
+    connect();
 
     return () => {
+      disposed = true;
       clearInterval(pingInterval);
-      ws.close();
+      ws?.close();
     };
   }, [user?.id, activeChatId, chatOpen]);
 
   useEffect(() => {
     if (chatOpen) {
-      setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+      dispatch(clearUnread(activeChatId));
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     }
   }, [chatOpen, activeChatId, chatMsgsByChat[activeChatId]?.length]);
 
   const handleChatInput = (value: string) => {
-    setChatInput(value);
+    dispatch(setChatInput(value));
     const atIdx = value.lastIndexOf('@');
     if (atIdx !== -1 && !value.slice(atIdx + 1).includes(' ')) {
-      setMentionFilter(value.slice(atIdx + 1).toLowerCase());
-      setShowMentionDrop(true);
+      dispatch(setMentionFilter(value.slice(atIdx + 1).toLowerCase()));
+      dispatch(setShowMentionDrop(true));
     } else {
-      setShowMentionDrop(false);
+      dispatch(setShowMentionDrop(false));
     }
   };
 
   const insertMention = (username: string) => {
     const atIdx = chatInput.lastIndexOf('@');
-    setChatInput(chatInput.slice(0, atIdx) + `@${username} `);
-    setShowMentionDrop(false);
+    dispatch(setChatInput(chatInput.slice(0, atIdx) + `@${username} `));
+    dispatch(setShowMentionDrop(false));
     chatInputRef.current?.focus();
   };
 
@@ -504,7 +524,7 @@ export default function App() {
       e.target.value = ''; return;
     }
     const reader = new FileReader();
-    reader.onload = ev => setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string });
+    reader.onload = ev => dispatch(setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string }));
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -512,18 +532,17 @@ export default function App() {
   const openDm = (target: UserOut) => {
     if (!user) return;
     const dmId = makeDmId(user.id, target.id);
-    setDmUserIds(prev => {
-      if (prev.includes(target.id)) return prev;
-      const next = [...prev, target.id];
-      localStorage.setItem(DM_LIST_KEY(user.id), JSON.stringify(next));
-      return next;
-    });
-    setActiveChatId(dmId);
-    setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+    dispatch(addDmUser(target.id));
+    const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]');
+    if (!stored.includes(target.id)) {
+      localStorage.setItem(DM_LIST_KEY(user.id), JSON.stringify([...stored, target.id]));
+    }
+    dispatch(setActiveChatId(dmId));
+    dispatch(clearUnread(dmId));
   };
 
-  const clearActiveChat = () => {
-    setChatMsgsByChat(prev => ({ ...prev, [activeChatId]: [] }));
+  const handleClearActiveChat = () => {
+    dispatch(clearChat(activeChatId));
   };
 
   const getDmPartner = (chatId: string) => {
@@ -535,7 +554,8 @@ export default function App() {
 
   const renderMsgText = (text: string) => {
     if (!text) return null;
-    const parts = text.split(/(@\w+)/g);
+    const safe = sanitizePlainText(text);
+    const parts = safe.split(/(@\w+)/g);
     return parts.map((p, i) =>
       p.startsWith('@') ? <span key={i} className="mention">{p}</span> : p
     );
@@ -546,24 +566,17 @@ export default function App() {
     const mentions = Array.from(chatInput.matchAll(/@(\w+)/g)).map(m => m[1]);
     const msg: ChatMessage = {
       id: Date.now().toString(), userId: user.id,
-      username: user.username, security_rank: user.security_rank || 'ANALISTA',
+      username: user.username, rank: user.rank || 'ANALISTA',
       text: chatInput.trim(), timestamp: new Date().toISOString(),
       chatId: activeChatId, mentions,
       ...(pendingAttachment ? { attachment: pendingAttachment } : {})
     };
-    setChatMsgsByChat(prev => {
-      const list = prev[activeChatId] || [];
-      const next = [...list, msg].slice(-200);
-      return { ...prev, [activeChatId]: next };
-    });
-    
-    // Save to DB and broadcast via Backend
+    dispatch(upsertMessage(msg));
     postChatMessage(msg).catch(err => console.error("Chat Send Error", err));
-
-    setChatInput('');
-    setPendingAttachment(null);
-    setShowMentionDrop(false);
-  }, [chatInput, user, activeChatId, pendingAttachment]);
+    dispatch(setChatInput(''));
+    dispatch(setPendingAttachment(null));
+    dispatch(setShowMentionDrop(false));
+  }, [chatInput, user, activeChatId, pendingAttachment, dispatch]);
 
   if (showCinematic) {
     return <CinematicIntro onComplete={() => {
@@ -591,54 +604,56 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className={`theme-${scheme} ${scanlines ? 'scanlines' : ''}`} data-scheme={scheme} data-scan={scanlines ? 'on' : 'off'} style={{ 
-          height: '100vh', 
-          background: 'url("./bg-login.png") center/cover no-repeat, var(--bg-void)'
-      }}>
+      <div
+        className={`login-screen theme-${scheme} ${scanlines ? 'scanlines' : ''}`}
+        data-scheme={scheme}
+        data-scan={scanlines ? 'on' : 'off'}
+        style={{ minHeight: '100vh', height: '100vh' }}
+      >
         <SvgSymbols />
-        <div style={{ display: 'flex', height: '100%' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '60px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'var(--signal)', borderRadius: '12px', display: 'grid', placeItems: 'center', boxShadow: '0 0 20px var(--signal-glow)' }}>
+        <div className="login-layout">
+          <div className="login-hero-col">
+            <div className="login-brand-row">
+              <div className="login-logo-tile">
                  <AlexanaLetter char="V" style={{ width: '40px', height: '40px', color: '#000' }} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                 <AlexanaWord word="VALHALLA" height="48px" />
-                 <div style={{ display: 'flex', gap: '15px' }}>
+              <div className="login-brand-words">
+                 <AlexanaWord word="VALHALLA" height="48px" color="var(--login-brand-text)" />
+                 <div className="login-brand-sub">
                     <AlexanaWord word="SOC" height="24px" color="var(--signal)" />
-                    <AlexanaWord word="PRO" height="24px" color="rgba(255,255,255,0.5)" />
+                    <AlexanaWord word="PRO" height="24px" color="var(--login-pro-muted)" />
                  </div>
               </div>
             </div>
-            <p style={{ margin: '10px 0 0 5px', fontSize: '13px', color: 'var(--text-dim)', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'var(--mono)' }}>
+            <p className="login-tagline">
               {lang === 'es' ? 'Plataforma de Monitorización y' : 'Platform for Monitoring and'}<br/>
               {lang === 'es' ? 'Respuesta Táctica con IA' : 'Tactical AI Response'}
             </p>
           </div>
-          <div style={{ width: '450px', display: 'flex', alignItems: 'center', marginRight: '200px' }}>
+          <div className="login-form-col">
             <div className="cyber-panel-wrap">
               <div className="cyber-panel">
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-                 <div style={{ width: '72px', height: '72px', borderRadius: '18px', border: '1px solid rgba(60,255,158,0.4)', display: 'grid', placeItems: 'center', background: 'linear-gradient(145deg, rgba(60,255,158,0.15), rgba(0,0,0,0.4))', boxShadow: '0 8px 24px rgba(0,0,0,0.4), inset 0 0 12px rgba(60,255,158,0.1)' }}>
+              <div className="login-panel-head">
+                 <div className="login-panel-icon">
                     <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
-                 <h2 style={{ margin: 0, fontSize: '22px', fontFamily: 'var(--sans)', fontWeight: 500, color: '#fff', letterSpacing: '0.5px' }}>{t('welcome')}</h2>
+                 <h2 className="login-welcome">{t('welcome')}</h2>
               </div>
-              <form onSubmit={onLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('user_id')}</label>
-                   <input name="u" placeholder="admin" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} autoFocus />
+              <form className="login-form" onSubmit={onLogin}>
+                 <div className="login-field">
+                   <label className="login-label" htmlFor="login-user">{t('user_id')}</label>
+                   <input id="login-user" name="u" className="login-input" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" autoFocus />
                  </div>
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--sans)' }}>{t('password')}</label>
-                   <input name="p" type="password" placeholder="••••••••" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '14px 16px', borderRadius: '12px', fontFamily: 'var(--sans)', fontSize: '14px', outline: 'none', transition: 'all 0.2s', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' }} />
+                 <div className="login-field">
+                   <label className="login-label" htmlFor="login-pass">{t('password')}</label>
+                   <input id="login-pass" name="p" className="login-input" type="password" placeholder="••••••••" />
                  </div>
                  <button type="submit" className="login-btn">{t('login_btn')}</button>
-                 <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--sans)' }}>
-                     <a href="/MANUAL.md" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--signal)', textDecoration: 'none', fontWeight: 500 }}>{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
+                 <div className="login-footer">
+                     <a className="login-manual-link" href="/MANUAL.md" target="_blank" rel="noopener noreferrer">{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
                   </div>
-                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
-                    <button type="button" onClick={toggleLang} style={{ background: 'rgba(60,255,158,0.1)', border: '1px solid rgba(60,255,158,0.3)', color: 'var(--signal)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}>
+                 <div className="login-lang-wrap">
+                    <button type="button" className="login-lang-btn" onClick={toggleLang}>
                        {lang === 'es' ? 'CAMBIAR A INGLÉS' : 'CHANGE TO SPANISH'}
                     </button>
                  </div>
@@ -653,7 +668,7 @@ export default function App() {
 
 
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
-    <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => setView(id)}>
+    <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__icon-wrap">
         <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>
       </span>
@@ -671,10 +686,13 @@ export default function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <SvgSymbols />
-      <div className={`app ${tvMode ? 'tv-mode' : ''}`}>
-        
+      <div className={`app ${tvMode ? 'tv-mode' : ''} ${sidebarCollapsed && !tvMode ? 'sidebar-collapsed' : ''}`}>
+
         {!tvMode && (
-        <header className="topbar" style={{ background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' }}>
+        <header
+          className="topbar"
+          style={theme === 'dark' ? { background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' } : undefined}
+        >
           <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div className="topbar__logo" style={{ width: '32px', height: '32px', background: 'rgba(60,255,158,0.05)', border: '1px solid var(--signal)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'rotate(45deg)', boxShadow: '0 0 10px var(--signal-glow)', marginRight: '8px' }}>
                <div style={{ transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -684,37 +702,37 @@ export default function App() {
             <div className="glitch-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', cursor: 'default' }}>
                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                  <AlexanaWord word="VALHALLA" height="18px" />
-                 <AlexanaWord word="SOC" height="12px" color="var(--signal)" />
-                 <AlexanaWord word="PRO" height="12px" color="rgba(255,255,255,0.5)" />
+                 <AlexanaWord word="SOC" height="12px" color={theme === 'light' ? '#d8f3dc' : 'var(--signal)'} />
+                 <AlexanaWord word="PRO" height="12px" color={theme === 'light' ? 'rgba(240,247,244,0.65)' : 'rgba(255,255,255,0.5)'} />
                </div>
                <div className="topbar__sub" style={{ fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>BLUE TEAM · WAZUH 4.9.5 · CLASSIFIED // EYES ONLY</div>
             </div>
           </div>
 
           <div className="status-chips">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{t('status')}</span>
-                <span style={{ color: 'var(--signal)', fontWeight: 600 }}>{t('operative')}</span>
+            <div className="topbar-stat-group">
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{t('status')}</span>
+                <span className="topbar-stat__value topbar-stat__value--ok">{t('operative')}</span>
               </div>
-              <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{incidentHeaderLabel}</span>
-                <span style={{ color: incidentCount > 0 ? 'var(--danger)' : 'var(--signal)', fontWeight: 600 }}>{incidentCount}</span>
+              <div className="topbar-stat__divider" aria-hidden="true" />
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{incidentHeaderLabel}</span>
+                <span className={`topbar-stat__value${incidentCount > 0 ? ' topbar-stat__value--warn' : ' topbar-stat__value--ok'}`}>{incidentCount}</span>
               </div>
-              <div style={{ width: '1px', height: '20px', background: 'var(--line-faint)' }}></div>
-              <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', lineHeight: '1.2' }}>
-                <span style={{ color: 'var(--text-faint)' }}>{t('alerts_24h')}</span>
-                <span style={{ color: stats?.metrics?.total_alerts_24h > 0 ? 'var(--danger)' : 'var(--text-dim)', fontWeight: 600 }}>{stats?.metrics?.total_alerts_24h || 0}</span>
+              <div className="topbar-stat__divider" aria-hidden="true" />
+              <div className="topbar-stat">
+                <span className="topbar-stat__label">{t('alerts_24h')}</span>
+                <span className={`topbar-stat__value${(stats?.metrics?.total_alerts_24h || 0) > 0 ? ' topbar-stat__value--warn' : ''}`}>{stats?.metrics?.total_alerts_24h || 0}</span>
               </div>
             </div>
             <button
+              className="topbar-icon-btn"
               onClick={() => {
                 if (!chatOpen) {
-                  // Al ABRIR: limpiar solo el canal activo
-                  setUnreadByChat(prev => ({ ...prev, [activeChatId]: 0 }));
+                  dispatch(clearUnread(activeChatId));
                 }
-                setChatOpen(v => !v);
+                dispatch(setChatOpen(!chatOpen));
               }}
               style={{
                 position: 'relative', display: 'flex', alignItems: 'center',
@@ -746,7 +764,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            <button onClick={() => { setNotifMenuOpen(!notifMenuOpen); setNotifSeen(true); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
+            <button className="topbar-icon-btn" onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
               <style>{`
                 @keyframes pulse-red {
                   0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
@@ -767,10 +785,10 @@ export default function App() {
               `}</style>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={recentOpenTickets.length > 0 && !notifSeen ? "#FF3E3E" : "var(--signal)"} strokeWidth="2" style={{ filter: recentOpenTickets.length > 0 && !notifSeen ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               {recentOpenTickets.length > 0 && !notifSeen && (
-                <span style={{ 
-                  position: 'absolute', top: '-4px', right: '-4px', 
+                <span style={{
+                  position: 'absolute', top: '-4px', right: '-4px',
                   minWidth: '18px', height: '18px', padding: '0 4px',
-                  background: '#FF3E3E', color: '#fff', 
+                  background: '#FF3E3E', color: '#fff',
                   borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: '0 0 10px rgba(255,62,62,0.5)',
@@ -785,12 +803,12 @@ export default function App() {
             <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'none', border: 'none', padding: '4px 8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{user.username.toUpperCase()}</span>
-                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.security_rank?.toUpperCase() || 'ANALISTA'}</span>
+                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
-              <div style={{ 
-                width: '28px', height: '28px', borderRadius: '50%', 
-                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '1px solid var(--signal-dim)',
                 overflow: 'hidden',
                 position: 'relative'
@@ -798,7 +816,7 @@ export default function App() {
                 {profilePic ? (
                   <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: '14px' }}>👤</span>
+                  <span style={{ fontSize: '14px' }}></span>
                 )}
               </div>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -815,18 +833,21 @@ export default function App() {
                 <div className="tactical-dropdown__header-rank">{user.rank?.toUpperCase() || 'ANALISTA'} · {user.role?.toUpperCase()}</div>
               </div>
               <div style={{ padding: '4px 0' }}>
+                <button onClick={() => { setShowCinematic(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)' }}>
+                  {lang === 'es' ? '▶ INTRO HYPERFRAME' : '▶ HYPERFRAME INTRO'}
+                </button>
                 <button onClick={() => window.location.reload()} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>{t('sync')}</button>
                 <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
                 <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
-                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>🎨 {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
-                <button onClick={() => { setView("profile"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}>👤 {t('profile_settings')}</button>
+                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}> {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
+                <button onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}> {t('profile_settings')}</button>
                 {user?.role === 'admin' && (
-                  <button onClick={() => { setView("settings"); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>⚙ {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
+                  <button onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}> {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
                 )}
                 <div className="tactical-dropdown__divider" />
                 <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)', background: 'rgba(60,255,158,0.05)' }}>{t('language')}: {lang.toUpperCase()}</button>
                 <div className="tactical-dropdown__divider" />
-                <button onClick={logout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
+                <button onClick={handleLogout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
               </div>
             </div>
           </div>
@@ -835,9 +856,9 @@ export default function App() {
         {notifMenuOpen && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setNotifMenuOpen(false)}>
             <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 60, width: '320px', maxHeight: '450px', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line-faint)', fontSize: '11px', fontWeight: 600, color: 'var(--signal)', display: 'flex', justifyContent: 'space-between' }}>
+              <div className="notif-panel__head" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
                 <span>{t('notifications')}</span>
-                <span style={{ opacity: 0.7 }}>{incidentCount} {incidentText}</span>
+                <span>{incidentCount} {incidentText}</span>
               </div>
               <div style={{ padding: '4px 0' }}>
                 <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '10px', color: 'var(--text-dim)' }}>
@@ -846,24 +867,26 @@ export default function App() {
                   </a>
                 </div>
                 {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => (
-                  <div key={tk.id} style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
+                  <div key={tk.id} className="notif-ticket-card" style={{ padding: '10px 12px', position: 'relative' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{ fontSize: '9px', color: tk.severity === 'critical' ? 'var(--danger)' : tk.severity === 'high' ? 'var(--amber)' : 'var(--cyan)', fontWeight: 'bold' }}>
                         {tk.severity.toUpperCase()}
                       </span>
                       <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>ID: {tk.id}</span>
                     </div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
+                    <div className="notif-title" style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button 
-                        onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} 
-                        style={{ padding: '4px 8px', background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.3)', color: 'var(--signal)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                      <button
+                        className="notif-btn-forest"
+                        onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}
+                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         {t('ir_to_workspace')}
                       </button>
-                      <button 
+                      <button
+                        className="notif-btn-outline"
                         onClick={() => handleAssignToMe(tk.id)}
-                        style={{ padding: '4px 8px', background: 'rgba(51,204,255,0.1)', border: '1px solid rgba(51,204,255,0.3)', color: 'var(--cyan)', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
+                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         {t('assign_to_me')}
                       </button>
@@ -873,7 +896,7 @@ export default function App() {
                   <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_recent_incidents')}</div>
                 )}
                 {incidentCount > 0 && (
-                  <button onClick={() => { setView("workspace"); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'var(--amber)', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <button className="notif-footer-btn" onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', border: 'none', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
                     {lang === 'es' ? 'VER TODOS LOS TICKETS' : 'VIEW ALL TICKETS'} ({incidentCount})
                   </button>
                 )}
@@ -883,8 +906,8 @@ export default function App() {
         )}
 
         {!tvMode && (
-        <aside className="sidenav">
-          <div className="sidenav__label">{t('modules')}</div>
+        <aside className={`sidenav ${sidebarCollapsed ? 'collapsed' : ''}`}>
+          {!sidebarCollapsed && <div className="sidenav__label">{t('modules')}</div>}
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
@@ -896,18 +919,42 @@ export default function App() {
           <NavBtn id="threat" label={t('threat_intel')} sub={t('threat_intel_sub')} icon="i-threat" badge="IOCs" />
           <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
           {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
+          {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
+          {user?.role === 'admin' && <NavBtn id="heimdall" label="Heimdall" sub={lang === 'es' ? 'Informe Intel' : 'Intel Report'} icon="i-metrics" />}
+          <NavBtn id="cveintel" label="CVE Intel" sub={lang === 'es' ? 'KEV · Difusión IA' : 'KEV · AI outreach'} icon="i-vuln" />
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
           {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
-          
-          <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
-          <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
-            ROOT@VALHALLA:~#<br/>
-            SID: 0x7A4F · L3<br/>
-            {t('operator')}: {user.username.toUpperCase()}
-          </div>
+
+          {!sidebarCollapsed && (
+            <>
+              <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
+              <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
+                ROOT@VALHALLA:~#<br/>
+                SID: 0x7A4F · L3<br/>
+                {t('operator')}: {user.username.toUpperCase()}
+              </div>
+            </>
+          )}
+
+          {/* Collapse Button */}
+          <button
+            className={`navbtn collapse-btn${sidebarCollapsed ? ' collapse-btn--active' : ''}`}
+            onClick={() => {
+              const newVal = !sidebarCollapsed;
+              setSidebarCollapsed(newVal);
+              localStorage.setItem('valhalla_sidebar_collapsed', String(newVal));
+            }}
+            style={{ marginTop: sidebarCollapsed ? 'auto' : '15px' }}
+          >
+            <span className="navbtn__icon-wrap" style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>
+              <svg className="navbtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+            </span>
+            {!sidebarCollapsed && <span className="navbtn__main">Colapsar Sidebar</span>}
+          </button>
         </aside>
+
         )}
 
         <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', gridRow: tvMode ? '1 / -1' : 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -935,14 +982,17 @@ export default function App() {
                 {view === 'threatmap' && <ThreatMapView lang={lang} />}
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
-                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => setWorkspaceData(null)} />}
+                {view === 'bifrost' && <SocMaturityView lang={lang} />}
+                {view === 'heimdall' && <HeimdallReportView lang={lang} />}
+                {view === 'cveintel' && <CveIntelView lang={lang} />}
+                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} />}
                 {view === 'executive-report' && <ExecutiveReport lang={lang} />}
-                {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={setUser} profilePic={profilePic} setProfilePic={updateProfilePic} />}
-                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
+                {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
-                    <button onClick={() => setView('overview')} style={{ padding: '8px 20px', background: 'rgba(60,255,158,0.1)', border: '1px solid var(--signal)', color: 'var(--signal)', cursor: 'pointer', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>← VOLVER A OVERVIEW</button>
+                    <button onClick={() => dispatch(setView('overview'))} style={{ padding: '8px 20px', background: 'rgba(60,255,158,0.1)', border: '1px solid var(--signal)', color: 'var(--signal)', cursor: 'pointer', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>← VOLVER A OVERVIEW</button>
                   </div>
                 )}
               </motion.div>
@@ -958,18 +1008,17 @@ export default function App() {
               <label style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>ESQUEMA CROMÁTICO</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                  {['green', 'cyan', 'amber', 'purple'].map(s => (
-                   <button key={s} onClick={() => setScheme(s)} className="action-btn" style={{ color: scheme === s ? '#000' : 'var(--text)' }}>
-                     {scheme === s && <span style={{ position: 'absolute', inset: 0, background: 'var(--signal)', zIndex: -1 }} />}
+                   <button key={s} onClick={() => dispatch(setScheme(s))} className={`action-btn ${scheme === s ? 'active' : ''}`}>
                      {s.toUpperCase()}
                    </button>
                  ))}
               </div>
               <button onClick={toggleTheme} className="action-btn">
-                {theme === 'dark' ? '☀ MODO CLARO' : '🌑 MODO OSCURO'}
+                {theme === 'dark' ? ' MODO CLARO' : ' MODO OSCURO'}
               </button>
-              <button onClick={() => setScanlines(!scanlines)} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
-              <button onClick={() => setTvMode(!tvMode)} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
-              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}>✕ CERRAR</button>
+              <button onClick={() => dispatch(setScanlines(!scanlines))} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
+              <button onClick={() => dispatch(setTvMode(!tvMode))} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
+              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}> CERRAR</button>
            </div>
         </div>
         )}
@@ -993,8 +1042,8 @@ export default function App() {
                 }
               </span>
               <div className="chat-panel__head-actions">
-                <button className="chat-panel__action-btn" onClick={clearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}>🗑</button>
-                <button className="chat-panel__close" onClick={() => setChatOpen(false)}>✕</button>
+                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}></button>
+                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))}></button>
               </div>
             </div>
 
@@ -1005,7 +1054,7 @@ export default function App() {
                 <div className="chat-sidebar__label">CANALES</div>
                 <button
                   className={`chat-sidebar__item${activeChatId === 'global' ? ' active' : ''}`}
-                  onClick={() => { setActiveChatId('global'); setUnreadByChat(prev => ({ ...prev, global: 0 })); }}
+                  onClick={() => { dispatch(setActiveChatId('global')); dispatch(clearUnread('global')); }}
                 >
                   # EQUIPO
                   {(unreadByChat.global || 0) > 0 && (
@@ -1025,9 +1074,8 @@ export default function App() {
                       key={uid}
                       className={`chat-sidebar__item${activeChatId === dmId ? ' active' : ''}`}
                       onClick={() => {
-                        // Historial se cargará automáticamente vía useEffect
-                        setActiveChatId(dmId);
-                        setUnreadByChat(prev => ({ ...prev, [dmId]: 0 }));
+                        dispatch(setActiveChatId(dmId));
+                        dispatch(clearUnread(dmId));
                       }}
                     >
                       @ {partner?.username?.toUpperCase() || `U${uid}`}
@@ -1080,9 +1128,9 @@ export default function App() {
                           ) : (
                             <>
                               <span style={{ fontSize: '16px' }}>
-                                {msg.attachment.type === 'application/pdf' ? '📄' :
-                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '📊' :
-                                 msg.attachment.type === 'text/plain' ? '📝' : '📎'}
+                                {msg.attachment.type === 'application/pdf' ? '' :
+                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '' :
+                                 msg.attachment.type === 'text/plain' ? '' : ''}
                               </span>
                               <a href={msg.attachment.data} download={msg.attachment.name} style={{ color: 'var(--signal)', textDecoration: 'none' }}>
                                 {msg.attachment.name}
@@ -1105,9 +1153,9 @@ export default function App() {
                     {pendingAttachment.type.startsWith('image/') ? (
                       <img src={pendingAttachment.data} alt={pendingAttachment.name} />
                     ) : (
-                      <span>📎 {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
+                      <span> {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
                     )}
-                    <button className="chat-attachment-preview__remove" onClick={() => setPendingAttachment(null)}>✕</button>
+                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))}></button>
                   </div>
                 )}
 
@@ -1135,7 +1183,7 @@ export default function App() {
                     style={{ display: 'none' }}
                     accept=".txt,.pdf,.png,.jpg,.jpeg,.svg,.xlsx,.xls,.csv"
                   />
-                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}>📎</button>
+                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}></button>
                   <input
                     ref={chatInputRef}
                     className="chat-panel__input"
@@ -1146,12 +1194,12 @@ export default function App() {
                     onChange={e => handleChatInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
-                      if (e.key === 'Escape') setShowMentionDrop(false);
+                      if (e.key === 'Escape') dispatch(setShowMentionDrop(false));
                     }}
                     maxLength={500}
                     autoFocus
                   />
-                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar">➤</button>
+                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar"></button>
                 </div>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import httpx
 from app.settings import settings
+from app.http_tls import httpx_verify
 
 class WazuhClient:
     def __init__(self):
@@ -9,7 +10,7 @@ class WazuhClient:
         self.token = None
 
     async def _get_token(self):
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=httpx_verify()) as client:
             r = await client.get(f"{self.base_url}/security/user/authenticate", auth=(self.user, self.pwd))
             if r.status_code == 200:
                 self.token = r.json().get("data", {}).get("token")
@@ -23,7 +24,7 @@ class WazuhClient:
         headers["Authorization"] = f"Bearer {self.token}"
         kwargs["headers"] = headers
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=httpx_verify()) as client:
             r = await client.request(method, f"{self.base_url}{path}", **kwargs)
             if r.status_code == 401: # Token expired?
                 await self._get_token()
@@ -59,6 +60,68 @@ class WazuhClient:
         payload = {"command": command, "arguments": arguments or []}
         r = await self.request("POST", f"/active-response/{agent_id}", json=payload)
         return r.json()
+
+    # ── Active Response: firewall-drop (Fase 1 — Consolidación Defensiva) ──
+    async def run_firewall_drop(self, ip: str, agents_list: str | None = None) -> dict:
+        """Ejecuta firewall-drop (iptables DROP) sobre los AGENTES vía API.
+
+        Limitación de Wazuh: la API NO permite AR sobre el manager (agente 000,
+        error 1703). En un despliegue donde solo existe el manager, el enforcement
+        se realiza mediante la regla local 100500 + <active-response location=local>,
+        que dispara firewall-drop cuando una IP de la lista CDB reaparece en los logs.
+        Por eso aquí targeteamos agentes reales (id != 000) y, si no hay, devolvemos
+        'skipped' (no es un fallo).
+        """
+        if agents_list is None:
+            try:
+                agents = await self.get_agents()
+                ids = [a.get("id") for a in agents if a.get("id") and a.get("id") != "000"]
+            except Exception as e:
+                return {"error": 0, "skipped": True, "reason": f"No se pudo listar agentes: {e}"}
+            if not ids:
+                return {
+                    "error": 0,
+                    "skipped": True,
+                    "reason": "Solo existe el manager (000); enforcement vía regla local 100500.",
+                }
+            agents_list = ",".join(ids)
+        payload = {"command": "firewall-drop", "alert": {"data": {"srcip": ip}}}
+        r = await self.request(
+            "PUT", f"/active-response?agents_list={agents_list}", json=payload
+        )
+        return r.json()
+
+    async def upload_cdb_list(self, filename: str, content: str) -> dict:
+        """Sube/sobrescribe el contenido completo de una lista CDB.
+
+        Wazuh 4.9 API: PUT /lists/files/{filename}?overwrite=true (cuerpo crudo).
+        """
+        r = await self.request(
+            "PUT",
+            f"/lists/files/{filename}?overwrite=true",
+            content=content.encode("utf-8"),
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        return r.json()
+
+    async def get_cdb_list(self, filename: str) -> str:
+        """Devuelve el contenido crudo de una lista CDB (texto) o '' si no existe."""
+        r = await self.request(
+            "GET", f"/lists/files/{filename}", headers={"Accept": "application/json"}
+        )
+        if r.status_code != 200:
+            return ""
+        # La API puede devolver el contenido crudo o envuelto en JSON; toleramos ambos.
+        try:
+            data = r.json()
+            items = data.get("data", {}).get("affected_items", [])
+            if items and isinstance(items[0], dict):
+                return items[0].get("content") or ""
+            if isinstance(data, str):
+                return data
+        except Exception:
+            return r.text
+        return r.text
 
     async def get_agent_packages(self, agent_id: str):
         r = await self.request("GET", f"/syscollector/{agent_id}/packages?limit=100")

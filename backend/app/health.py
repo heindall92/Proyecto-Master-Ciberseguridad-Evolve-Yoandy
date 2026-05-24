@@ -10,6 +10,7 @@ import httpx
 
 from app.settings import settings
 from app.wazuh_client import wazuh
+from app.http_tls import httpx_verify
 
 router = APIRouter(prefix="/api/health/integrations", tags=["health"])
 
@@ -26,27 +27,53 @@ async def check_wazuh() -> dict:
 async def check_indexer() -> dict:
     start = time.time()
     try:
-        async with asyncio.timeout(3):
-            async with httpx.AsyncClient(verify=False) as client:
+        async with asyncio.timeout(8):
+            async with httpx.AsyncClient(verify=httpx_verify()) as client:
                 res = await client.get(
-                    f"{settings.opensearch_url}/",
-                    auth=(settings.opensearch_user, settings.opensearch_pass)
+                    f"{settings.opensearch_url.rstrip('/')}/",
+                    auth=(settings.opensearch_user, settings.opensearch_pass),
                 )
-                status = "ok" if res.status_code == 200 else "error"
-                return {"status": status, "latency_ms": int((time.time() - start)*1000), "error": None}
+                latency = int((time.time() - start) * 1000)
+                if res.status_code == 200:
+                    return {"status": "ok", "latency_ms": latency, "error": None}
+                hint = None
+                if res.status_code == 401:
+                    hint = (
+                        "Credenciales OpenSearch incorrectas — en laboratorio use "
+                        "OPENSEARCH_USER=admin y OPENSEARCH_PASSWORD=admin en .env"
+                    )
+                return {
+                    "status": "error",
+                    "latency_ms": latency,
+                    "error": hint or f"HTTP {res.status_code}",
+                }
     except Exception as e:
-        return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}
+        return {"status": "error", "latency_ms": int((time.time() - start) * 1000), "error": str(e)}
 
 async def check_dashboard() -> dict:
     start = time.time()
-    try:
-        async with asyncio.timeout(3):
-            async with httpx.AsyncClient(verify=False) as client:
-                # Dashboard is usually at wazuh.dashboard:443 in this setup
-                res = await client.get("https://wazuh.dashboard:443/api/status")
-                return {"status": "ok" if res.status_code == 200 else "warning", "latency_ms": int((time.time() - start)*1000), "error": None}
-    except Exception as e:
-        return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}
+    urls = (
+        "https://wazuh.dashboard:443/",
+        "https://wazuh.dashboard:443/api/status",
+        "https://wazuh.dashboard:443/app/login",
+    )
+    last_err: str | None = None
+    for url in urls:
+        try:
+            async with asyncio.timeout(3):
+                async with httpx.AsyncClient(verify=httpx_verify(), follow_redirects=True) as client:
+                    res = await client.get(url)
+                    latency = int((time.time() - start) * 1000)
+                    if res.status_code < 500:
+                        return {"status": "ok", "latency_ms": latency, "error": None}
+                    last_err = f"HTTP {res.status_code}"
+        except Exception as e:
+            last_err = str(e)
+    return {
+        "status": "warning",
+        "latency_ms": int((time.time() - start) * 1000),
+        "error": last_err or "No responde — UI en https://localhost:443",
+    }
 
 async def check_postgres(db: AsyncSession) -> dict:
     start = time.time()
@@ -71,7 +98,11 @@ async def check_vt() -> dict:
     start = time.time()
     try:
         if not settings.virustotal_api_key:
-             return {"status": "warning", "latency_ms": 0, "error": "Not configured"}
+            return {
+                "status": "info",
+                "latency_ms": 0,
+                "error": "Opcional — configure VIRUSTOTAL_API_KEY o Threat Intel",
+            }
         return {"status": "ok", "latency_ms": 0, "error": None}
     except Exception as e:
         return {"status": "error", "latency_ms": int((time.time() - start)*1000), "error": str(e)}

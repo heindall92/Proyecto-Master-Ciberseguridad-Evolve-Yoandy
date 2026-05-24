@@ -1,0 +1,29 @@
+<!--
+═══════════════════════════════════════════════════════════
+  Valhalla SOC — Reglas locales (Fase 1: Active Response)
+  File: /var/ossec/etc/rules/local_rules.xml
+
+  Regla 100500: dispara cuando una IP origen está en la lista
+  CDB blocked-ips. Esto re-activa firewall-drop (configurado en
+  ossec.conf) cada vez que una IP ya bloqueada reaparece en los logs.
+═══════════════════════════════════════════════════════════
+-->
+
+<group name="local,valhalla_block,">
+
+  <!-- Coincidencia contra la lista CDB de IPs bloqueadas -->
+  <rule id="100500" level="10">
+    <list field="srcip" lookup="match_key">etc/lists/blocked-ips</list>
+    <description>Valhalla: IP bloqueada ($(srcip)) detectada de nuevo — Active Response firewall-drop</description>
+    <group>valhalla_blocked,pci_dss_10.6.1,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- Variante para eventos Cowrie (campo decodificado src_ip) -->
+  <rule id="100501" level="10">
+    <if_sid>100100</if_sid>
+    <list field="src_ip" lookup="match_key">etc/lists/blocked-ips</list>
+    <description>Valhalla: IP bloqueada ($(src_ip)) reincidente en honeypot — Active Response</description>
+    <group>valhalla_blocked,cowrie,</group>
+  </rule>
+
+</group>

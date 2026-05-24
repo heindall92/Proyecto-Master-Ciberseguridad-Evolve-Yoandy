@@ -6,24 +6,69 @@ event types, Cowrie timeline, and alert volume over time.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 
 from app.settings import settings
+from app.http_tls import httpx_verify
 
 logger = logging.getLogger("valhalla.opensearch")
 
 INDEX = "wazuh-alerts-*"
 COWRIE_INDEX = "wazuh-alerts-*"
 
+_COWRIE_IP_IN_DESC = re.compile(r"from (\d{1,3}(?:\.\d{1,3}){3})")
+
+
+def _cowrie_query_clause() -> dict[str, Any]:
+    """Filtro fiable para alertas Cowrie en Wazuh Indexer."""
+    return {
+        "bool": {
+            "should": [
+                {"term": {"rule.groups": "cowrie"}},
+                {"wildcard": {"rule.description": "Cowrie:*"}},
+                {"term": {"data.log_type": "cowrie"}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def _cowrie_src_ip(data: dict[str, Any], rule_desc: str = "") -> str:
+    ip = (data.get("src_ip") or data.get("srcip") or "").strip()
+    if ip:
+        return ip
+    if rule_desc:
+        m = _COWRIE_IP_IN_DESC.search(rule_desc)
+        if m:
+            return m.group(1)
+    return "unknown"
+
+
+def _cowrie_session_id(data: dict[str, Any]) -> str:
+    return str(data.get("session") or data.get("session_id") or "unknown")
+
+
+def _cowrie_command_text(data: dict[str, Any], rule_desc: str = "") -> str:
+    cmd = (data.get("input") or data.get("command") or "").strip()
+    if cmd:
+        return cmd
+    if data.get("username"):
+        pwd = data.get("password", "***")
+        return f"login attempt: {data.get('username')}/{pwd}"
+    if rule_desc:
+        return rule_desc
+    return "session event"
+
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=settings.opensearch_url,
         auth=(settings.opensearch_user, settings.opensearch_pass),
-        verify=False,
+        verify=httpx_verify(),
         timeout=15.0,
     )
 
@@ -170,11 +215,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"bool": {"should": [
-                        {"match": {"rule.groups": "cowrie"}},
-                        {"match": {"decoder.name": "cowrie"}},
-                        {"match": {"data.program": "cowrie"}},
-                    ]}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
@@ -182,7 +223,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
             "timeline": {
                 "date_histogram": {
                     "field": "@timestamp",
-                    "fixed_interval": interval,
+                    "calendar_interval": interval,
                     "min_doc_count": 0,
                     "extended_bounds": {"min": since, "max": "now"}
                 },
@@ -191,7 +232,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
                 }
             },
             "total_events": {"value_count": {"field": "@timestamp"}},
-            "unique_ips": {"cardinality": {"field": "data.srcip"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
             "event_types": {"terms": {"field": "rule.description", "size": 10}}
         }
     }
@@ -209,7 +250,7 @@ async def get_cowrie_timeline(hours: int = 24, interval: str = "1h") -> list[dic
     ]
 
 
-async def get_cowrie_stats(hours: int = 168) -> dict:
+async def get_cowrie_stats(hours: int = 24) -> dict:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
@@ -217,20 +258,14 @@ async def get_cowrie_stats(hours: int = 168) -> dict:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"bool": {"should": [
-                        {"match": {"rule.groups": "cowrie"}},
-                        {"match": {"decoder.name": "cowrie"}},
-                    ]}}
-                ],
-                "must_not": [
-                    {"match": {"data.log_type": "ollama"}},
-                    {"match": {"data.integration": "ollama_ai"}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
         "aggs": {
             "total": {"value_count": {"field": "@timestamp"}},
-            "unique_ips": {"cardinality": {"field": "data.srcip"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
+            "unique_ips_legacy": {"cardinality": {"field": "data.srcip"}},
             "event_types": {"terms": {"field": "rule.description", "size": 10}}
         }
     }
@@ -240,9 +275,13 @@ async def get_cowrie_stats(hours: int = 168) -> dict:
         {"type": b["key"], "count": b["doc_count"]}
         for b in aggs.get("event_types", {}).get("buckets", [])
     ]
+    uniq = max(
+        aggs.get("unique_ips", {}).get("value", 0) or 0,
+        aggs.get("unique_ips_legacy", {}).get("value", 0) or 0,
+    )
     return {
         "total": aggs.get("total", {}).get("value", 0),
-        "unique_ips": aggs.get("unique_ips", {}).get("value", 0),
+        "unique_ips": uniq,
         "event_types": types,
     }
 
@@ -258,7 +297,7 @@ async def get_alert_volume(hours: int = 24, interval: str = "1h") -> list[dict]:
             "volume": {
                 "date_histogram": {
                     "field": "@timestamp",
-                    "fixed_interval": interval,
+                    "calendar_interval": interval,
                     "min_doc_count": 0,
                     "extended_bounds": {"min": since, "max": "now"}
                 }
@@ -272,30 +311,20 @@ async def get_alert_volume(hours: int = 24, interval: str = "1h") -> list[dict]:
 
 # ── Dashboard Stats ──────────────────────────────────────────────────────────
 
-async def get_dashboard_stats(hours: int = 168) -> dict:
+async def get_dashboard_stats(hours: int = 24) -> dict:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {
-            "bool": {
-                "must": [{"range": {"@timestamp": {"gte": since}}}],
-                "must_not": [
-                    {"match": {"data.log_type": "ollama"}},
-                    {"match": {"data.integration": "ollama_ai"}}
-                ]
-            }
-        },
+        "query": {"range": {"@timestamp": {"gte": since}}},
         "aggs": {
             "total": {"value_count": {"field": "@timestamp"}},
             "critical": {"filter": {"range": {"rule.level": {"gte": 12}}}},
             "high": {"filter": {"range": {"rule.level": {"gte": 9, "lt": 12}}}},
             "unique_agents": {"cardinality": {"field": "agent.id"}},
-            "unique_ips": {"cardinality": {"field": "data.srcip"}}
+            "unique_ips": {"cardinality": {"field": "data.srcip"}},
         }
     }
     resp = await _search(body)
-    if not resp:
-        return {}
     aggs = resp.get("aggregations", {})
     return {
         "total_alerts_24h": aggs.get("total", {}).get("value", 0),
@@ -308,20 +337,12 @@ async def get_dashboard_stats(hours: int = 168) -> dict:
 
 # ── Recent Alerts ─────────────────────────────────────────────────────────────
 
-async def get_recent_alerts(limit: int = 200, hours: int = 168) -> list[dict]:
+async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": limit,
         "sort": [{"@timestamp": {"order": "desc"}}],
-        "query": {
-            "bool": {
-                "must": [{"range": {"@timestamp": {"gte": since}}}],
-                "must_not": [
-                    {"match": {"data.log_type": "ollama"}},
-                    {"match": {"data.integration": "ollama_ai"}}
-                ]
-            }
-        },
+        "query": {"range": {"@timestamp": {"gte": since}}},
         "_source": [
             "@timestamp", "rule.id", "rule.description", "rule.level",
             "rule.groups", "rule.mitre.technique", "rule.mitre.tactic",
@@ -360,9 +381,8 @@ async def get_recent_alerts(limit: int = 200, hours: int = 168) -> list[dict]:
         })
     return result
 
-
-async def get_cowrie_sessions(limit: int = 100, hours: int = 168) -> list[dict]:
-    """Extrae comandos reales y sesiones de Cowrie."""
+async def get_cowrie_sessions(limit: int = 100, hours: int = 24) -> list[dict]:
+    """Extrae comandos y sesiones Cowrie (comandos, logins, conexiones)."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": limit,
@@ -371,16 +391,15 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 168) -> list[dict]:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"match": {"rule.groups": "cowrie"}},
-                    {"exists": {"field": "data.input"}}
-                ],
-                "must_not": [
-                    {"match": {"data.log_type": "ollama"}},
-                    {"match": {"data.integration": "ollama_ai"}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
-        "_source": ["@timestamp", "data.srcip", "data.session", "data.input", "data.geoip.country_code2"]
+        "_source": [
+            "@timestamp", "data.src_ip", "data.srcip", "data.session", "data.input",
+            "data.username", "data.password", "data.eventid", "rule.description",
+            "data.geoip.country_code2",
+        ]
     }
     resp = await _search(body)
     hits = resp.get("hits", {}).get("hits", [])
@@ -388,45 +407,86 @@ async def get_cowrie_sessions(limit: int = 100, hours: int = 168) -> list[dict]:
     for h in hits:
         src = h.get("_source", {})
         data = src.get("data", {})
+        rule_desc = src.get("rule", {}).get("description", "")
         result.append({
             "timestamp": src.get("@timestamp", ""),
-            "ip": data.get("srcip", "unknown"),
+            "ip": _cowrie_src_ip(data, rule_desc),
             "geo": data.get("geoip", {}).get("country_code2", "XX"),
-            "session": data.get("session", "unknown"),
-            "command": data.get("input", "")
+            "session": _cowrie_session_id(data),
+            "command": _cowrie_command_text(data, rule_desc),
+            "eventid": data.get("eventid", ""),
         })
     return result
 
+
+async def get_lsa_security_alerts(hours: int = 24, limit: int = 50) -> list[dict]:
+    """Alertas Wazuh relacionadas con LSA, credenciales o dumping."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    body = {
+        "size": limit,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {
+            "bool": {
+                "must": [{"range": {"@timestamp": {"gte": since}}}],
+                "should": [
+                    {"wildcard": {"rule.description": "*lsass*"}},
+                    {"wildcard": {"rule.description": "*mimikatz*"}},
+                    {"wildcard": {"rule.description": "*credential*"}},
+                    {"wildcard": {"rule.description": "*Sysmon*"}},
+                    {"match": {"rule.groups": "windows"}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "_source": ["@timestamp", "rule.description", "rule.level", "agent.name", "data.srcip"],
+    }
+    resp = await _search(body)
+    hits = resp.get("hits", {}).get("hits", [])
+    out = []
+    for i, h in enumerate(hits):
+        src = h.get("_source", {})
+        rule = src.get("rule", {})
+        level = int(rule.get("level", 0))
+        sev = "critical" if level >= 12 else "high" if level >= 9 else "medium"
+        desc = (rule.get("description") or "").lower()
+        alert_type = "lsass_access"
+        if "mimikatz" in desc:
+            alert_type = "mimikatz"
+        elif "credential" in desc:
+            alert_type = "credential_dump"
+        elif "sysmon" in desc:
+            alert_type = "sysmon_id10"
+        out.append({
+            "id": i + 1,
+            "timestamp": src.get("@timestamp", ""),
+            "type": alert_type,
+            "source_ip": src.get("data", {}).get("srcip", ""),
+            "hostname": src.get("agent", {}).get("name", "unknown"),
+            "severity": sev,
+            "blocked": False,
+            "target_process": "lsass.exe" if "lsass" in desc else "N/A",
+            "source_process": rule.get("description", ""),
+        })
+    return out
+
 async def get_mitre_stats(hours: int = 24) -> list[dict]:
-    """Agrega alertas por tecnica MITRE para el dashboard."""
+    """Agrega alertas por tactica MITRE."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
         "query": {"range": {"@timestamp": {"gte": since}}},
         "aggs": {
-            "techniques": {
-                "terms": {"field": "rule.mitre.technique", "size": 20},
-                "aggs": {
-                    "tech_id": {"terms": {"field": "rule.mitre.id", "size": 1}}
-                }
+            "tactics": {
+                "terms": {"field": "rule.mitre.tactic.keyword", "size": 10}
             }
         }
     }
     resp = await _search(body)
-    buckets = resp.get("aggregations", {}).get("techniques", {}).get("buckets", [])
-    result = []
-    for b in buckets:
-        id_buckets = b.get("tech_id", {}).get("buckets", [])
-        tech_id = id_buckets[0]["key"] if id_buckets else "T0000"
-        result.append({
-            "technique": b["key"],
-            "technique_id": tech_id,
-            "count": b["doc_count"]
-        })
-    return result
+    buckets = resp.get("aggregations", {}).get("tactics", {}).get("buckets", [])
+    return [{"tactic": b["key"], "count": b["doc_count"]} for b in buckets]
 
-async def get_honeypot_stats(hours: int = 168) -> dict:
-    """Extrae metricas clave de Cowrie (senuelo) para CowrieView."""
+async def get_honeypot_stats(hours: int = 24) -> dict:
+    """Extrae metricas clave de Cowrie (senuelo)."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
@@ -434,42 +494,21 @@ async def get_honeypot_stats(hours: int = 168) -> dict:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {
-                        "bool": {
-                            "should": [
-                                {"match": {"rule.groups": "cowrie"}},
-                                {"match": {"rule.groups": "honeypot"}},
-                                {"match": {"decoder.name": "cowrie"}}
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    }
-                ],
-                "must_not": [
-                    {"match": {"data.log_type": "ollama"}},
-                    {"match": {"data.integration": "ollama_ai"}}
+                    _cowrie_query_clause(),
                 ]
             }
         },
         "aggs": {
-            "unique_ips": {"cardinality": {"field": "data.srcip"}},
+            "unique_ips": {"cardinality": {"field": "data.src_ip"}},
             "top_passwords": {
-                "terms": {"field": "data.password", "size": 10}
+                "terms": {"field": "data.password.keyword", "size": 5}
             }
         }
     }
     resp = await _search(body)
-    if not resp:
-        return {"total": 0, "unique_ips": 0, "event_types": []}
-        
     aggs = resp.get("aggregations", {})
     return {
-        "total": resp.get("hits", {}).get("total", {}).get("value", 0),
-        "unique_ips": aggs.get("unique_ips", {}).get("value", 0),
-        "event_types": [
-            {"type": b["key"], "count": b["doc_count"]} 
-            for b in aggs.get("top_passwords", {}).get("buckets", [])
-        ],
+        "unique_attackers": aggs.get("unique_ips", {}).get("value", 0),
         "top_passwords": [b["key"] for b in aggs.get("top_passwords", {}).get("buckets", [])]
     }
 
@@ -483,7 +522,10 @@ async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
-                    {"match": {"data.srcip": ip}}
+                    {"bool": {"should": [
+                        {"term": {"data.src_ip.keyword": ip}},
+                        {"term": {"data.srcip.keyword": ip}},
+                    ], "minimum_should_match": 1}}
                 ]
             }
         },
@@ -502,88 +544,3 @@ async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
             "type": "alert" if "cowrie" not in src.get("rule", {}).get("groups", []) else "honeypot"
         })
     return path
-
-async def get_threat_map(hours: int = 24) -> dict:
-    """Extrae datos de geolocalizacion de atacantes para el mapa."""
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-    COUNTRY_COORDS = {
-        "CN": [35.8617, 104.1954], "RU": [61.5240, 105.3188], "US": [37.0902, -95.7129],
-        "IR": [32.4279, 53.6880], "KP": [40.3399, 127.5101], "ES": [40.4637, -3.7492],
-        "NL": [52.1326, 5.2913], "DE": [51.1657, 10.4515], "UA": [48.3794, 31.1656],
-        "BR": [-14.2350, -51.9253], "JP": [36.2048, 138.2529], "AU": [-25.2744, 133.7751],
-        "GB": [55.3781, -3.4360], "MX": [23.6345, -102.5528], "CA": [56.1304, -106.3468]
-    }
-    body = {
-        "size": 0,
-        "query": {
-            "bool": {
-                "must": [
-                    {"range": {"@timestamp": {"gte": since}}},
-                    {"exists": {"field": "data.srcip"}}
-                ]
-            }
-        },
-        "aggs": {
-            "top_ips": {
-                "terms": {"field": "data.srcip", "size": 100},
-                "aggs": {
-                    "last_info": {
-                        "top_hits": {
-                            "size": 1,
-                            "sort": [{"@timestamp": "desc"}],
-                            "_source": ["data.srcip", "data.geoip", "rule.groups"]
-                        }
-                    }
-                }
-            },
-            "countries": {
-                "terms": {"field": "data.geoip.country_code2", "size": 20}
-            }
-        }
-    }
-    resp = await _search(body)
-    if not resp:
-        return {"attacks": [], "countries": [], "total_attacks": 0}
-
-    buckets = resp.get("aggregations", {}).get("top_ips", {}).get("buckets", [])
-    attacks = []
-    for b in buckets:
-        hits = b.get("last_info", {}).get("hits", {}).get("hits", [])
-        if not hits: continue
-        source = hits[0]["_source"]
-        data = source.get("data", {})
-        geo = data.get("geoip", {})
-        
-        try:
-            lat = float(geo.get("latitude", 0))
-            lon = float(geo.get("longitude", 0))
-        except:
-            lat, lon = 0, 0
-
-        if lat == 0 and lon == 0:
-            c_code = geo.get("country_code2", "XX")
-            if c_code in COUNTRY_COORDS:
-                lat, lon = COUNTRY_COORDS[c_code]
-
-        attacks.append({
-            "ip": b["key"],
-            "country": geo.get("country_name", "Unknown"),
-            "country_code": geo.get("country_code2", "XX"),
-            "city": geo.get("city_name", "Unknown"),
-            "isp": geo.get("isp", "Unknown Provider"),
-            "as": geo.get("as_owner", ""),
-            "lat": lat,
-            "lon": lon,
-            "count": b["doc_count"],
-            "is_honeypot": "cowrie" in source.get("rule", {}).get("groups", [])
-        })
-
-    country_buckets = resp.get("aggregations", {}).get("countries", {}).get("buckets", [])
-    countries = [{"country": b["key"], "count": b["doc_count"]} for b in country_buckets]
-    total_attacks = sum(c["count"] for c in countries)
-
-    return {
-        "attacks": attacks,
-        "countries": countries,
-        "total_attacks": total_attacks
-    }

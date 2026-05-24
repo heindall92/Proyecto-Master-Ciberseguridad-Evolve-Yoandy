@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
-import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC } from "../lib/api";
+import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC, setMyVtApiKey, getVtKeyStatus, blockIp, unblockIp } from "../lib/api";
 
 export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
   const [query, setQuery] = useState("");
@@ -23,9 +23,10 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
   useEffect(() => {
     loadWatchlist();
-    const savedKey = localStorage.getItem("vt_api_key");
-    if (savedKey) setApiKey(savedKey);
-    
+    getVtKeyStatus().then(s => {
+      if (s.configured) setApiKey("••••••••••••••••");
+    }).catch(() => {});
+
     if (initialIp) {
       setQuery(initialIp);
       setType("ip");
@@ -37,36 +38,35 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
     }
   }, [initialIp]);
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem("vt_api_key", apiKey);
-    alert("API Key de VirusTotal guardada en la sesión actual.");
-    setShowConfig(false);
+  const handleSaveApiKey = async () => {
+    if (!apiKey || apiKey.startsWith("••")) {
+      alert(lang === "es" ? "Ingrese una API Key válida" : "Enter a valid API Key");
+      return;
+    }
+    try {
+      await setMyVtApiKey(apiKey);
+      alert(lang === "es" ? "API Key guardada en su perfil de operador (servidor)." : "API Key saved to your operator profile.");
+      setShowConfig(false);
+    } catch (e: any) {
+      alert(e?.message || "Error al guardar API Key");
+    }
   };
 
   const testApiKey = async () => {
-    if (!apiKey) return alert("Ingrese una API Key primero");
-    
-    // Guardar temporalmente para que api.ts la lea
-    const previousKey = localStorage.getItem("vt_api_key");
-    localStorage.setItem("vt_api_key", apiKey);
-    
+    if (!apiKey || apiKey.startsWith("••")) return alert("Ingrese una API Key primero");
     try {
-      // Hacemos una llamada real al backend, que a su vez llama a VT con la nueva key.
+      await setMyVtApiKey(apiKey);
       const testRes = await vtCheckIp("8.8.8.8");
       if (testRes && !testRes.error) {
-        alert("¡Ping exitoso! La API Key de VirusTotal está funcionando correctamente y ha sido guardada.");
+        alert("¡Ping exitoso! La API Key está guardada en el servidor y funciona correctamente.");
+        setApiKey("••••••••••••••••");
         setShowConfig(false);
       } else {
         throw new Error(testRes?.error || "Respuesta inválida de VirusTotal");
       }
-    } catch (e: any) {
-      // Revertimos si falla
-      if (previousKey) {
-        localStorage.setItem("vt_api_key", previousKey);
-      } else {
-        localStorage.removeItem("vt_api_key");
-      }
-      alert(`Error verificando API Key: ${e.message || "Credenciales inválidas o sin cuota"}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Credenciales inválidas o sin cuota";
+      alert(`Error verificando API Key: ${msg}`);
     }
   };
 
@@ -112,6 +112,52 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
   const handleBlock = async () => {
     if (!result) return;
+
+    // IPs → bloqueo REAL vía Active Response de Wazuh (firewall-drop + lista CDB).
+    if (type === "ip") {
+      try {
+        // Registramos primero los metadatos de inteligencia (best-effort, no crítico).
+        await addIOC({
+          value: query,
+          ioc_type: type,
+          malicious_score: result.malicious || 0,
+          total_engines: result.total || 0,
+          country: result.country,
+          asn: result.asn,
+          as_owner: result.as_owner,
+          tags: [...(result.tags || []), "blocked-firewall"],
+          status: "blocked",
+          vt_report: result,
+        }).catch(() => {});
+
+        const res = await blockIp(query);
+        // Feedback HONESTO: reflejamos qué confirmó realmente Wazuh.
+        if (res.cdb_applied && res.active_response) {
+          alert(lang === 'es'
+            ? `IP ${query} BLOQUEADA. firewall-drop aplicado en el host y añadida a la lista CDB.`
+            : `IP ${query} BLOCKED. firewall-drop applied on host and added to CDB list.`);
+        } else if (res.active_response) {
+          alert(lang === 'es'
+            ? `IP ${query} bloqueada (firewall-drop activo). Aviso: la lista CDB no se actualizó.`
+            : `IP ${query} blocked (firewall-drop active). Note: CDB list not updated.`);
+        } else if (res.cdb_applied) {
+          alert(lang === 'es'
+            ? `IP ${query} añadida a la lista CDB. Aviso: el bloqueo inmediato (firewall-drop) no se confirmó.`
+            : `IP ${query} added to CDB list. Note: immediate firewall-drop not confirmed.`);
+        } else {
+          alert(lang === 'es' ? `Bloqueo registrado pero Wazuh no confirmó la acción.` : `Block recorded but Wazuh did not confirm.`);
+        }
+      } catch (e: any) {
+        alert(lang === 'es'
+          ? `ERROR: no se pudo bloquear la IP en Wazuh. ${e?.message || ''}`
+          : `ERROR: could not block IP in Wazuh. ${e?.message || ''}`);
+      } finally {
+        loadWatchlist();
+      }
+      return;
+    }
+
+    // Dominios / hashes → no aplican a firewall-drop: solo registro IOC.
     try {
       await addIOC({
         value: query,
@@ -125,16 +171,43 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
         status: "blocked",
         vt_report: result
       });
-      alert(lang === 'es' ? "Indicador BLOQUEADO en el sistema SOC." : "Indicator BLOCKED in SOC system.");
+      alert(lang === 'es'
+        ? "Indicador BLOQUEADO en el registro IOC (los dominios/hashes no se aplican al firewall)."
+        : "Indicator BLOCKED in IOC registry (domains/hashes do not apply to firewall).");
       loadWatchlist();
     } catch (e) {
       alert(lang === 'es' ? "Error al bloquear (quizás ya existe)." : "Error blocking (maybe already exists).");
     }
   };
 
-  const handleUpdateStatus = async (id: number, currentStatus: string) => {
-    const newStatus = currentStatus === "watchlist" ? "blocked" : currentStatus === "blocked" ? "resolved" : "watchlist";
+  const handleWhitelist = async () => {
+    if (!result) return;
     try {
+      await addIOC({
+        value: query,
+        ioc_type: type,
+        malicious_score: result.malicious || 0,
+        total_engines: result.total || 0,
+        tags: [...(result.tags || []), "whitelist-manual"],
+        status: "whitelist",
+        vt_report: result,
+      });
+      alert(lang === "es" ? "Indicador en LISTA BLANCA (excluido de bloqueos automáticos)." : "Indicator WHITELISTED.");
+      loadWatchlist();
+    } catch (e) {
+      alert(lang === "es" ? "Error al añadir a lista blanca." : "Error whitelisting.");
+    }
+  };
+
+  const handleUpdateStatus = async (id: number, currentStatus: string) => {
+    // Ciclo de estados válidos en el backend: watchlist → blocked → cleared → watchlist
+    const newStatus = currentStatus === "watchlist" ? "blocked" : currentStatus === "blocked" ? "cleared" : "watchlist";
+    const ioc = watchlist.find((w) => w.id === id);
+    try {
+      // Si desbloqueamos una IP, retiramos también el firewall-drop / lista CDB en Wazuh.
+      if (currentStatus === "blocked" && ioc?.ioc_type === "ip") {
+        await unblockIp(ioc.value).catch((e) => logger.error("unblockIp", e));
+      }
       await updateIOC(id, { status: newStatus });
       loadWatchlist();
     } catch (e) {
@@ -153,37 +226,37 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
   };
 
   const DetailRow = ({ label, value, color, mono }: { label: string; value: React.ReactNode; color?: string; mono?: boolean }) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '15px', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: '12px' }}>
-      <div style={{ color: 'var(--text-dim)' }}>{label}</div>
-      <div style={{ color: color || 'var(--text-bright)', wordBreak: 'break-all', fontFamily: mono ? 'var(--mono)' : 'inherit' }}>{value || "-"}</div>
+    <div className="ti-detail-row">
+      <div className="ti-detail-row__label">{label}</div>
+      <div className="ti-detail-row__value" style={{ color: color || undefined, fontFamily: mono ? 'var(--mono)' : undefined }}>{value || "-"}</div>
     </div>
   );
 
   return (
-    <div className="view" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '16px', height: '100%', overflow: 'hidden' }}>
+    <div className="view threat-intel-view" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '16px', height: '100%', overflow: 'hidden' }}>
 
       {/* Main Analysis Panel */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">Motor de Inteligencia de Amenazas · VT REPORT ENGINE</span>
-          <button 
+          <button
             onClick={() => setShowConfig(!showConfig)}
             style={{ background: 'var(--signal)', border: 'none', color: '#000', fontSize: '10px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
           >
-            ⚙️ CONFIG API
+             CONFIG API
           </button>
         </div>
         <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden', padding: '15px', flex: 1, minHeight: 0 }}>
-          
+
           {/* API Config Panel */}
           {showConfig && (
             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '4px', border: '1px solid var(--signal)' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-bright)', marginBottom: '8px' }}>Configuración de VirusTotal API Key</div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input 
-                  type="password" 
-                  value={apiKey} 
-                  onChange={e => setApiKey(e.target.value)} 
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
                   placeholder="Ingrese su VirusTotal API Key..."
                   style={{ flex: 1, background: '#000', border: '1px solid var(--line)', color: 'var(--text-bright)', padding: '6px' }}
                 />
@@ -221,7 +294,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
           {!result && !loading && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎯</div>
+                <div style={{ fontSize: '48px', marginBottom: '10px' }}></div>
                 <div style={{ fontSize: '12px', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>ESPERANDO ENTRADA DE IOC PARA ANÁLISIS GLOBAL</div>
               </div>
             </div>
@@ -259,9 +332,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                 </div>
                 <div>
                   <div style={{ color: result.malicious > 0 ? 'var(--danger)' : 'var(--signal)', fontSize: '14px', fontWeight: 600, marginBottom: '6px' }}>
-                    {result.malicious > 0 
-                      ? `⚠️ ${result.malicious} motores de seguridad marcaron este indicador como malicioso.` 
-                      : `✅ Ningún motor detectó amenazas en este indicador.`}
+                    {result.malicious > 0
+                      ? ` ${result.malicious} motores de seguridad marcaron este indicador como malicioso.`
+                      : ` Ningún motor detectó amenazas en este indicador.`}
                   </div>
                   <div style={{ display: 'flex', gap: '20px', fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
                     <div><span style={{ color: 'var(--text-faint)' }}>Target: </span><span style={{ color: 'var(--text-bright)' }}>{query}</span></div>
@@ -277,18 +350,17 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}>➕ AÑADIR A WATCHLIST</button>
-                    {result.malicious > 0 && (
-                        <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}>🚨 {lang === 'es' ? 'BLOQUEAR EN FIREWALL' : 'BLOCK IN FIREWALL'}</button>
-                    )}
+                    <button onClick={handleAddToWatchlist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%' }}> {lang === "es" ? "WATCHLIST" : "WATCHLIST"}</button>
+                    <button onClick={handleWhitelist} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', width: '100%', borderColor: 'var(--signal)' }}> {lang === "es" ? "LISTA BLANCA" : "WHITELIST"}</button>
+                    <button onClick={handleBlock} className="action-btn" style={{ padding: '8px 15px', fontSize: '10px', background: 'var(--danger)', color: '#fff', border: 'none', width: '100%' }}> {lang === 'es' ? 'BLOQUEAR IOC' : 'BLOCK IOC'}</button>
                 </div>
               </div>
 
               {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '15px', flexShrink: 0, overflowX: 'auto' }}>
                 {(["DETALLES", "VENDORS", "WHOIS", "DNS", "COMUNIDAD"] as const).map(tab => (
-                  <button 
-                    key={tab} 
+                  <button
+                    key={tab}
                     onClick={() => setActiveTab(tab)}
                     style={{
                       background: 'none',
@@ -310,7 +382,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
 
               {/* Scrollable Content */}
               <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                
+
                 {activeTab === "DETALLES" && (
                   <>
                     {result.ioc_type === "ip" && (
@@ -433,14 +505,14 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                                 {result.comments.map((c: any, i: number) => (
                                     <div key={i} style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}>👤 {c.user}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--cyan)', fontWeight: 'bold' }}> {c.user}</span>
                                             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{c.date}</span>
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#fff', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{c.text}</div>
                                         <div style={{ marginTop: '10px', display: 'flex', gap: '10px', fontSize: '9px', color: 'var(--text-dim)' }}>
-                                            <span>👍 {c.votes?.positive || 0}</span>
-                                            <span>👎 {c.votes?.negative || 0}</span>
-                                            <span>🚩 {c.votes?.abuse || 0}</span>
+                                            <span> {c.votes?.positive || 0}</span>
+                                            <span> {c.votes?.negative || 0}</span>
+                                            <span> {c.votes?.abuse || 0}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -456,7 +528,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
           {result && !result.found && !loading && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ textAlign: 'center', color: 'var(--amber)' }}>
-                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>⚠️</div>
+                      <div style={{ fontSize: '32px', marginBottom: '10px' }}></div>
                       <div>INDICADOR NO ENCONTRADO EN VIRUSTOTAL</div>
                   </div>
               </div>
@@ -481,9 +553,9 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                             <div style={{ fontSize: '13px', fontFamily: 'var(--mono)', color: 'var(--text-bright)', wordBreak: 'break-all' }}>{ioc.value}</div>
                             <div style={{ display: 'flex', gap: '4px' }}>
                                 <button onClick={() => handleUpdateStatus(ioc.id, ioc.status)} title="Cambiar Estado" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--text-bright)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}>
-                                    {isBlocked ? '🛡️' : isResolved ? '✅' : '👀'}
+                                    {isBlocked ? '' : isResolved ? '' : ''}
                                 </button>
-                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}>✖</button>
+                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}></button>
                             </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px' }}>
@@ -503,7 +575,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
             })}
             {watchlist.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px', marginTop: '40px' }}>
-                    <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '10px' }}>📋</div>
+                    <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '10px' }}></div>
                     No hay indicadores en seguimiento.
                 </div>
             )}

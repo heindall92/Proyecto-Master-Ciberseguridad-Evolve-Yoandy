@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 640" fill="#ffffff" aria-hidden="true">
+  <!-- Capa / manto -->
+  <path d="M180 95 C90 95 35 200 20 340 L8 620 L335 620 L323 340 C308 200 270 95 180 95Z"/>
+  <!-- Torso -->
+  <rect x="115" y="235" width="130" height="160" rx="28"/>
+  <!-- Cabeza -->
+  <circle cx="180" cy="175" r="52"/>
+  <!-- Cuerno izquierdo -->
+  <path d="M128 130 Q95 55 62 38 Q88 88 118 125Z"/>
+  <!-- Cuerno derecho -->
+  <path d="M232 130 Q265 55 298 38 Q272 88 242 125Z"/>
+  <!-- Yelmo / frente -->
+  <path d="M128 155 Q180 138 232 155 Q228 195 180 208 Q132 195 128 155Z"/>
+  <!-- Escudo (brazo izq.) -->
+  <ellipse cx="72" cy="330" rx="48" ry="110" transform="rotate(-18 72 330)"/>
+  <!-- Hacha / mango (brazo der.) -->
+  <path d="M285 260 L318 248 L328 460 L298 468 L285 260Z"/>
+  <path d="M295 248 L345 185 L368 208 L318 275 Z"/>
+</svg>

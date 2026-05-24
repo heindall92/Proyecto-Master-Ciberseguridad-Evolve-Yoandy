@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchAuth } from "../lib/api";
 
 interface HealthStatus {
-    status: "ok" | "warning" | "error";
+    status: "ok" | "warning" | "error" | "info";
     latency_ms: number;
     error: string | null;
 }
@@ -39,8 +39,15 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
 
     const getStatusColor = (status: string) => {
         if (status === "ok") return "var(--signal)";
+        if (status === "info") return "var(--text-dim)";
         if (status === "warning") return "var(--amber)";
         return "var(--danger)";
+    };
+
+    const getStatusLabel = (status: string | undefined) => {
+        if (!status) return lang === 'es' ? 'OFFLINE' : 'OFFLINE';
+        if (status === 'info') return lang === 'es' ? 'OPCIONAL' : 'OPTIONAL';
+        return status.toUpperCase();
     };
 
     if (loading) return <div style={{ padding: '20px', color: 'var(--signal)' }}>{lang === 'es' ? 'ANALIZANDO INTEGRACIONES...' : 'ANALYZING INTEGRATIONS...'}</div>;
@@ -48,14 +55,14 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
     const items = [
         { id: 'wazuh', name: 'Wazuh Manager', data: health?.wazuh },
         { id: 'indexer', name: 'OpenSearch Indexer', data: health?.indexer },
-        { id: 'dashboard', name: 'OpenSearch Dashboard', data: health?.dashboard },
+        { id: 'dashboard', name: 'Wazuh Dashboard', data: health?.dashboard },
         { id: 'postgres', name: 'PostgreSQL DB', data: health?.postgres },
         { id: 'ollama', name: 'Ollama AI', data: health?.ollama },
         { id: 'virustotal', name: 'VirusTotal API', data: health?.virustotal },
     ];
 
     return (
-        <div className="view" style={{ padding: '0 8px 8px 0' }}>
+        <div className="view integrations-health-view" style={{ padding: '0 8px 8px 0' }}>
             <div className="panel" style={{ padding: '24px' }}>
                 <h2 style={{ color: 'var(--signal)', marginTop: 0, fontFamily: 'var(--mono)', fontSize: '18px', letterSpacing: '1px' }}>
                     {lang === 'es' ? 'ESTADO DE INTEGRACIONES' : 'INTEGRATIONS HEALTH'}
@@ -65,28 +72,31 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                    {items.map(item => (
-                        <div key={item.id} style={{ 
-                            background: 'rgba(0,0,0,0.3)', 
-                            border: `1px solid ${getStatusColor(item.data?.status || 'error')}`,
+                    {items.map(item => {
+                        const st = item.data?.status || 'error';
+                        const noteColor = st === 'info' ? 'var(--text-dim)' : 'var(--danger)';
+                        return (
+                        <div key={item.id} className="health-card" style={{
+                            background: 'rgba(0,0,0,0.3)',
+                            border: `1px solid ${getStatusColor(st)}`,
                             padding: '20px',
                             position: 'relative',
-                            overflow: 'hidden'
+                            overflow: 'hidden',
                         }}>
-                            <div style={{ 
-                                position: 'absolute', top: 0, right: 0, 
-                                width: '40px', height: '40px', 
-                                background: getStatusColor(item.data?.status || 'error'), 
-                                opacity: 0.1, clipPath: 'polygon(100% 0, 0 0, 100% 100%)' 
-                            }}></div>
-                            
+                            <div style={{
+                                position: 'absolute', top: 0, right: 0,
+                                width: '40px', height: '40px',
+                                background: getStatusColor(st),
+                                opacity: 0.1, clipPath: 'polygon(100% 0, 0 0, 100% 100%)',
+                            }} />
+
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
                                 <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>{item.name}</div>
-                                <div style={{ 
-                                    fontSize: '9px', padding: '2px 6px', borderRadius: '2px', 
-                                    background: getStatusColor(item.data?.status || 'error'), color: '#000', fontWeight: 'bold' 
+                                <div style={{
+                                    fontSize: '9px', padding: '2px 6px', borderRadius: '2px',
+                                    background: getStatusColor(st), color: st === 'info' ? '#fff' : '#000', fontWeight: 'bold',
                                 }}>
-                                    {item.data?.status.toUpperCase() || 'OFFLINE'}
+                                    {getStatusLabel(item.data?.status)}
                                 </div>
                             </div>
 
@@ -98,18 +108,20 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
                                     </div>
                                 </div>
                                 {item.data?.error && (
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '9px', color: 'var(--danger)' }}>ERROR</div>
-                                        <div style={{ fontSize: '10px', color: 'var(--danger)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '9px', color: noteColor }}>
+                                            {st === 'info' ? (lang === 'es' ? 'NOTA' : 'NOTE') : (lang === 'es' ? 'DETALLE' : 'DETAIL')}
+                                        </div>
+                                        <div style={{ fontSize: '10px', color: noteColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {item.data.error}
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
-                    ))}
+                    );})}
                 </div>
-                
+
                 <div style={{ marginTop: '30px', textAlign: 'right' }}>
                     <button className="action-btn" onClick={checkHealth}>
                         {lang === 'es' ? 'FORZAR RE-CHECK' : 'FORCE RE-CHECK'}

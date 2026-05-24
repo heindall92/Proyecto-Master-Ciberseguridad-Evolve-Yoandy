@@ -1,0 +1,24 @@
+<!--
+  Valhalla SOC — Reglas generadas desde Sigma (NO editar a mano).
+  Generado por sigma_to_wazuh.py · 2 reglas · base id 100600
+-->
+<group name="sigma,valhalla,">
+  <rule id="100600" level="12">
+    <if_sid>100100</if_sid>
+    <field name="eventid" type="pcre2">cowrie\.command\.input</field>
+    <field name="input" type="pcre2">.*xmrig.*|.*minerd.*|.*stratum\+tcp.*|.*cpuminer.*</field>
+    <description>Sigma: Descarga o ejecución de criptominero en honeypot</description>
+    <group>sigma,sigma_vhsigma0001,</group>
+    <mitre><id>T1496</id></mitre>
+  </rule>
+
+  <rule id="100601" level="14">
+    <if_sid>100100</if_sid>
+    <field name="eventid" type="pcre2">cowrie\.command\.input</field>
+    <field name="input" type="pcre2">.*rm\ \-rf\ /.*|.*mkfs\..*|.*dd\ if=/dev/zero.*|.*:\(\)\{\ :\|:\&amp;\ \};:.*</field>
+    <description>Sigma: Comando destructivo en honeypot</description>
+    <group>sigma,sigma_vhsigma0002,</group>
+    <mitre><id>T1485</id></mitre>
+  </rule>
+
+</group>
