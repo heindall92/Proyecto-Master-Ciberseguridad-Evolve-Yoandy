@@ -1,0 +1,18 @@
+# Perfil producción — Fase 1 seguridad
+# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile prod up -d
+# Requiere .env con ENV=production, secretos fuertes y gateway en :8443
+
+services:
+  backend:
+    environment:
+      ENV: production
+      SESSION_COOKIE_SECURE: "true"
+    volumes: !reset []
+
+  dashboard:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_ALLOW_OFFLINE_DEMO: "false"
+    volumes: !reset []

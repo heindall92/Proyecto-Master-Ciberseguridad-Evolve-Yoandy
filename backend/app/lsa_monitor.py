@@ -6,11 +6,18 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+
+from app.auth import get_current_user, require_admin
+from app.models import User
 
 logger = logging.getLogger("valhalla.lsa")
 
-router = APIRouter(prefix="/api/lsa", tags=["lsa"])
+router = APIRouter(
+    prefix="/api/lsa",
+    tags=["lsa"],
+    dependencies=[Depends(get_current_user)],
+)
 
 # ============================================================================
 # SCHEMAS
@@ -143,21 +150,11 @@ async def fetch_endpoint_status(hostname: str) -> EndpointStatus:
     )
 
 async def fetch_lsa_alerts(hours: int = 24) -> list[LSAAlert]:
-    """
-    Fetch real LSA alerts from Windows Event Viewer via Sysmon
-    In production, this queries Microsoft-Windows-Sysmon/Operational log
-    """
-    # In production, this would query:
-    # Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational'; Id=10}
-    # Where-Object { $_.Properties[3].Value -match 'lsass' }
-    
-    # For demo with realistic data
-    alerts = [
-        LSAAlert(id=1, timestamp=datetime.now(timezone.utc).isoformat(), type="lsass_access", source_ip="192.168.1.50", hostname="WS-ADMIN-01", severity="critical", blocked=False, target_process="lsass.exe", source_process="procdump.exe"),
-        LSAAlert(id=2, timestamp=datetime.now(timezone.utc).isoformat(), type="mimikatz", source_ip="10.0.0.5", hostname="SRV-DB-01", severity="critical", blocked=True, target_process="lsass.exe", source_process="mimikatz.exe"),
-        LSAAlert(id=3, timestamp=datetime.now(timezone.utc).isoformat(), type="credential_dump", source_ip="192.168.1.102", hostname="WS-FINANZAS-02", severity="high", blocked=False, target_process="lsass.exe", source_process="powershell.exe"),
-    ]
-    return alerts
+    """Alertas LSA/credenciales desde índice Wazuh (OpenSearch)."""
+    from app import opensearch_client as osc
+
+    raw = await osc.get_lsa_security_alerts(hours=hours, limit=50)
+    return [LSAAlert(**a) for a in raw]
 
 # ============================================================================
 # API ENDPOINTS
@@ -166,31 +163,55 @@ async def fetch_lsa_alerts(hours: int = 24) -> list[LSAAlert]:
 @router.get("/endpoints", response_model=list[EndpointStatus])
 async def get_lsa_endpoints():
     """
-    Get LSA status for all monitored endpoints
-    
-    Returns real-time status of RunAsPPL and LSASS protection
-    for all Windows endpoints in the environment
+    Estado LSA de los endpoints Windows REALES registrados como agentes Wazuh.
+
+    Deriva la lista de los agentes activos (excluye el manager 000) y consulta su
+    estado SCA (RunAsPPL / protección LSA). Si no hay agentes Windows enrolados,
+    devuelve lista vacía (honesto) — antes devolvía hosts ficticios hardcodeados.
     """
-    # In production, this would:
-    # 1. Query all registered endpoints from database
-    # 2. For each endpoint, run WMI queries via WinRM/WMI
-    # 3. Return aggregated status
-    
-    # For now, return status for demo endpoints
-    # In production, replace with real endpoint list from DB
-    endpoints = [
-        "WS-ADMIN-01",
-        "WS-FINANZAS-02", 
-        "SRV-DB-01",
-        "WS-VENTAS-03",
-        "WS-DEV-04",
-    ]
-    
-    results = []
-    for hostname in endpoints:
-        status = await fetch_endpoint_status(hostname)
-        results.append(status)
-    
+    from app.wazuh_client import wazuh
+
+    try:
+        agents = await wazuh.get_agents()
+    except Exception as e:
+        logger.warning("No se pudieron listar agentes Wazuh para LSA: %s", e)
+        return []
+
+    results: list[EndpointStatus] = []
+    for ag in agents or []:
+        agent_id = str(ag.get("id", ""))
+        if agent_id == "000":  # manager, no es endpoint Windows
+            continue
+        os_platform = ((ag.get("os") or {}).get("platform") or "").lower()
+        os_name = ((ag.get("os") or {}).get("name") or "").lower()
+        # Solo Windows tiene LSA/RunAsPPL
+        if os_platform and "windows" not in os_platform and "windows" not in os_name:
+            continue
+
+        hostname = ag.get("name") or agent_id
+        runasppl = lsa_protected = False
+        try:
+            checks = await wazuh.get_sca_checks(agent_id, "win_audit")
+            rc = next((c for c in checks if "RunAsPPL" in (c.get("title") or "")), None)
+            lp = next((c for c in checks if "LSA" in (c.get("title") or "") and "Protection" in (c.get("title") or "")), None)
+            runasppl = (rc.get("result") == "passed") if rc else False
+            lsa_protected = (lp.get("result") == "passed") if lp else False
+        except Exception as e:
+            logger.debug("SCA LSA no disponible para agente %s: %s", agent_id, e)
+
+        risk = (0 if runasppl else 40) + (0 if lsa_protected else 30)
+        results.append(
+            EndpointStatus(
+                hostname=hostname,
+                runasppl_enabled=runasppl,
+                lsa_protected=lsa_protected,
+                suspicious_processes=[],
+                admin_sessions=0,
+                risk_score=min(risk, 100),
+                sysmon_logged=0,
+                last_check=datetime.now(timezone.utc).isoformat(),
+            )
+        )
     return results
 
 
@@ -209,7 +230,7 @@ async def get_lsa_alerts(hours: int = 24):
 
 
 @router.post("/apply-hardening")
-async def apply_lsa_hardening(request: LSAHardeningRequest):
+async def apply_lsa_hardening(request: LSAHardeningRequest, _: User = Depends(require_admin)):
     """
     Apply LSA protection hardening to a specific endpoint
     
@@ -225,20 +246,19 @@ async def apply_lsa_hardening(request: LSAHardeningRequest):
     # Get the hardening command
     command = get_hardening_command(hostname, method)
     
-    # In production, this would:
-    # 1. Connect to target via WinRM/PSRemoting
-    # 2. Execute the command with elevated privileges
-    # 3. Verify the result
-    # 4. Log the action for audit
-    
-    # For demo, return success
+    # El endurecimiento real requiere ejecutar el comando en el endpoint Windows
+    # vía agente Wazuh (POST /api/lsa/agents/{id}/harden) o WinRM. Aquí NO se ejecuta
+    # nada en remoto: devolvemos el comando a aplicar de forma honesta (applied=false).
     return {
-        "success": True,
+        "applied": False,
         "hostname": hostname,
         "method": method,
         "command": command,
-        "message": "LSA Protection hardening applied successfully",
-        "note": "System restart required for changes to take effect"
+        "message": (
+            "Comando de hardening generado. No se ejecutó en remoto: aplíquelo en el "
+            "endpoint o use POST /api/lsa/agents/{agent_id}/harden con un agente Wazuh real."
+        ),
+        "note": "Tras aplicarlo, se requiere reinicio del sistema para que surta efecto.",
     }
 
 
@@ -311,7 +331,7 @@ async def get_agent_lsa_status(agent_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/agents/{agent_id}/harden")
-async def harden_agent_lsa(agent_id: str):
+async def harden_agent_lsa(agent_id: str, _: User = Depends(require_admin)):
     """
     Trigger LSA hardening active response on a specific agent
     """

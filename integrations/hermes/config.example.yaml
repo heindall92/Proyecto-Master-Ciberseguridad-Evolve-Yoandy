@@ -1,0 +1,37 @@
+# Fragmento para ~/.hermes/config.yaml
+# Documentación: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+
+# --- Modelo local (mismo Ollama que Valhalla) ---
+# Tras instalar Hermes: hermes model → Custom endpoint
+#   API base: http://host.docker.internal:11434/v1  (Hermes en Windows, Ollama en Docker)
+#   o http://127.0.0.1:11434/v1 si Ollama corre en el host
+# Modelo sugerido: qwen2.5-coder:7b (alineado con docker-compose de Valhalla)
+
+mcp_servers:
+  valhalla_soc:
+    command: python
+    # Ajusta la ruta absoluta a tu clone de Valhalla-SOC:
+    args:
+      - "E:/000Yoandy/Proyecto SOC/Valhalla-SOC/integrations/hermes/mcp_valhalla_soc.py"
+    env:
+      VALHALLA_API_URL: "http://localhost:8000"
+      VALHALLA_USERNAME: "admin"
+      VALHALLA_PASSWORD: "CAMBIAR-por-tu-ADMIN_PASSWORD"
+    tools:
+      include:
+        - valhalla_health
+        - valhalla_dashboard
+        - valhalla_recent_alerts
+        - valhalla_top_attackers
+        - valhalla_cowrie_stats
+        - valhalla_cowrie_sessions
+        - valhalla_wazuh_services
+        - valhalla_list_tickets
+        - valhalla_open_tickets_count
+        - valhalla_mitre_coverage
+        - valhalla_threat_map
+      prompts: false
+      resources: false
+
+# Copiar skill al directorio de Hermes:
+#   cp -r integrations/hermes/skills/valhalla-soc ~/.hermes/skills/

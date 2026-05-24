@@ -16,7 +16,10 @@ services:
   # ATTACKER (opcional para simulaciones)
   # ──────────────────────────────────────────────────
   attacker:
-    image: kalilinux/kali-rolling
+    build:
+      context: ./attacker
+      dockerfile: Dockerfile
+    image: valhalla-attacker:latest
     logging:
       driver: "json-file"
       options:
@@ -26,11 +29,43 @@ services:
     hostname: attacker
     tty: true
     stdin_open: true
-    command: /bin/bash
+    command: ["/bin/bash", "/root/attack-loop.sh"]
     restart: unless-stopped
     profiles: ["labs"]
+    environment:
+      - COWRIE_HOST=cowrie
+      - COWRIE_SSH_PORT=2222
+      - COWRIE_TELNET_PORT=2223
+      - ATTACK_INTERVAL_SEC=900
+    volumes:
+      - attacker-home:/root/workspace
+      - ./attacker/attack-loop.sh:/root/attack-loop.sh:ro
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       - valhalla-net
+
+  # ──────────────────────────────────────────────────
+  # EXPLOIT SEARCH — microservicio searchsploit (Fase 5)
+  #   Reutiliza la imagen Kali del atacante (ya trae exploitdb). Corre solo el
+  #   wrapper HTTP estable; el backend consulta exploits públicos por CVE.
+  # ──────────────────────────────────────────────────
+  exploit-search:
+    build:
+      context: ./attacker
+    image: valhalla-attacker:latest
+    container_name: valhalla-exploit-search
+    restart: unless-stopped
+    command: ["python3", "/opt/exploit_server.py"]
+    volumes:
+      - ./attacker/exploit_server.py:/opt/exploit_server.py:ro
+    networks:
+      - valhalla-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ──────────────────────────────────────────────────
   # WAZUH INDEXER (OpenSearch Database)
@@ -44,8 +79,7 @@ services:
         max-file: "3"
     hostname: wazuh.indexer
     restart: always
-    ports:
-      - "9200:9200"
+    # Puerto 9200 solo con perfil dev-expose (ver docker-compose.dev-expose.yml)
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
       - "node.name=wazuh.indexer"
@@ -108,8 +142,10 @@ services:
       - SSL_CERTIFICATE_AUTHORITIES=/source_certs/root-ca.pem
       - SSL_CERTIFICATE=/source_certs/wazuh.manager.pem
       - SSL_KEY=/source_certs/wazuh.manager-key.pem
-      # url de ollama configurable para integracion local
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      # Ollama containerizado (servicio 'ollama'); consistente con el backend.
+      # Antes apuntaba a host.docker.internal (Ollama del host) — inconsistente.
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - wazuh-manager-data:/var/ossec/data
       - wazuh-manager-api:/var/ossec/api/configuration
@@ -122,23 +158,45 @@ services:
       - cowrie_logs:/var/log/cowrie:ro
       - ./wazuh_config/ossec.conf:/var/ossec/etc/ossec.conf
       - ./wazuh_config/rules/cowrie_rules.xml:/var/ossec/etc/rules/cowrie_rules.xml
+      - ./wazuh_config/rules/local_rules.xml:/var/ossec/etc/rules/local_rules.xml
+      - ./wazuh_config/rules/sigma_rules.xml:/var/ossec/etc/rules/sigma_rules.xml
+      - ./wazuh_config/rules/correlation_rules.xml:/var/ossec/etc/rules/correlation_rules.xml
       - ./wazuh_config/decoders/cowrie_decoders.xml:/var/ossec/etc/decoders/cowrie_decoders.xml
       # Montamos el script en /tmp para luego copiarlo con permisos correctos en el entrypoint
       - ./wazuh_config/integrations/custom-ollama.py:/tmp/custom-ollama-src:ro
       - ./wazuh_config/integrations/custom-valhalla.py:/tmp/custom-valhalla-src:ro
+      # Active Response propio (Fase 1): lee srcip/src_ip y aplica iptables
+      - ./wazuh_config/active-response/valhalla-fwdrop.py:/tmp/valhalla-fwdrop-src:ro
+      # Lista CDB blocked-ips: semilla en /tmp; el entrypoint la copia a un archivo
+      # propio del contenedor (la API Wazuh la reescribe — no puede ser bind-mount directo).
+      - ./wazuh_config/lists/blocked-ips:/tmp/blocked-ips-seed:ro
     entrypoint: >
       bash -c "
-      mkdir -p /var/ossec/integrations /var/ossec/etc/shared &&
-      touch /var/ossec/etc/shared/ar.conf &&
-      cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama &&
-      cp /tmp/custom-valhalla-src /var/ossec/integrations/custom-valhalla &&
-      chown root:wazuh /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true &&
-      chmod 750 /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla &&
-      echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf &&
+      mkdir -p /var/ossec/integrations /var/ossec/etc/shared /var/ossec/active-response/bin /var/ossec/etc/lists;
+      touch /var/ossec/etc/shared/ar.conf;
+      cp /tmp/custom-ollama-src /var/ossec/integrations/custom-ollama;
+      cp /tmp/custom-valhalla-src /var/ossec/integrations/custom-valhalla;
+      chown root:wazuh /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true;
+      chmod 750 /var/ossec/integrations/custom-ollama /var/ossec/integrations/custom-valhalla 2>/dev/null || true;
+      cp /tmp/valhalla-fwdrop-src /var/ossec/active-response/bin/valhalla-fwdrop;
+      chown root:wazuh /var/ossec/active-response/bin/valhalla-fwdrop 2>/dev/null || true;
+      chmod 750 /var/ossec/active-response/bin/valhalla-fwdrop 2>/dev/null || true;
+      chown root:wazuh /var/ossec/etc/lists 2>/dev/null || true;
+      chmod 770 /var/ossec/etc/lists 2>/dev/null || true;
+      cp /tmp/blocked-ips-seed /var/ossec/etc/lists/blocked-ips;
+      chown root:wazuh /var/ossec/etc/lists/blocked-ips 2>/dev/null || true;
+      chmod 660 /var/ossec/etc/lists/blocked-ips 2>/dev/null || true;
+      ( command -v iptables >/dev/null 2>&1 || dnf install -y iptables >/dev/null 2>&1 || dnf install -y iptables-nft >/dev/null 2>&1 || true );
+      echo 'vulnerability-detection.disable_scan_manager=0' > /var/ossec/etc/local_internal_options.conf;
       exec /init
       "
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Fase 1: NET_ADMIN permite que el Active Response firewall-drop ejecute
+    # iptables dentro del contenedor manager (necesario para el bloqueo real).
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       - valhalla-net
     depends_on:
@@ -225,6 +283,35 @@ services:
           memory: 512M
 
   # ──────────────────────────────────────────────────
+  # WAZUH AGENT (Linux) — Fase 2: telemetría real + AR efectivo
+  #   Agente real enrolado al manager. Habilita:
+  #   - firewall-drop vía API de Wazuh sobre un agente (cierra el límite de Fase 1)
+  #   - detección host (auditd / FIM / SCA) en un endpoint real
+  #   iptables se instala al arrancar para que el AR pueda aplicar el DROP.
+  # ──────────────────────────────────────────────────
+  wazuh.agent:
+    build:
+      context: ./agent
+    image: valhalla-wazuh-agent:4.9.2
+    container_name: valhalla-agent
+    hostname: valhalla-linux-01
+    restart: unless-stopped
+    environment:
+      - WAZUH_MANAGER=wazuh.manager
+      - WAZUH_AGENT_NAME=valhalla-linux-01
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - wazuh.manager
+    networks:
+      - valhalla-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ──────────────────────────────────────────────────
   # POSTGRES (persistencia backend fastapi)
   # ──────────────────────────────────────────────────
   postgres:
@@ -234,8 +321,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-valhalla}
       POSTGRES_USER: ${POSTGRES_USER:-valhalla}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-valhalla}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # Sin ports al host por defecto (Fase 1). Para DBeaver local: perfil dev-expose
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -273,7 +359,8 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://valhalla:valhalla@postgres:5432/valhalla}
+      # Siempre host «postgres» en la red Docker (no usar DATABASE_URL del host: suele ser localhost)
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-valhalla}:${POSTGRES_PASSWORD:-valhalla}@postgres:5432/${POSTGRES_DB:-valhalla}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://192.168.46.1:3000,http://192.168.1.17:3000}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
@@ -285,6 +372,10 @@ services:
       OPENSEARCH_URL: ${OPENSEARCH_URL:-https://wazuh.indexer:9200}
       OPENSEARCH_USER: ${OPENSEARCH_USER:-admin}
       OPENSEARCH_PASS: ${OPENSEARCH_PASSWORD:-admin}
+      SECRET_KEY: ${SECRET_KEY:-DEV-ONLY-valhalla-insecure-key-replace-in-prod}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      ENV: ${ENV:-development}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -294,6 +385,7 @@ services:
         condition: service_started
     volumes:
       - ./backend:/app
+      - ./scripts:/opt/valhalla-scripts:ro
     networks:
       - valhalla-net
 
@@ -316,6 +408,24 @@ services:
     networks:
       - valhalla-net
 
+  # HTTPS gateway — VM / exposición: docker compose --profile prod up -d
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: valhalla-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_HTTP_PORT:-8080}:80"
+      - "${GATEWAY_HTTPS_PORT:-8443}:443"
+    depends_on:
+      - backend
+    networks:
+      - valhalla-net
+    profiles: ["prod"]
+
 volumes:
   wazuh-indexer-data:
   wazuh-manager-data:
@@ -327,6 +437,7 @@ volumes:
   cowrie_downloads:
   pgdata:
   ollama:
+  attacker-home:
 
 networks:
   valhalla-net:

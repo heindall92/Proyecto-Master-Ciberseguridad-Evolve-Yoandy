@@ -8,7 +8,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### 🔒 Seguridad
 - **Eliminado** `credenciales.txt` con contraseñas en texto plano.
-- **Eliminadas** credenciales visibles (`admin / admin`) del formulario de login (`AppCore.tsx`).
+- **Eliminadas** credenciales visibles (`admin / Valhalla2026!`) del formulario de login (`AppCore.tsx`).
 - **Creado** `.env.example` con todas las variables de entorno requeridas.
 - **Hardening** `backend/app/settings.py`: migración a `pydantic-settings` con validación `RuntimeError` si faltan secretos en producción.
 - **Actualizado** `.gitignore` para excluir `.env`, backups, caches, y archivos sensibles.
@@ -40,22 +40,31 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ---
 
-## [0.2.0] — 2026-05-15 — Fase 2: Estabilización y Dashboard Final
+## [Unreleased] — 2026-05-15
 
-### 🛠️ Corregido (Fixed)
-- **Dashboard**: Corregido crash crítico `summary.metrics is undefined`. Ahora el estado inicial es robusto y tolera fallos de API.
-- **Backend**: Eliminado *early return* en `/api/dashboard` que impedía la entrega de métricas de tickets abiertos.
-- **OpenSearch**: Migrados histogramas de `calendar_interval` a `fixed_interval` para soportar intervalos de 6h en Cowrie y SIEM.
-- **UI Alignment**: Corregida desalineación de columnas en `SiemView.tsx` y `DashboardSuperFinal.tsx`.
-- **Runbooks**: Normalizadas categorías de "Malware", "Phishing", etc., a minúsculas para coincidir con los filtros de búsqueda del frontend.
+### Documentación
+- **Nuevo** `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — auditoría OWASP/API (hallazgos críticos a altos).
+- **Nuevo** `docs/INFORME_MEJORAS_UI_TEMAS_2026-05-15.md` — multitema, formularios, threat map, runbooks, honeypot.
 
-### ✨ Añadido (Added)
-- **SIEM dedicated view**: Añadida columna de **Source IP** (IP de origen) para mejorar el análisis de incidentes desde la vista completa.
-- **Demo Assets**: Actualizado `SuperPopulate.py` con 800+ alertas realistas distribuidas en una ventana de 7 días.
+### UI / UX
+- Sistema multitema GREEN / CYAN / AMBER / PURPLE en modo oscuro y claro (`light-theme-overrides.css`).
+- Formularios y modales alineados al esquema activo (fix bordes/hover verdes en CYAN+).
+- Workspace: modal crear incidente, drawer, filtros y stats con clases HUD.
+- Intro cinemática, Cowrie, Threat Map, SIEM i18n, Monitores, Perfil — cohesionados al HUD.
 
-### 🧹 Limpieza (Removed)
-- **Redundancia**: Eliminados endpoints duplicados de VirusTotal y Threat Map en `main.py`.
+### Backend / Ops
+- Threat map geo desde OpenSearch; seed de runbooks; sync alertas Wazuh.
+- Contenedor atacante Kali (`attack-loop.sh`, perfil `labs` en compose).
+
+### Seguridad (pendiente remediación)
+- Ver informe ciber — Fase 1: auth en LSA/webhook/WS, admin bootstrap, offline mode.
 
 ---
 
-## [Unreleased] — Fase 3: Integraciones Avanzadas
+## [Unreleased] — Fase 1: Hardening de Backend
+
+### Planeado
+- Migración de `print()` a `structlog` en `backend/app/main.py`.
+- Implementación de RBAC granular con decorador `@require_role()`.
+- Rate limiting por endpoint sensible.
+- Validación de inputs con Pydantic v2 strict mode.

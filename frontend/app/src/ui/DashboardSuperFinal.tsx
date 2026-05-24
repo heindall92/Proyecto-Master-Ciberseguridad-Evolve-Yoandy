@@ -40,15 +40,34 @@ function CountUp({ value, color }: { value: number, color: string }) {
   return <span style={{ color, textShadow: `0 0 10px ${color}40` }}>{display.toLocaleString()}</span>;
 }
 
+function buildVolumeFallback(alerts: { timestamp?: string }[], hours: number): { points: number[]; labels: string[] } {
+  const slots = hours <= 1 ? 12 : hours <= 24 ? 24 : 7;
+  const spanMs = hours * 3600000;
+  const now = Date.now();
+  const buckets = Array(slots).fill(0);
+  alerts.forEach((a) => {
+    if (!a.timestamp) return;
+    const age = now - new Date(a.timestamp).getTime();
+    if (age < 0 || age > spanMs) return;
+    buckets[Math.min(slots - 1, Math.floor((1 - age / spanMs) * slots))]++;
+  });
+  const labels = buckets.map((_, i) => {
+    if (i !== 0 && i !== slots - 1 && i !== Math.floor(slots / 2)) return "";
+    return new Date(now - (slots - 1 - i) * (spanMs / slots)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }).filter(Boolean) as string[];
+  return { points: buckets, labels };
+}
+
 function AreaChart({ points, color, gradientId, labels }: { points: number[], color: string, gradientId: string, labels?: string[] }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  if (!points || points.length < 2) return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
+  if (!points || points.length === 0) return (
+    <div className="dash-chart-empty" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
   );
+  const chartPoints = points.length === 1 ? [points[0], points[0]] : points;
   const W = 400; const H = 120;
-  const max = Math.max(...points, 1);
-  const pts = points.map((v, i) => ({
-    x: (i / (points.length - 1)) * W,
+  const max = Math.max(...chartPoints, 1);
+  const pts = chartPoints.map((v, i) => ({
+    x: (i / (chartPoints.length - 1)) * W,
     y: H - (v / max) * (H - 12)
   }));
   const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
@@ -56,13 +75,13 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <svg 
-        viewBox={`0 0 ${W} ${H}`} 
-        preserveAspectRatio="none" 
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
         style={{ width: '100%', flex: 1, display: 'block', cursor: 'crosshair' }}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
-          const x = ((e.clientX - rect.left) / rect.width) * (points.length - 1);
+          const x = ((e.clientX - rect.left) / rect.width) * (chartPoints.length - 1);
           setHoverIdx(Math.round(x));
         }}
         onMouseLeave={() => setHoverIdx(null)}
@@ -73,16 +92,16 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
             <stop offset="100%" stopColor={color} stopOpacity="0.05" />
           </linearGradient>
         </defs>
-        <motion.path 
+        <motion.path
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          d={areaPath} fill={`url(#${gradientId})`} 
+          d={areaPath} fill={`url(#${gradientId})`}
         />
-        <motion.path 
+        <motion.path
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
           transition={{ duration: 1.5, ease: "easeInOut" }}
-          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" 
+          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"
         />
         {hoverIdx !== null && pts[hoverIdx] && (
           <g>
@@ -94,7 +113,7 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
       {labels && labels.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 2px 0' }}>
           {labels.map((l, i) => (
-            <span key={i} style={{ fontSize: '8px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{l}</span>
+            <span key={i} style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{l}</span>
           ))}
         </div>
       )}
@@ -105,12 +124,12 @@ function AreaChart({ points, color, gradientId, labels }: { points: number[], co
 function SevBar({ label, count, total, color }: { label: string, count: number, total: number, color: string }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <div className="dash-sev-bar" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '9px', letterSpacing: '1.5px', color: 'rgba(255,255,255,0.5)' }}>{label}</span>
-        <span style={{ fontSize: '11px', fontFamily: 'var(--mono)', color, fontWeight: 700 }}>{count}</span>
+        <span className="dash-sev-bar__label" style={{ fontSize: '10px', letterSpacing: '1.5px', fontWeight: 600 }}>{label}</span>
+        <span className="dash-sev-bar__count" style={{ fontSize: '12px', fontFamily: 'var(--mono)', color, fontWeight: 700 }}>{count}</span>
       </div>
-      <div style={{ height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+      <div className="dash-sev-bar__track" style={{ height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{
           width: `${pct}%`, height: '100%', background: color, borderRadius: '2px',
           boxShadow: `0 0 6px ${color}60`,
@@ -141,12 +160,12 @@ const DEFAULT_LAYOUT: any = {
 export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog = false, setShowWidgetCatalog, lang = "es" }: { isLockedProp?: boolean; showWidgetCatalog?: boolean; setShowWidgetCatalog?: (v: boolean) => void; lang?: "es" | "en" }) {
   const { ref, width } = useContainerWidth();
   const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
-  
+
   const [layouts, setLayouts] = useState(() => {
     const saved = localStorage.getItem("valhalla.dashboard.layout.v6");
     return saved ? JSON.parse(saved) : DEFAULT_LAYOUT;
   });
-  
+
   const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
     const saved = localStorage.getItem("valhalla.dashboard.widgets.v11");
     return saved ? JSON.parse(saved) : DEFAULT_ACTIVE;
@@ -184,29 +203,41 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     try {
       const dash = await getDashboardSummary(timeRange);
       setSummary(dash);
-      
+
+      let recentAlerts: any[] = [];
       try {
-        const alts = await getRecentAlerts(100, timeRange);
-        setAlerts(alts || []);
+        recentAlerts = await getRecentAlerts(100, timeRange) || [];
+        setAlerts(recentAlerts);
       } catch(e) { setAlerts([]); }
-      
+
       try {
         const top = await getTopAttackers(10, timeRange);
         setTopAttackers(top || []);
       } catch(e) { setTopAttackers([]); }
-      
+
+      let volPoints: number[] = [];
+      let volLabels: string[] = [];
       try {
         const vol = await getAlertVolume(timeRange, timeRange <= 1 ? "5m" : "1h");
-        setVolumePoints((vol || []).map((p: any) => typeof p === 'object' ? (p.count ?? 0) : p));
-        setVolumeLabels((vol || []).map((p: any, i: number) => {
-          if (i === 0 || i === vol.length - 1 || i === Math.floor(vol.length / 2)) {
-            const date = new Date(p.time);
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          }
-          return "";
-        }).filter(l => l !== ""));
-      } catch(e) { setVolumePoints([]); setVolumeLabels([]); }
-      
+        if (vol && vol.length > 0) {
+          volPoints = vol.map((p: any) => (typeof p === "object" ? (p.count ?? 0) : p));
+          volLabels = vol.map((p: any, i: number) => {
+            if (i === 0 || i === vol.length - 1 || i === Math.floor(vol.length / 2)) {
+              const date = new Date(p.time);
+              return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            }
+            return "";
+          }).filter((l: string) => l !== "");
+        }
+      } catch (e) { /* fallback below */ }
+      if (volPoints.length === 0 && recentAlerts.length > 0) {
+        const fb = buildVolumeFallback(recentAlerts, timeRange);
+        volPoints = fb.points;
+        volLabels = fb.labels;
+      }
+      setVolumePoints(volPoints);
+      setVolumeLabels(volLabels);
+
       try {
         const ags = await listAgents();
         setAgents(ags || []);
@@ -256,7 +287,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     try {
       const result = await syncWazuhAlerts(1);
       setSyncResult(result);
-      fetchData(); 
+      fetchData();
     } catch (err) {
       logger.error("Sync error:", err);
     } finally {
@@ -293,31 +324,31 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   const currentAlerts = alerts.slice(siemPageState * pageSize, (siemPageState + 1) * pageSize);
 
   const WIDGET_REGISTRY = useMemo(() => ({
-    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "🚨", render: () => (
+    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--danger)' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
         <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
-        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('alerts_24h').toUpperCase()}</span>
+        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('alerts_24h').toUpperCase()}</span>
         <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.total_alerts_24h || 0} color="var(--danger)" />
         </div>
-        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>LAST {timeRange}H</span>
+        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>LAST {timeRange}H</span>
       </div>
     )},
-    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "🔥", render: () => (
+    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: '#ff4757' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
         <div className="kpi-corner kpi-corner--br" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
-        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('critical').toUpperCase()}</span>
+        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('critical').toUpperCase()}</span>
         <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.critical_alerts || 0} color="#ff4757" />
         </div>
-        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>SEVERITY · CRIT</span>
+        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>SEVERITY · CRIT</span>
       </div>
     )},
-    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "🖥️", render: () => {
+    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "", render: () => {
       const active = agents.filter(a => a.status === 'active').length;
       const total = agents.length;
       return (
@@ -325,27 +356,27 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           <div className="kpi-card__glow" style={{ background: 'var(--cyan)' }} />
           <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
           <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
-          <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('agents').toUpperCase()}</span>
+          <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('agents').toUpperCase()}</span>
           <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
             <CountUp value={active} color="var(--cyan)" />
           </div>
-          <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>{active}/{total} ACTIVOS</span>
+          <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>{active}/{total} ACTIVOS</span>
         </div>
       );
     }},
-    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "🎫", render: () => (
+    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "", render: () => (
       <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
         <div className="kpi-card__glow" style={{ background: 'var(--amber)' }} />
         <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
         <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
-        <span style={{ fontSize: '8px', opacity: 0.5, letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('tickets_open').toUpperCase()}</span>
+        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('tickets_open').toUpperCase()}</span>
         <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
           <CountUp value={summary.metrics.tickets_open || 0} color="var(--amber)" />
         </div>
-        <span style={{ fontSize: '7px', opacity: 0.35, letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>EN PROGRESO</span>
+        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>EN PROGRESO</span>
       </div>
     )},
-    "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "🌊", render: () => {
+    "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "", render: () => {
       const SEV_COLOR: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e', info: '#38bdf8' };
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -353,32 +384,28 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 6px var(--signal)', animation: 'pulse 2s infinite', display: 'inline-block' }} />
               <span className="panel__title">SIEM · {t('siem_sub').toUpperCase()}</span>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{alerts.length} eventos</span>
+              <span className="siem-meta">{alerts.length} eventos</span>
             </div>
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
               <button
+                type="button"
+                className="btn-dash-sync"
                 onClick={handleSyncWazuh}
                 disabled={syncing}
-                style={{
-                  background: syncing ? 'rgba(0,255,136,0.1)' : 'rgba(0,255,136,0.15)',
-                  color: 'var(--signal)', border: '1px solid rgba(0,255,136,0.3)',
-                  padding: '2px 8px', cursor: syncing ? 'not-allowed' : 'pointer',
-                  fontSize: '11px', letterSpacing: '1px', fontFamily: 'var(--mono)', fontWeight: 'bold'
-                }}
               >{syncing ? '···' : '+INC'}</button>
               <button onClick={() => setSiemPageState(p => Math.max(0, p - 1))} disabled={siemPageState === 0} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>◄</button>
               <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>{siemPageState + 1}/{totalPages}</span>
               <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>►</button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '6px 12px 8px', borderBottom: '1px solid var(--line)', background: 'rgba(60,255,158,0.02)' }}>
+          <div className="siem-table-head" style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '6px 12px 8px' }}>
             {['SEV',t('time'),t('ip'),t('agents'),t('description'), t('actions')].map((h, idx) => (
               <span key={idx} style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontWeight: 700, fontFamily: 'var(--mono)' }}>{h.toUpperCase()}</span>
             ))}
           </div>
           <div className="panel__body" style={{ padding: 0, overflowY: 'auto', flex: 1 }}>
             {currentAlerts.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_alerts').toUpperCase()}</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_alerts').toUpperCase()}</div>
             )}
             <AnimatePresence initial={false}>
               {currentAlerts.map((al, i) => {
@@ -386,7 +413,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                 const color = SEV_COLOR[sev] || '#38bdf8';
                 const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
                 return (
-                  <motion.div 
+                  <motion.div
                     key={al.id || i}
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
@@ -395,46 +422,45 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
                     style={{
                       display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px',
                       gap: '0 8px', padding: '10px 12px',
-                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                      borderBottom: '1px solid var(--line-faint)',
                       alignItems: 'center', fontSize: '12px',
                       transition: 'background 0.15s',
                       position: 'relative'
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    className="siem-row"
                   >
                     <span style={{
                       fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
                       color, padding: '2px 6px', background: `${color}15`,
                       textAlign: 'center', display: 'inline-block', border: `1px solid ${color}30`
                     }}>{sev.toUpperCase().slice(0, 4)}</span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+                    <span className="siem-col-time">
                       {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                     <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600 }}>
                       {al.source_ip || '—'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--mono)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span className="siem-col-agent" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {al.agent_name || al.agent_id || '—'}
                     </span>
                     <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 500 }}>
+                      <span className="siem-col-desc" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {al.description || `Rule ${al.rule_id}`}
                       </span>
                       {isSshBrute && (
-                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}>⚠️ Check for "Accepted Password" follow-up</span>
+                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}> Check for "Accepted Password" follow-up</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px' }}>
-                      <button 
+                      <button
+                        type="button"
                         onClick={() => handleCreateTicketFromAlert(al)}
                         disabled={syncing}
                         className="btn-mini"
-                        style={{ color: 'var(--signal)' }}
                       >
                         +INC
                       </button>
-                      <button className="btn-mini" style={{ color: '#ef4444' }}>BLOCK</button>
+                      <button type="button" className="btn-mini btn-mini--danger">BLOCK</button>
                     </div>
                   </motion.div>
                 );
@@ -444,7 +470,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "chart-vol": { name: "Volume", w: 4, h: 4, icon: "📈", render: () => {
+    "chart-vol": { name: "Volume", w: 4, h: 4, icon: "", render: () => {
       const lastVal = volumePoints?.slice(-1)?.[0] || 0;
       const maxVal = Math.max(...(volumePoints || [1]), 1);
       const trend = volumePoints.length >= 2 ? volumePoints[volumePoints.length - 1] - volumePoints[volumePoints.length - 2] : 0;
@@ -457,44 +483,44 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
               <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--signal)', fontFamily: 'var(--mono)', lineHeight: 1 }}>{lastVal}</span>
-              <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.3)', letterSpacing: '1px' }}>{t('eps')}</span>
+              <span style={{ fontSize: '8px', color: 'var(--text-faint)', letterSpacing: '1px' }}>{t('eps')}</span>
               {trend !== 0 && <span style={{ fontSize: '9px', color: trend > 0 ? '#ef4444' : '#22c55e' }}>{trend > 0 ? '▲' : '▼'}</span>}
             </div>
           </div>
           <div style={{ padding: '8px 12px 4px', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>-{timeRange}h</span>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('max')}: {maxVal}</span>
-            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--mono)' }}>{t('now')}</span>
+            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>-{timeRange}h</span>
+            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{t('max')}: {maxVal}</span>
+            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{t('now')}</span>
           </div>
           <div style={{ flex: 1, padding: '0 12px 12px', minHeight: 0 }}>
-            <AreaChart points={volumePoints} labels={volumeLabels} color="#00ff88" gradientId="vol-grad" />
+            <AreaChart points={volumePoints} labels={volumeLabels} color="var(--forest)" gradientId="vol-grad" />
           </div>
         </section>
       );
     }},
-    "chart-levels": { name: "Niveles", w: 4, h: 4, icon: "📊", render: () => {
+    "chart-levels": { name: "Niveles", w: 4, h: 4, icon: "", render: () => {
       const counts = { critical: 0, high: 0, medium: 0, low: 0 };
       alerts.forEach(al => {
         const s = (al.severity || '').toLowerCase();
         if (s in counts) counts[s as keyof typeof counts]++;
       });
-      const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
       return (
-        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <section className="panel dash-chart-levels" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head" style={{ cursor: 'move' }}>
             <span className="panel__title">{t('distribution')} · SEV</span>
-            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--mono)' }}>{total === 1 ? 0 : total} {t('siem').toLowerCase()}</span>
+            <span className="dash-chart-meta" style={{ fontSize: '10px', fontFamily: 'var(--mono)' }}>{total} {t('siem').toLowerCase()}</span>
           </div>
           <div className="panel__body" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', flex: 1 }}>
-            <SevBar label={t('critical').toUpperCase()} count={counts.critical} total={total === 1 ? 0 : total} color="#ef4444" />
-            <SevBar label={t('high').toUpperCase()} count={counts.high} total={total === 1 ? 0 : total} color="#f97316" />
-            <SevBar label={t('medium').toUpperCase()} count={counts.medium} total={total === 1 ? 0 : total} color="#eab308" />
-            <SevBar label={t('low').toUpperCase()} count={counts.low} total={total === 1 ? 0 : total} color="#22c55e" />
+            <SevBar label={t('critical').toUpperCase()} count={counts.critical} total={total || 1} color="#ef4444" />
+            <SevBar label={t('high').toUpperCase()} count={counts.high} total={total || 1} color="#f97316" />
+            <SevBar label={t('medium').toUpperCase()} count={counts.medium} total={total || 1} color="#eab308" />
+            <SevBar label={t('low').toUpperCase()} count={counts.low} total={total || 1} color="#22c55e" />
           </div>
         </section>
       );
     }},
-    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "🛡️", render: () => {
+    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "", render: () => {
       const maxCount = Math.max(...(mitreData.map((m: any) => m.count || 0)), 1);
       return (
         <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -504,14 +530,14 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
           </div>
           <div className="panel__body" style={{ padding: '8px 0', overflowY: 'auto', flex: 1 }}>
             {mitreData.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '11px' }}>{t('no_data').toUpperCase()}</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px' }}>{t('no_data').toUpperCase()}</div>
             )}
             {mitreData.slice(0, 10).map((m: any, i: number) => {
               const barPct = (m.count / maxCount) * 100;
               return (
-                <div key={i} style={{ padding: '6px 14px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                <div key={i} style={{ padding: '6px 14px', borderBottom: '1px solid var(--line-faint)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--mono)' }}>{m.technique_id} - {m.technique}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-bright)', fontFamily: 'var(--mono)' }}>{m.technique_id} - {m.technique}</span>
                     <span style={{ fontSize: '10px', color: 'var(--signal)', fontWeight: 'bold' }}>{m.count}</span>
                   </div>
                   <div style={{ height: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '1px' }}>
@@ -524,35 +550,44 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         </section>
       );
     }},
-    "stack-health": { name: "Health", w: 6, h: 5, icon: "💓", render: () => {
+    "stack-health": { name: "Health", w: 6, h: 8, icon: "", render: () => {
       const services = [
-        { name: t('manager'), status: wazuhServices?.status || 'disconnected', icon: '🛡️' },
-        { name: t('indexer'), status: summary.status === 'operational' ? 'active' : 'disconnected', icon: '📊' },
-        { name: t('api'), status: 'active', icon: '🔌' }
+        { name: t('manager'), status: wazuhServices?.manager || wazuhServices?.status || 'disconnected', icon: '' },
+        { name: t('indexer'), status: wazuhServices?.indexer || (summary.status === 'operational' ? 'active' : 'disconnected'), icon: '' },
+        { name: 'Cowrie SSH/Telnet', status: wazuhServices?.cowrie || 'disconnected', icon: '', hint: wazuhServices?.cowrie_events_24h != null ? `${wazuhServices.cowrie_events_24h} evt/24h` : '' },
+        { name: lang === 'es' ? 'Honeypot (señuelo)' : 'Honeypot (decoy)', status: wazuhServices?.honeypot || wazuhServices?.cowrie || 'disconnected', icon: '' },
+        { name: lang === 'es' ? 'Simulador atacante' : 'Attack simulator', status: wazuhServices?.attacker || 'disconnected', icon: '' },
+        { name: t('api'), status: wazuhServices?.api || 'active', icon: '' },
       ];
       return (
-        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <section className="panel dash-stack-health" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div className="panel__head" style={{ cursor: 'move' }}>
              <span className="panel__title">{t('stack_health').toUpperCase()}</span>
           </div>
           <div className="panel__body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
             {services.map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div key={i} className="dash-health-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px' }}>
                 <span style={{ fontSize: '18px' }}>{s.icon}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'rgba(255,255,255,0.7)' }}>{s.name}</div>
-                  <div style={{ fontSize: '9px', color: s.status === 'active' || s.status === 'running' ? 'var(--signal)' : 'var(--danger)', textTransform: 'uppercase' }}>
-                    ● {s.status}
+                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-bright)' }}>{s.name}</div>
+                  <div style={{
+                    fontSize: '9px',
+                    color: s.status === 'active' || s.status === 'running' ? 'var(--signal)' : s.status === 'warning' ? 'var(--amber)' : 'var(--danger)',
+                    textTransform: 'uppercase',
+                  }}>
+                    ● {s.status === 'warning' ? (lang === 'es' ? 'activo · sin eventos' : 'up · no events') : s.status}
                   </div>
                 </div>
-                {s.status === 'active' && <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)' }}>{t('latency')}: 24ms</div>}
+                {'hint' in s && (s as { hint?: string }).hint ? (
+                  <div style={{ fontSize: '9px', color: 'var(--text-faint)' }}>{(s as { hint?: string }).hint}</div>
+                ) : null}
               </div>
             ))}
           </div>
         </section>
       );
     }}
-  }), [summary, alerts, topAttackers, volumePoints, agents, siemPageState, setSiemPageState]);
+  }), [summary, alerts, topAttackers, volumePoints, agents, siemPageState, setSiemPageState, wazuhServices, lang, t, timeRange, syncing]);
 
   const onLayoutChange = (layout: any, allLayouts: any) => {
     setLayouts(allLayouts);
@@ -580,28 +615,18 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   };
 
   return (
-    <div className="view" ref={ref} style={{ flex: 1, padding: '2px 8px 4px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="view dash-overview" ref={ref} style={{ flex: 1, padding: '2px 8px 4px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '2px 12px 4px' }}>
         {[
           { label: t('last_hour'), val: 1 },
           { label: t('last_24h'), val: 24 },
           { label: t('last_7d'), val: 168 }
         ].map(r => (
-          <button 
+          <button
+            type="button"
             key={r.val}
             onClick={() => setTimeRange(r.val)}
-            style={{
-              background: timeRange === r.val ? 'var(--signal)' : 'rgba(0,0,0,0.3)',
-              color: timeRange === r.val ? '#000' : 'var(--text-dim)',
-              border: '1px solid var(--line)',
-              padding: '4px 12px',
-              fontSize: '10px',
-              fontFamily: 'var(--mono)',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              transition: 'all 0.2s',
-              clipPath: 'polygon(5px 0%, 100% 0%, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0% 100%, 0% 5px)'
-            }}
+            className={`dash-filter-btn ${timeRange === r.val ? 'active' : ''}`}
           >
             {r.label.toUpperCase()}
           </button>
@@ -670,7 +695,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px', letterSpacing: '2px' }}>TODOS LOS WIDGETS ACTIVOS</div>
             )}
             <button onClick={() => setCatalogState(false)} className="action-btn" style={{ marginTop: '16px', width: '100%', padding: '12px', color: 'var(--danger)' }}>
-              ✕ {t('close')}
+               {t('close')}
             </button>
           </div>
         </div>

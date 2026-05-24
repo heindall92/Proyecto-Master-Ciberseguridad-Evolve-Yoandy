@@ -157,3 +157,107 @@
 .c-chroma {
   filter: url(#chroma-filter);
 }
+
+/* ── Hyperframe: marco táctico que enmarca VALHALLA · SOC PRO ── */
+.hyperframe-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.hyperframe-wrap--live .hyperframe-border-top,
+.hyperframe-wrap--live .hyperframe-border-bottom {
+  animation: hyperframe-border-pulse 2.4s ease-in-out infinite;
+}
+
+.hyperframe-wrap--live .hyperframe-corner {
+  animation: hyperframe-corner-lock 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hyperframe-border-top,
+.hyperframe-border-bottom {
+  width: min(420px, 72vw);
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--signal) 20%, var(--signal) 80%, transparent);
+  box-shadow: 0 0 20px var(--signal), 0 0 40px rgba(0, 255, 136, 0.25);
+  margin: 16px 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.hyperframe-border-top::after,
+.hyperframe-border-bottom::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: hyperframe-scan 2.8s ease-in-out infinite;
+}
+
+.hyperframe-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--signal);
+  opacity: 0;
+  box-shadow: 0 0 12px var(--signal);
+}
+
+.hyperframe-corner--tl { top: -12px; left: -12px; border-right: 0; border-bottom: 0; animation-delay: 0.05s; }
+.hyperframe-corner--tr { top: -12px; right: -12px; border-left: 0; border-bottom: 0; animation-delay: 0.12s; }
+.hyperframe-corner--bl { bottom: -12px; left: -12px; border-right: 0; border-top: 0; animation-delay: 0.18s; }
+.hyperframe-corner--br { bottom: -12px; right: -12px; border-left: 0; border-top: 0; animation-delay: 0.25s; }
+
+@keyframes hyperframe-border-pulse {
+  0%, 100% { opacity: 0.85; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.35); }
+}
+
+@keyframes hyperframe-scan {
+  0% { left: -40%; }
+  100% { left: 140%; }
+}
+
+@keyframes hyperframe-corner-lock {
+  from { opacity: 0; transform: scale(1.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.hyperframe-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--signal), transparent);
+  min-width: 60px;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+}
+
+.hyperframe-line--pulse {
+  animation: hyperframe-line-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes hyperframe-line-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.hyperframe-bracket {
+  color: var(--signal);
+  font-weight: bold;
+  text-shadow: 0 0 12px var(--signal), 0 0 24px rgba(0, 255, 136, 0.5);
+  margin: 0 10px;
+}
+
+.hyperframe-wrap--live .hyperframe-bracket {
+  animation: hyperframe-bracket-flicker 3s ease-in-out infinite;
+}
+
+@keyframes hyperframe-bracket-flicker {
+  0%, 92%, 100% { opacity: 1; }
+  94% { opacity: 0.55; }
+  96% { opacity: 1; }
+}

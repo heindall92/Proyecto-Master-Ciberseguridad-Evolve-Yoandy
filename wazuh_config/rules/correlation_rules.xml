@@ -1,0 +1,50 @@
+<!--
+═══════════════════════════════════════════════════════════
+  Valhalla SOC — Reglas de correlación composite (Fase 2)
+  File: /var/ossec/etc/rules/correlation_rules.xml
+
+  Detectan PATRONES (no eventos sueltos) encadenando reglas Cowrie
+  existentes. Correlacionan por el campo real de Cowrie (src_ip)
+  mediante <same_field>src_ip</same_field>.
+═══════════════════════════════════════════════════════════
+-->
+<group name="valhalla,correlation,">
+
+  <!-- Ataque sostenido: 20+ eventos Cowrie de la misma IP en 5 minutos -->
+  <rule id="100700" level="12" frequency="20" timeframe="300">
+    <if_matched_sid>100100</if_matched_sid>
+    <same_field>src_ip</same_field>
+    <description>Correlación: ataque sostenido (20+ eventos) desde la misma IP</description>
+    <group>attack_pattern,sustained,</group>
+    <mitre>
+      <id>T1595</id>
+    </mitre>
+  </rule>
+
+  <!-- Multi-etapa: descarga de malware (100130) seguida de reverse shell (100140) -->
+  <rule id="100701" level="15">
+    <if_sid>100140</if_sid>
+    <if_matched_sid>100130</if_matched_sid>
+    <same_field>src_ip</same_field>
+    <description>Correlación: malware descargado + reverse shell — intrusión multi-etapa</description>
+    <group>attack_pattern,multi_stage,c2,</group>
+    <mitre>
+      <id>T1105</id>
+      <id>T1059</id>
+    </mitre>
+  </rule>
+
+  <!-- Escalada: reconocimiento (100121) seguido de escalada de privilegios (100180) -->
+  <rule id="100702" level="13">
+    <if_sid>100180</if_sid>
+    <if_matched_sid>100121</if_matched_sid>
+    <same_field>src_ip</same_field>
+    <description>Correlación: reconocimiento + escalada de privilegios desde la misma IP</description>
+    <group>attack_pattern,privilege_escalation,</group>
+    <mitre>
+      <id>T1082</id>
+      <id>T1548</id>
+    </mitre>
+  </rule>
+
+</group>

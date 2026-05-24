@@ -1,0 +1,73 @@
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import type { UserOut } from "../lib/api";
+import { clearValhallaClientStorage } from "../lib/clientStorage";
+
+/** Marcador de sesión en cookie httpOnly — no almacenar JWT en el cliente. */
+export type SessionMarker = null | "session" | "offline-mode-token";
+
+interface AuthState {
+  user: UserOut | null;
+  token: SessionMarker;
+  profilePic: string | null;
+  loading: boolean;
+  isOffline: boolean;
+}
+
+const initialState: AuthState = {
+  user: null,
+  token: null,
+  profilePic: null,
+  loading: true,
+  isOffline: false,
+};
+
+const authSlice = createSlice({
+  name: "auth",
+  initialState,
+  reducers: {
+    setUser(state, action: PayloadAction<UserOut | null>) {
+      state.user = action.payload;
+    },
+    setToken(state, action: PayloadAction<SessionMarker>) {
+      state.token = action.payload;
+    },
+    setProfilePic(state, action: PayloadAction<string | null>) {
+      state.profilePic = action.payload;
+    },
+    setLoading(state, action: PayloadAction<boolean>) {
+      state.loading = action.payload;
+    },
+    setIsOffline(state, action: PayloadAction<boolean>) {
+      state.isOffline = action.payload;
+    },
+    logout(state) {
+      state.user = null;
+      state.token = null;
+      state.profilePic = null;
+      state.isOffline = false;
+      clearValhallaClientStorage();
+    },
+    loginOffline(state) {
+      if (!import.meta.env.DEV || import.meta.env.VITE_ALLOW_OFFLINE_DEMO !== "true") {
+        return;
+      }
+      state.isOffline = true;
+      state.token = "offline-mode-token";
+      state.user = {
+        id: 1,
+        username: "admin_offline",
+        email: "admin@valhalla",
+        full_name: "Admin Offline",
+        is_active: true,
+        is_superuser: true,
+        role: "admin",
+        rank: "L3 Blue Team",
+      };
+      state.loading = false;
+    },
+  },
+});
+
+export const { setUser, setToken, setProfilePic, setLoading, setIsOffline, logout, loginOffline } =
+  authSlice.actions;
+export default authSlice.reducer;

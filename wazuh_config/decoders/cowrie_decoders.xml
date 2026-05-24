@@ -19,3 +19,15 @@
   <prematch>^{"timestamp": "\d{4}-</prematch>
   <plugin_decoder>JSON_Decoder</plugin_decoder>
 </decoder>
+
+<!--
+  Fase 1 (Active Response): Cowrie emite el campo "src_ip" (con guion bajo),
+  pero el binario firewall-drop de Wazuh lee "srcip" desde data. Este decoder
+  hijo extrae además "srcip" para que firewall-drop pueda aplicar el iptables DROP
+  y para que la regla 100500 (field srcip) también case con eventos Cowrie.
+-->
+<decoder name="cowrie-srcip">
+  <parent>cowrie</parent>
+  <regex type="pcre2">"src_ip":\s*"([^"]+)"</regex>
+  <order>srcip</order>
+</decoder>

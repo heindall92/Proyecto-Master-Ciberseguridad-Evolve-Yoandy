@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from functools import wraps
 from fastapi import HTTPException, Request, Depends
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.logger import logger
@@ -90,21 +91,34 @@ class RateLimiter:
 # Global rate limiter instance
 rate_limiter = RateLimiter()
 
-def rate_limit_middleware(request: Request, call_next):
-    """Middleware to enforce rate limiting"""
+async def rate_limit_middleware(request: Request, call_next):
+    """Middleware to enforce rate limiting on mutating requests.
+
+    Never raise HTTPException here — Starlette BaseHTTPMiddleware turns it into 500.
+    """
     ip = request.client.host if request.client else "unknown"
-    
-    # Skip rate limit for health checks
-    if request.url.path in ["/health", "/docs", "/openapi.json", "/api/auth/login"]:
-        return call_next(request)
-    
+
+    skip_paths = {"/health", "/docs", "/openapi.json", "/api/auth/login", "/api/auth/logout"}
+    if request.url.path in skip_paths:
+        return await call_next(request)
+
+    # El dashboard hace polling GET; no limitar lecturas (login ya usa slowapi).
+    if request.method == "GET":
+        return await call_next(request)
+
     if rate_limiter.is_ip_blocked(ip):
-        raise HTTPException(429, "Too many requests. Please try again later.")
-    
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again later."},
+        )
+
     if not rate_limiter.record_request(ip):
-        raise HTTPException(429, "Rate limit exceeded. You have been temporarily blocked.")
-    
-    return call_next(request)
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded. You have been temporarily blocked."},
+        )
+
+    return await call_next(request)
 
 
 # ============================================================================
@@ -284,13 +298,15 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if not csrf_token:
             csrf_token = secrets.token_urlsafe(32)
             
-        if settings.csrf_enabled and request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-            # Bypass CSRF for login and external integrations (webhooks)
-            if request.url.path not in ["/api/auth/login", "/api/webhook/wazuh", "/health"]:
+        if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+            bypass_paths = ["/api/auth/login", "/api/auth/refresh", "/api/webhook/wazuh", "/health"]
+            csrf_check_needed = (
+                settings.csrf_enabled
+                and request.url.path not in bypass_paths
+            )
+            if csrf_check_needed:
                 header_csrf = request.headers.get("x-csrf-token")
                 if not header_csrf or header_csrf != csrf_token:
-                    # In a real scenario we'd return a 403 Response directly,
-                    # but with BaseHTTPMiddleware we can return a JSONResponse
                     from fastapi.responses import JSONResponse
                     return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
         
@@ -306,8 +322,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             key="csrf_token",
             value=csrf_token,
             httponly=False,
-            secure=True,
-            samesite="strict"
+            secure=settings.session_cookie_secure,
+            samesite=settings.session_cookie_samesite
         )
         
         # Additional security headers

@@ -62,7 +62,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
 
   return (
     <div className="view" style={{ display: 'grid', gridTemplateColumns: selectedAgent ? '1.2fr 1.5fr' : '1fr', gap: '16px', height: '100%', overflow: 'hidden' }}>
-      
+
       {/* Agents List */}
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -82,11 +82,11 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
             </thead>
             <tbody>
               {agents.map((a) => (
-                <tr 
-                  key={a.id} 
+                <tr
+                  key={a.id}
                   onClick={() => handleSelectAgent(a)}
-                  style={{ 
-                    borderBottom: '1px solid var(--line-faint)', 
+                  style={{
+                    borderBottom: '1px solid var(--line-faint)',
                     cursor: 'pointer',
                     background: selectedAgent?.id === a.id ? 'rgba(60,255,158,0.1)' : 'transparent'
                   }}
@@ -115,7 +115,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
               {agents.length === 0 && (
                 <tr>
                   <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)', letterSpacing: '2px' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '10px' }}>📡</div>
+                    <div style={{ fontSize: '24px', marginBottom: '10px' }}></div>
                     {t('no_agents_found')} · {t('check_wazuh_connection')}
                   </td>
                 </tr>
@@ -131,8 +131,8 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
           <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="panel__title">{t('technical_detail')}: {selectedAgent.name}</span>
             <div style={{ display: 'flex', gap: '10px' }}>
-               <button 
-                onClick={handleScan} 
+               <button
+                onClick={handleScan}
                 disabled={scanning || selectedAgent.status !== 'active'}
                 style={{ padding: '4px 12px', background: 'var(--cyan)', border: 'none', color: '#000', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px' }}
                >
@@ -141,11 +141,11 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
                <button className="action-btn" onClick={() => setSelectedAgent(null)}>{t('close').toUpperCase()}</button>
             </div>
           </div>
-          
+
           <div className="panel__body" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px' }}>
-             
+
              {detailsLoading ? (
-               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--signal)' }}>{t('sync').replace('🔄', '').trim().toUpperCase()}...</div>
+               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--signal)' }}>{t('sync').replace('', '').trim().toUpperCase()}...</div>
              ) : (
                <>
                  {/* Summary KPIs */}

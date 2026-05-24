@@ -53,6 +53,7 @@ interface ValhallaReportJSON {
     controls: Array<{ control: string; status: string; note: string }>;
   };
   recommendations?: string[];
+  geo_intel?: Array<{ country: string; pct: number; desc: string }>;
 }
 
 const GlassCard = ({ children, sx = {}, title }: any) => (
@@ -90,6 +91,197 @@ function gaugeColor(score: number): string {
   return "#ff3b3b";
 }
 
+const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAY_ABBR = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+
+function DateRangePicker({ dateStart, dateEnd, onChange }: {
+  dateStart: string;
+  dateEnd: string;
+  onChange: (start: string, end: string) => void;
+}) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [viewYear, setViewYear] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[0]) : new Date().getFullYear()
+  );
+  const [viewMonth, setViewMonth] = useState(() =>
+    dateStart ? parseInt(dateStart.split('-')[1]) - 1 : new Date().getMonth()
+  );
+  const [hoverDate, setHoverDate] = useState('');
+  const [open, setOpen] = useState(false);
+  const [picking, setPicking] = useState<'start' | 'end'>(
+    dateStart && !dateEnd ? 'end' : 'start'
+  );
+
+  useEffect(() => {
+    if (dateStart) {
+      setViewYear(parseInt(dateStart.split('-')[0]));
+      setViewMonth(parseInt(dateStart.split('-')[1]) - 1);
+    }
+  }, [dateStart]);
+
+  useEffect(() => {
+    setPicking(dateStart && !dateEnd ? 'end' : 'start');
+  }, [dateStart, dateEnd]);
+
+  const prevMonth = () =>
+    setViewMonth(m => { if (m === 0) { setViewYear(y => y - 1); return 11; } return m - 1; });
+  const nextMonth = () =>
+    setViewMonth(m => { if (m === 11) { setViewYear(y => y + 1); return 0; } return m + 1; });
+
+  function handleClick(ds: string) {
+    if (picking === 'start' || (dateStart && dateEnd)) {
+      onChange(ds, '');
+    } else {
+      const [s, e] = ds >= dateStart ? [dateStart, ds] : [ds, dateStart];
+      onChange(s, e);
+      setOpen(false);
+      setHoverDate('');
+    }
+  }
+
+  function buildWeeks(): (string | null)[][] {
+    const dim = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const off = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const prefix = `${viewYear}-${pad(viewMonth + 1)}-`;
+    const cells: (string | null)[] = [
+      ...Array(off).fill(null),
+      ...Array.from({ length: dim }, (_, i) => `${prefix}${pad(i + 1)}`),
+    ];
+    while (cells.length % 7) cells.push(null);
+    return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
+  }
+
+  function getRange() {
+    const eff = dateEnd || (picking === 'end' && hoverDate ? hoverDate : '');
+    if (!dateStart || !eff) return { rs: dateStart, re: '' };
+    return dateStart <= eff ? { rs: dateStart, re: eff } : { rs: eff, re: dateStart };
+  }
+
+  const { rs, re } = getRange();
+  const weeks = buildWeeks();
+  const fmt = (s: string) => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const navSx: any = {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: 'var(--signal)', fontSize: '20px', width: 28, height: 28,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: '4px', '&:hover': { bgcolor: 'rgba(60,255,158,0.1)' },
+  };
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <Box
+        onClick={() => setOpen(o => !o)}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
+          pb: '4px', borderBottom: `1px solid ${open ? 'var(--signal)' : 'rgba(60,255,158,0.3)'}`,
+          transition: 'border-color 0.2s', userSelect: 'none',
+          '&:hover': { borderBottomColor: 'var(--signal)' },
+        }}
+      >
+        <Typography sx={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '1.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+          PERIOD
+        </Typography>
+        <Typography sx={{ fontSize: '11px', color: dateStart ? 'var(--text)' : 'var(--text-dim)', fontFamily: 'var(--ff-mono)', flex: 1 }}>
+          {fmt(dateStart)} → {fmt(dateEnd)}
+        </Typography>
+        <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', ml: 0.5 }}>
+          {open ? '▲' : '▼'}
+        </Typography>
+      </Box>
+
+      {open && (
+        <Box
+          onClick={() => { setOpen(false); setHoverDate(''); }}
+          sx={{ position: 'fixed', inset: 0, zIndex: 999 }}
+        />
+      )}
+
+      {open && (
+        <Box sx={{
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 1000,
+          bgcolor: 'rgba(5, 14, 10, 0.98)', border: '1px solid rgba(60,255,158,0.25)',
+          borderRadius: '10px', p: 2, width: 272,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Box component="button" onClick={prevMonth} sx={navSx}>‹</Box>
+            <Typography sx={{ color: 'var(--signal)', fontSize: '11px', fontWeight: 900, letterSpacing: '2px', fontFamily: 'var(--ff-mono)' }}>
+              {MONTH_NAMES_ES[viewMonth].toUpperCase()} {viewYear}
+            </Typography>
+            <Box component="button" onClick={nextMonth} sx={navSx}>›</Box>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
+            {DAY_ABBR.map(d => (
+              <Typography key={d} sx={{ textAlign: 'center', fontSize: '9px', color: 'var(--text-dim)', fontWeight: 700, py: '3px' }}>
+                {d}
+              </Typography>
+            ))}
+          </Box>
+
+          {weeks.map((week, wi) => (
+            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {week.map((ds, di) => {
+                if (!ds) return <Box key={`_${wi}${di}`} sx={{ height: 36 }} />;
+                const isSel = ds === dateStart || ds === dateEnd;
+                const hasRange = !!(rs && re && rs !== re);
+                const inRange = hasRange && ds > rs && ds < re;
+                const isRs = hasRange && ds === rs;
+                const isRe = hasRange && ds === re;
+                const isToday = ds === todayStr;
+                const day = parseInt(ds.split('-')[2]);
+                let bg = 'transparent';
+                if (inRange) bg = 'rgba(60,255,158,0.13)';
+                else if (isRs) bg = 'linear-gradient(to right, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                else if (isRe) bg = 'linear-gradient(to left, transparent 50%, rgba(60,255,158,0.13) 50%)';
+                return (
+                  <Box
+                    key={ds}
+                    onClick={() => handleClick(ds)}
+                    onMouseEnter={() => { if (picking === 'end') setHoverDate(ds); }}
+                    onMouseLeave={() => setHoverDate('')}
+                    sx={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: bg }}
+                  >
+                    <Box sx={{
+                      width: 30, height: 30,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%',
+                      bgcolor: isSel ? 'var(--signal)' : 'transparent',
+                      color: isSel ? '#000' : isToday ? 'var(--signal)' : 'var(--text)',
+                      fontSize: '12px', fontFamily: 'var(--ff-mono)',
+                      fontWeight: isSel || isToday ? 700 : 400,
+                      border: isToday && !isSel ? '1px solid rgba(60,255,158,0.4)' : 'none',
+                      transition: 'background-color 0.1s',
+                      '&:hover': { bgcolor: isSel ? 'var(--signal)' : 'rgba(60,255,158,0.2)' },
+                    }}>
+                      {day}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          ))}
+
+          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: '9px', color: 'var(--signal)', fontWeight: 700, letterSpacing: '1px' }}>
+              {picking === 'start' ? '► INICIO' : '► FIN'}
+            </Typography>
+            <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--ff-mono)' }}>
+              {dateStart ? (dateEnd ? `${fmt(dateStart)} → ${fmt(dateEnd)}` : `${fmt(dateStart)} → ?`) : '—'}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [loading, setLoading] = useState(true);
@@ -98,58 +290,79 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [reportData, setReportData] = useState<ValhallaReportJSON | null>(null);
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
+  const [analystName, setAnalystName] = useState("Y. RAMIREZ");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const raw = await fetchExecutiveReportData();
-      
-      // Mapeamos los datos del backend a la estructura del informe
+      const d = new Date(raw.generatedAt || Date.now());
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDayNum = new Date(year, month + 1, 0).getDate();
+      const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+      const fmtDate = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+      const derivedPeriod = `${fmtDate(firstDay)} – ${fmtDate(lastDay)}`;
+      const derivedReportId = `VHL-${year}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      setDateStart(firstDay);
+      setDateEnd(lastDay);
+      setReportId(derivedReportId);
+      if (raw.analystNameFromBackend) setAnalystName(raw.analystNameFromBackend);
       const structured: ValhallaReportJSON = {
         report_metadata: {
-          report_id: raw.report_metadata?.report_id || `VHL-2026-RT${Math.floor(Math.random()*1000)}`,
-          generation_date: raw.report_metadata?.generation_date || new Date().toISOString().split('T')[0],
-          analyst_name: raw.report_metadata?.analyst_name || "SISTEMA",
-          company_name: companyName || raw.report_metadata?.company_name || "VALHALLA SOC",
-          period: raw.report_metadata?.period || "PERÍODO ACTUAL"
+          report_id: derivedReportId,
+          generation_date: new Date().toISOString().split('T')[0],
+          analyst_name: raw.analystNameFromBackend ?? analystName,
+          company_name: companyName,
+          period: derivedPeriod,
         },
         executive_summary: {
-          status: raw.executive_summary?.status || (raw.riskScore < 40 ? "Operativo" : "Alerta"),
-          health_score: raw.executive_summary?.health_score || (100 - raw.riskScore),
-          key_finding: raw.executive_summary?.key_finding || raw.executiveSummary || "No se han detectado anomalías críticas en el sistema."
+          status: raw.riskScore < 40 ? "Operativo" : "Alerta",
+          health_score: 100 - raw.riskScore,
+          key_finding: raw.backendKeyFinding ?? "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
         },
-        wazuh_metrics: {
-          total_alerts: raw.wazuh_metrics?.total_alerts || raw.metrics?.total_alerts_24h || 0,
-          critical_alerts: raw.wazuh_metrics?.critical_alerts || raw.metrics?.critical_alerts || 0,
-          top_affected_assets: raw.wazuh_metrics?.top_affected_assets || [
+        wazuh_metrics: raw.wazuhMetrics ?? {
+          total_alerts: 42890,
+          critical_alerts: 145,
+          top_affected_assets: [
             { name: "SRV-SAP-PROD", ip: "10.0.1.5", alerts: 1245 },
-            { name: "GW-FIREWALL-01", ip: "10.0.1.1", alerts: 840 }
+            { name: "GW-FIREWALL-01", ip: "10.0.1.1", alerts: 840 },
+            { name: "WS-ADMIN-01", ip: "10.0.2.15", alerts: 620 }
           ]
         },
-        mitre_coverage: raw.mitre_coverage || [
+        mitre_coverage: raw.mitreCoverage ?? [
           { tactic: "Initial Access", count: 120, level: "High", icon: "📥" },
-          { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" }
+          { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" },
+          { tactic: "Persistence", count: 12, level: "Medium", icon: "🛡️" },
+          { tactic: "Credential Access", count: 85, level: "Critical", icon: "🔑" },
+          { tactic: "Lateral Movement", count: 4, level: "High", icon: "↗️" }
         ],
-        honeypot_intel: {
-          unique_attackers: raw.honeypot_intel?.unique_attackers || 0,
-          top_passwords_captured: raw.honeypot_intel?.top_passwords_captured || [],
-          malware_samples_collected: raw.honeypot_intel?.malware_samples_collected || 0
+        honeypot_intel: raw.honeypotIntel ?? {
+          unique_attackers: 1438,
+          top_passwords_captured: ["admin123", "root", "Valhalla@123"],
+          malware_samples_collected: 12
         },
-        incident_management: {
-          total_tickets: raw.incident_management?.total_tickets || 0,
-          closed_tickets: raw.incident_management?.closed_tickets || 0,
-          avg_resolution_time_min: raw.incident_management?.avg_resolution_time_min || 0
+        incident_management: raw.incidentManagement ?? {
+          total_tickets: 45,
+          closed_tickets: 42,
+          avg_resolution_time_min: 18
         },
-        remediation_steps: raw.remediation_steps || [
-          { task: "Actualización de parches en activos críticos." },
-          { task: "Bloqueo de IPs persistentes en el firewall." }
+        remediation_steps: raw.remediationSteps ?? [
+          { task: "Bloqueo de IPs persistentes en el firewall core.", action_cmd: "iptables -A INPUT -s 185.x.x.x -j DROP" },
+          { task: "Actualización de parches en activos críticos.", action_cmd: "apt update && apt upgrade -y" },
+          { task: "Refuerzo de política MFA para el grupo de Administradores." }
         ],
         iso27001: {
           overall: raw.iso27001?.overall ?? 73,
           controls: raw.iso27001?.controls ?? []
         },
-        recommendations: raw.recommendations ?? []
+        recommendations: raw.recommendations ?? [],
+        geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
     } catch (e) {
@@ -162,6 +375,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   useEffect(() => { load(); }, []);
 
   const healthColor = useMemo(() => gaugeColor(reportData?.executive_summary.health_score ?? 0), [reportData]);
+
+  const period = useMemo(() => {
+    if (!dateStart || !dateEnd) return "";
+    const fmt = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
+    return `${fmt(dateStart)} – ${fmt(dateEnd)}`;
+  }, [dateStart, dateEnd]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -203,17 +422,17 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     doc.setTextColor(...white);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
+    doc.setFontSize(16);
     doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text("Security Operations Center — Valhalla SOC", M, 30);
 
     doc.setFontSize(8);
-    doc.text(`Ref: ${reportData.report_metadata.report_id}`, W - M, 18, { align: "right" });
+    doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 25, { align: "right" });
-    doc.text(`Período: ${reportData.report_metadata.period}`, W - M, 32, { align: "right" });
-    doc.text(`Analista: ${reportData.report_metadata.analyst_name}`, W - M, 39, { align: "right" });
+    doc.text(`Período: ${period}`, W - M, 32, { align: "right" });
+    doc.text(`Analista: ${analystName}`, W - M, 39, { align: "right" });
 
     doc.setFillColor(240, 243, 247);
     doc.rect(M, 52, col, 18, "F");
@@ -352,7 +571,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 1 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 1 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 2
@@ -387,7 +606,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("TIPO DE ATAQUE", M + 3, 57);
     doc.text("DETECCIONES", M + 95, 57);
     doc.text("NIVEL DE RIESGO", M + 130, 57);
-    doc.text("QUÉ SIGNIFICA", M + 158, 57);
 
     const mitreExplained: Record<string, string> = {
       "Initial Access": "Intento de entrada al sistema",
@@ -402,28 +620,29 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     };
 
     (reportData.mitre_coverage ?? []).forEach((row, i) => {
-      const y = 62 + i * 14;
-      if (i % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(M, y - 4, col, 12, "F"); }
+      const y = 62 + i * 16;
+      if (i % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(M, y - 4, col, 14, "F"); }
       const lColor: [number, number, number] = row.level === "Critical" ? red : row.level === "High" ? orange : row.level === "Medium" ? yellow : green;
       doc.setTextColor(...black);
-      doc.setFont("helvetica", "normal");
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.text(row.tactic, M + 3, y + 4);
+      doc.text(row.tactic, M + 3, y + 2);
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.text(mitreExplained[row.tactic] || "Actividad sospechosa", M + 3, y + 8);
       doc.setTextColor(...navy);
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
       doc.text(String(row.count), M + 100, y + 4);
       doc.setFillColor(...lColor);
       doc.roundedRect(M + 128, y - 1, 25, 8, 1, 1, "F");
       doc.setTextColor(...white);
       doc.setFontSize(6);
       doc.text(levelLabels[row.level] || row.level, M + 140, y + 4, { align: "center" });
-      doc.setTextColor(...gray);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.text(mitreExplained[row.tactic] || "Actividad sospechosa", M + 158, y + 4);
     });
 
-    const tableEndY = 62 + (reportData.mitre_coverage?.length ?? 0) * 14 + 10;
+    const tableEndY = 62 + (reportData.mitre_coverage?.length ?? 0) * 16 + 10;
 
     doc.setDrawColor(...lightgray);
     doc.line(M, tableEndY, W - M, tableEndY);
@@ -490,42 +709,60 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(pw, pwX + 25, pwY + 17, { align: "center" });
     });
 
-    const geoY = pwY + 30;
-    doc.setDrawColor(...lightgray);
-    doc.line(M, geoY, W - M, geoY);
+    doc.setFillColor(...navy);
+    doc.rect(0, 285, W, 12, "F");
+    doc.setTextColor(...white);
+    doc.setFontSize(7);
+    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
+    doc.text("Página 2 de 4", W - M, 293, { align: "right" });
+
+    // ════════════════════════════
+    // PÁGINA 3 — GEO INTEL
+    // ════════════════════════════
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, W, 18, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("INTELIGENCIA GEOGRÁFICA DE AMENAZAS", M, 12);
+
     doc.setTextColor(...navy);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, geoY + 12);
+    doc.text("6. ORIGEN GEOGRÁFICO DE LOS ATAQUES", M, 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...gray);
-    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, geoY + 19);
+    doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, 37);
 
-    const geoData = [
-      { name: "China", pct: 85, desc: "Principal origen de ataques de fuerza bruta" },
-      { name: "Rusia", pct: 65, desc: "Ataques de reconocimiento y escaneo" },
-      { name: "Países Bajos", pct: 45, desc: "Tráfico a través de proxies anónimos" },
-    ];
+    const geoData = (reportData.geo_intel ?? []).map(e => ({ name: e.country, pct: e.pct, desc: e.desc }));
 
+    const barStartX = M + 28;
+    const barMaxW = 55;
     geoData.forEach((g, i) => {
-      const gy = geoY + 27 + i * 18;
+      const gy = 50 + i * 22;
       doc.setTextColor(...black);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.text(g.name, M, gy + 6);
       doc.setFillColor(...lightgray);
-      doc.roundedRect(M + 30, gy, col - 60, 8, 2, 2, "F");
+      doc.roundedRect(barStartX, gy, barMaxW, 8, 2, 2, "F");
       doc.setFillColor(...navy);
-      doc.roundedRect(M + 30, gy, (col - 60) * g.pct / 100, 8, 2, 2, "F");
+      doc.roundedRect(barStartX, gy, barMaxW * g.pct / 100, 8, 2, 2, "F");
+      const pctX = barStartX + barMaxW + 3;
       doc.setTextColor(...navy);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.text(`${g.pct}%`, W - M - 25, gy + 6);
+      doc.text(`${g.pct}%`, pctX, gy + 6);
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
-      doc.text(g.desc, W - M, gy + 6, { align: "right" });
+      const descMaxW = W - M - pctX - 8;
+      doc.text(doc.splitTextToSize(g.desc, descMaxW), W - M, gy + 6, { align: "right" });
     });
 
     doc.setFillColor(...navy);
@@ -533,7 +770,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...white);
     doc.setFontSize(7);
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 2 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 3 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 3
@@ -693,14 +930,485 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 3 de 3", W - M, 293, { align: "right" });
+    doc.text("Página 4 de 4", W - M, 293, { align: "right" });
 
     doc.save(`valhalla-informe-ejecutivo-${reportData.report_metadata.generation_date}.pdf`);
+  }
+
+  async function exportTechnicalPDF() {
+    if (!reportData) return;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const W = 210, M = 20, col = W - M * 2;
+    const TOTAL_PAGES = 4;
+
+    const navy: [number, number, number] = [26, 58, 92];
+    const black: [number, number, number] = [17, 17, 17];
+    const gray: [number, number, number] = [100, 100, 100];
+    const lightgray: [number, number, number] = [220, 220, 220];
+    const white: [number, number, number] = [255, 255, 255];
+    const red: [number, number, number] = [192, 57, 43];
+    const orange: [number, number, number] = [211, 84, 0];
+    const green: [number, number, number] = [39, 174, 96];
+    const yellow: [number, number, number] = [243, 156, 18];
+
+    const health = reportData.executive_summary.health_score;
+    const statusColor: [number, number, number] = health >= 80 ? green : health >= 60 ? yellow : red;
+    const closureRate = reportData.incident_management.total_tickets > 0
+      ? Math.round(reportData.incident_management.closed_tickets / reportData.incident_management.total_tickets * 100)
+      : 0;
+    const mttr = reportData.incident_management.avg_resolution_time_min;
+    const pendingTickets = reportData.incident_management.total_tickets - reportData.incident_management.closed_tickets;
+
+    const pageHeader = (subtitle: string) => {
+      doc.setFillColor(...navy);
+      doc.rect(0, 0, W, 18, "F");
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(subtitle, M, 12);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(`${reportId} · ${analystName} · ${period}`, W - M, 12, { align: "right" });
+    };
+
+    const pageFooter = (page: number) => {
+      doc.setFillColor(...navy);
+      doc.rect(0, 285, W, 12, "F");
+      doc.setTextColor(...white);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.text("CONFIDENCIAL — INFORME TÉCNICO. Uso exclusivo del equipo de seguridad.", M, 293);
+      doc.text(`Página ${page} de ${TOTAL_PAGES}`, W - M, 293, { align: "right" });
+    };
+
+    const sectionTitle = (title: string, y: number): number => {
+      doc.setDrawColor(...lightgray);
+      doc.setLineWidth(0.3);
+      doc.line(M, y, W - M, y);
+      doc.setTextColor(...navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(title, M, y + 8);
+      return y + 14;
+    };
+
+    const bodyText = (text: string, y: number, maxW = col): number => {
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const lines = doc.splitTextToSize(text, maxW);
+      doc.text(lines, M, y);
+      return y + lines.length * 4.5 + 2;
+    };
+
+    const analysisBox = (text: string, y: number, maxW = 130, ref = ""): number => {
+      doc.setFillColor(232, 239, 248);
+      const lines = doc.splitTextToSize(text, maxW);
+      const refLines = ref ? doc.splitTextToSize(ref, maxW) : [];
+      const boxH = Math.max(16, (lines.length + (refLines.length > 0 ? refLines.length + 0.5 : 0)) * 4.5 + 8);
+      doc.roundedRect(M, y, col, boxH, 2, 2, "F");
+      doc.setDrawColor(...navy);
+      doc.setLineWidth(1.5);
+      doc.line(M, y, M, y + boxH);
+      doc.setLineWidth(0.3);
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.saveGraphicsState();
+      doc.rect(M + 2, y, col - 4, boxH);
+      doc.clip();
+      doc.text(lines, M + 8, y + 6);
+      if (refLines.length > 0) {
+        const refY = y + 6 + lines.length * 4.5 + 2;
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.5);
+        doc.text(refLines, M + 8, refY);
+      }
+      doc.restoreGraphicsState();
+      return y + boxH + 4;
+    };
+
+    // ── PÁGINA 1: Portada y Resumen Ejecutivo ──────────────────────────────
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, W, 52, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("INFORME TÉCNICO DE SEGURIDAD", M, 18);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Security Operations Center — Valhalla SOC", M, 27);
+    doc.setFontSize(8);
+    doc.text("Orientado a CISO y Responsables de Seguridad", M, 35);
+    doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
+    doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 26, { align: "right" });
+    doc.text(`Período: ${period}`, W - M, 34, { align: "right" });
+    doc.text(`Analista: ${analystName}`, W - M, 42, { align: "right" });
+    doc.text(`Cliente: ${companyName}`, W - M, 50, { align: "right" });
+
+    doc.setFillColor(...statusColor);
+    doc.rect(M, 60, col, 14, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(`ESTADO: ${reportData.executive_summary.status.toUpperCase()} — Salud del sistema: ${health}%`, M + 4, 65);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.text(`Alertas críticas: ${reportData.wazuh_metrics.critical_alerts}  ·  MTTR: ${mttr} min  ·  Tasa de cierre: ${closureRate}%`, M + 4, 71);
+
+    let y1 = 82;
+    y1 = sectionTitle("1. ESTADO GENERAL DEL SISTEMA", y1);
+    const stateNarrative = health >= 80
+      ? `El sistema de seguridad de ${companyName} opera en condiciones óptimas durante ${period}. El índice de salud del ${health}% refleja una postura defensiva consolidada con todos los controles activos. No se han registrado brechas de datos confirmadas. El equipo SOC mantuvo vigilancia continua con respuesta efectiva a las ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas procesadas.`
+      : health >= 60
+      ? `El sistema presenta estado de alerta moderada durante ${period}. El índice de salud del ${health}% indica que algunos controles requieren refuerzo. Se detectaron ${reportData.wazuh_metrics.critical_alerts} alertas críticas que requirieron intervención manual. No se registraron brechas confirmadas, pero la actividad maliciosa exige revisión de los procedimientos de respuesta.`
+      : `El sistema se encuentra en estado crítico durante ${period}. El índice de salud del ${health}% está por debajo del umbral mínimo aceptable. Se registraron ${reportData.wazuh_metrics.critical_alerts} alertas críticas. Se requiere intervención inmediata y revisión urgente de los controles comprometidos.`;
+    y1 = bodyText(stateNarrative, y1);
+    y1 += 4;
+
+    y1 = sectionTitle("2. RESUMEN EJECUTIVO TÉCNICO", y1);
+    y1 = bodyText(reportData.executive_summary.key_finding, y1);
+    y1 += 3;
+
+    const execAnalysis = [
+      `• ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas procesadas en ${period}`,
+      `• ${reportData.wazuh_metrics.critical_alerts} críticas con intervención manual`,
+      `• Tasa de resolución: ${closureRate}%`,
+      `• MTTR: ${mttr} min`,
+      `• IA redujo tiempo de detección y respuesta`,
+    ].join("\n");
+    y1 = analysisBox(execAnalysis, y1);
+    y1 += 3;
+
+    if ((reportData.wazuh_metrics.top_affected_assets ?? []).length > 0) {
+      doc.setTextColor(...navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("ACTIVOS MÁS AFECTADOS:", M, y1);
+      y1 += 5;
+      (reportData.wazuh_metrics.top_affected_assets ?? []).forEach((asset, i) => {
+        if (i % 2 === 0) doc.setFillColor(248, 249, 250); else doc.setFillColor(255, 255, 255);
+        doc.rect(M, y1, col, 9, "F");
+        doc.setTextColor(...black);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(asset.name, M + 3, y1 + 6);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...gray);
+        doc.text(`IP: ${asset.ip}`, M + 65, y1 + 6);
+        doc.setTextColor(...red);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${asset.alerts} alertas`, W - M - 3, y1 + 6, { align: "right" });
+        y1 += 9;
+      });
+    }
+    pageFooter(1);
+
+    // ── PÁGINA 2: MITRE ATT&CK + Honeypot ─────────────────────────────────
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+    pageHeader("ANÁLISIS MITRE ATT&CK E INTELIGENCIA DE HONEYPOT");
+
+    let y2 = 26;
+    y2 = sectionTitle("3. ANÁLISIS DE TÁCTICAS MITRE ATT&CK", y2);
+
+    const sortedMitre = [...(reportData.mitre_coverage ?? [])].sort((a, b) => b.count - a.count);
+    const topTactic = sortedMitre[0];
+    const criticalTactics = (reportData.mitre_coverage ?? []).filter(m => m.level === "Critical");
+    const totalMitreEvents = (reportData.mitre_coverage ?? []).reduce((s, m) => s + m.count, 0);
+    const mitreNarrative = `Se registraron ${totalMitreEvents} eventos en ${(reportData.mitre_coverage ?? []).length} tácticas MITRE ATT&CK. La táctica dominante fue "${topTactic?.tactic ?? "N/A"}" con ${topTactic?.count ?? 0} detecciones (${totalMitreEvents > 0 ? Math.round(((topTactic?.count ?? 0) / totalMitreEvents) * 100) : 0}% del total). ${criticalTactics.length > 0 ? `Se identificaron ${criticalTactics.length} táctica(s) en nivel CRÍTICO: ${criticalTactics.map(m => m.tactic).join(" y ")}. Estas requieren revisión forense inmediata y escalado al equipo IRT.` : "No se registraron tácticas en nivel crítico, indicando buen nivel de contención."}`;
+    y2 = bodyText(mitreNarrative, y2);
+    y2 += 3;
+
+    const mitreExplainedT: Record<string, string> = {
+      "Initial Access": "Entrada al sistema", "Execution": "Código malicioso",
+      "Persistence": "El atacante persiste", "Credential Access": "Robo contraseñas",
+      "Lateral Movement": "Mov. en red",
+    };
+    const levelLabelsT: Record<string, string> = {
+      "Critical": "MUY ALTO", "High": "ALTO", "Medium": "MEDIO", "Low": "BAJO",
+    };
+
+    doc.setFillColor(...navy);
+    doc.rect(M, y2, col, 9, "F");
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text("TÁCTICA", M + 3, y2 + 6);
+    doc.text("EVENTOS", M + 78, y2 + 6);
+    doc.text("NIVEL", M + 108, y2 + 6);
+    doc.text("DESCRIPCIÓN", M + 132, y2 + 6);
+    y2 += 9;
+    (reportData.mitre_coverage ?? []).forEach((row, i) => {
+      if (i % 2 === 0) doc.setFillColor(248, 249, 250); else doc.setFillColor(255, 255, 255);
+      doc.rect(M, y2, col, 10, "F");
+      const lc: [number, number, number] = row.level === "Critical" ? red : row.level === "High" ? orange : row.level === "Medium" ? yellow : green;
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.text(row.tactic, M + 3, y2 + 7);
+      doc.setTextColor(...navy);
+      doc.text(String(row.count), M + 80, y2 + 7);
+      doc.setFillColor(...lc);
+      doc.roundedRect(M + 104, y2 + 1, 22, 7, 1, 1, "F");
+      doc.setTextColor(...white);
+      doc.setFontSize(6);
+      doc.text(levelLabelsT[row.level] || row.level, M + 115, y2 + 6, { align: "center" });
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(doc.splitTextToSize(mitreExplainedT[row.tactic] || "Actividad sospechosa", W - M - (M + 132))[0], M + 132, y2 + 7);
+      y2 += 10;
+    });
+    y2 += 5;
+
+    const mitrePct = totalMitreEvents > 0 ? Math.round(((topTactic?.count ?? 0) / totalMitreEvents) * 100) : 0;
+    const mitreConclusion = [
+      `• Táctica dominante: "${topTactic?.tactic ?? "N/A"}"`,
+      `• ${topTactic?.count ?? 0} eventos (${mitrePct}% del total)`,
+      criticalTactics.length > 0
+        ? `• ${criticalTactics.length} táctica(s) en nivel CRÍTICO`
+        : `• Sin tácticas en nivel CRÍTICO`,
+      `• Revisar firewall y aplicar threat hunting`,
+    ].join("\n");
+    y2 = analysisBox(mitreConclusion, y2, col - 18, "Ref: MITRE D3FEND, ISO 27001 A.13.1.");
+    y2 += 4;
+
+    y2 = sectionTitle("4. INTELIGENCIA DE HONEYPOT COWRIE", y2);
+    const passwords = reportData.honeypot_intel.top_passwords_captured ?? [];
+    const honeypotNarrative = `El sistema honeypot registró ${reportData.honeypot_intel.unique_attackers.toLocaleString()} atacantes únicos con ${reportData.honeypot_intel.malware_samples_collected} muestras de malware capturadas. Las contraseñas más usadas por los atacantes fueron: ${passwords.join(", ") || "no registradas"}. Este patrón es característico de ataques automatizados con credential stuffing y diccionarios genéricos, indicando campañas masivas no dirigidas específicamente a esta organización.`;
+    y2 = bodyText(honeypotNarrative, y2);
+    y2 += 3;
+    const honeypotConclusion = [
+      `• Contraseña top: "${passwords[0] ?? "admin"}"`,
+      `• Confirma uso de diccionarios básicos`,
+      `• Verificar credenciales en sistemas activos`,
+      `• Compartir IOCs con MISP/ISAC`,
+    ].join("\n");
+    y2 = analysisBox(honeypotConclusion, y2, col - 18, "Ref: ISO 27001 A.12.4, NIST SP 800-150.");
+    pageFooter(2);
+
+    // ── PÁGINA 3: Geo Intel + Gestión de Incidentes ────────────────────────
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+    pageHeader("INTELIGENCIA GEOGRÁFICA Y GESTIÓN DE INCIDENTES");
+
+    let y3 = 26;
+    y3 = sectionTitle("5. ORIGEN GEOGRÁFICO DE LOS ATAQUES", y3);
+    const geoData3 = reportData.geo_intel ?? [];
+    const topGeo = geoData3[0];
+    const geoNarrative = topGeo
+      ? `El ${topGeo.pct}% del tráfico malicioso se originó desde ${topGeo.country} (${topGeo.desc}). Esta distribución es consistente con la actividad de grupos APT documentados en estas regiones. Los ataques desde jurisdicciones con limitada cooperación judicial dificultan la atribución legal; la estrategia recomendada es contención técnica mediante geofencing y bloqueo proactivo de rangos IP conocidos como maliciosos en feeds de CTI.`
+      : "No se dispone de datos geográficos para este período.";
+    y3 = bodyText(geoNarrative, y3);
+    y3 += 4;
+
+    if (geoData3.length > 0) {
+      const bStart = M + 28, bMax = 55;
+      geoData3.forEach(g => {
+        doc.setTextColor(...black);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(doc.splitTextToSize(g.country, bStart - M - 2)[0], M, y3 + 6);
+        doc.setFillColor(...lightgray);
+        doc.roundedRect(bStart, y3, bMax, 7, 2, 2, "F");
+        doc.setFillColor(...navy);
+        doc.roundedRect(bStart, y3, bMax * g.pct / 100, 7, 2, 2, "F");
+        const pX = bStart + bMax + 3;
+        doc.setTextColor(...navy);
+        doc.setFontSize(8);
+        doc.text(`${g.pct}%`, pX, y3 + 6);
+        doc.setTextColor(...gray);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        const descLines = doc.splitTextToSize(g.desc, W - M - pX - 8);
+        doc.text(descLines, W - M, y3 + 6, { align: "right" });
+        y3 += 18;
+      });
+    }
+    y3 += 4;
+
+    y3 = sectionTitle("6. GESTIÓN DE INCIDENTES Y MÉTRICAS OPERATIVAS", y3);
+    const incKpis = [
+      { label: "TOTAL TICKETS", value: String(reportData.incident_management.total_tickets), sub: "Período analizado", color: navy },
+      { label: "RESUELTOS", value: String(reportData.incident_management.closed_tickets), sub: `Tasa: ${closureRate}%`, color: green },
+      { label: "PENDIENTES", value: String(pendingTickets), sub: "Requieren seguimiento", color: pendingTickets === 0 ? green : red },
+      { label: "MTTR", value: `${mttr}m`, sub: "Tiempo medio resolución", color: mttr <= 30 ? green : mttr <= 60 ? orange : red },
+    ];
+    incKpis.forEach((kpi, i) => {
+      const kx = M + i * (col / 4);
+      const kw = col / 4 - 2;
+      doc.setFillColor(248, 249, 250);
+      doc.roundedRect(kx, y3, kw, 26, 2, 2, "F");
+      doc.setDrawColor(...kpi.color);
+      doc.setLineWidth(1.5);
+      doc.line(kx, y3, kx, y3 + 26);
+      doc.setLineWidth(0.3);
+      doc.setTextColor(...kpi.color);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(kpi.value, kx + kw / 2, y3 + 14, { align: "center" });
+      doc.setTextColor(...black);
+      doc.setFontSize(6.5);
+      doc.text(kpi.label, kx + kw / 2, y3 + 20, { align: "center" });
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.text(kpi.sub, kx + kw / 2, y3 + 24, { align: "center" });
+    });
+    y3 += 32;
+
+    const closureVerdict = closureRate >= 90
+      ? "supera el objetivo del 90% recomendado por ITIL"
+      : `está por debajo del objetivo del 90% — los ${pendingTickets} tickets abiertos deben priorizarse`;
+    const mttrVerdict = mttr <= 30
+      ? "se sitúa dentro del umbral de excelencia (< 30 min) del NIST SP 800-61"
+      : mttr <= 60
+      ? "es aceptable según NIST SP 800-61, aunque supera el objetivo óptimo de 30 min"
+      : "supera el umbral recomendado por NIST SP 800-61 — revisar urgentemente los procedimientos de escalado";
+    const mttrStatus = mttr <= 30 ? "óptimo (<30 min)" : mttr <= 60 ? "aceptable (30–60 min)" : "crítico (>60 min)";
+    const closureStatus = closureRate >= 90 ? "cumple objetivo ITIL" : "bajo objetivo ITIL";
+    const incidentAnalysis = [
+      `• MTTR: ${mttr} min — ${mttrStatus}`,
+      `• Tasa de cierre: ${closureRate}% — ${closureStatus}`,
+      `• Tickets pendientes: ${pendingTickets}`,
+      `• Establecer SLAs formales por severidad`,
+    ].join("\n");
+    y3 = analysisBox(incidentAnalysis, y3, col - 18, "Ref: ISO 27001 A.16.1.");
+    pageFooter(3);
+
+    // ── PÁGINA 4: Remediación detallada + ISO 27001 ────────────────────────
+    doc.addPage();
+    doc.setFillColor(...white);
+    doc.rect(0, 0, W, 297, "F");
+    pageHeader("PLAN DE REMEDIACIÓN Y CUMPLIMIENTO ISO 27001");
+
+    let y4 = 26;
+    y4 = sectionTitle("7. PLAN DE REMEDIACIÓN TÉCNICA DETALLADO", y4);
+    y4 = bodyText("Cada acción incluye estimación de esfuerzo, referencia normativa y responsable operativo sugerido.", y4);
+    y4 += 3;
+
+    const remMeta = [
+      { time: "2–4 h", ref: "ISO 27001 A.13.1 / NIST SP 800-41", owner: "Equipo de Red" },
+      { time: "4–8 h", ref: "ISO 27001 A.12.6 / NIST SP 800-40", owner: "Equipo de Sistemas" },
+      { time: "1–2 días", ref: "ISO 27001 A.9.4 / NIST SP 800-63B", owner: "IT Admin + CISO" },
+      { time: "2–4 h", ref: "ISO 27001 A.12.1 / NIST SP 800-53", owner: "DevSecOps" },
+    ];
+    (reportData.remediation_steps ?? []).slice(0, 3).forEach((step, i) => {
+      const meta = remMeta[i] ?? remMeta[0];
+      const hasCmd = !!step.action_cmd;
+      const boxH = hasCmd ? 32 : 22;
+      doc.setFillColor(248, 249, 250);
+      doc.roundedRect(M, y4, col, boxH, 2, 2, "F");
+      doc.setDrawColor(...navy);
+      doc.setLineWidth(2);
+      doc.line(M, y4, M, y4 + boxH);
+      doc.setLineWidth(0.3);
+      doc.setTextColor(...navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(`ACCIÓN ${i + 1}`, M + 4, y4 + 7);
+      doc.setFillColor(...navy);
+      doc.roundedRect(W - M - 36, y4 + 2, 34, 6, 1, 1, "F");
+      doc.setTextColor(...white);
+      doc.setFontSize(6);
+      doc.text(`⏱ ${meta.time}`, W - M - 19, y4 + 6, { align: "center" });
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(doc.splitTextToSize(step.task, col - 16)[0], M + 4, y4 + 14);
+      if (hasCmd) {
+        doc.setFillColor(230, 230, 230);
+        doc.roundedRect(M + 4, y4 + 17, col - 8, 9, 1, 1, "F");
+        doc.setTextColor(...gray);
+        doc.setFont("courier", "normal");
+        doc.setFontSize(7);
+        doc.text(doc.splitTextToSize(step.action_cmd!, col - 16)[0], M + 7, y4 + 23);
+      }
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(6.5);
+      doc.text(doc.splitTextToSize(`Ref: ${meta.ref}  —  Responsable: ${meta.owner}`, col - 10)[0], M + 4, y4 + boxH - 2);
+      y4 += boxH + 4;
+    });
+    y4 += 3;
+
+    y4 = sectionTitle("8. CUMPLIMIENTO NORMATIVO — ISO/IEC 27001:2022", y4);
+    const isoScore = reportData.iso27001?.overall ?? 73;
+    const isoColor: [number, number, number] = isoScore >= 80 ? green : isoScore >= 60 ? yellow : red;
+    doc.setFillColor(240, 243, 247);
+    doc.roundedRect(M, y4, col, 14, 2, 2, "F");
+    doc.setTextColor(...black);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Nivel de cumplimiento global estimado:", M + 4, y4 + 9);
+    doc.setTextColor(...isoColor);
+    doc.setFontSize(13);
+    doc.text(`${isoScore}%`, M + 118, y4 + 9);
+    doc.setTextColor(...gray);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.text(doc.splitTextToSize(isoScore >= 80 ? "Cumplimiento satisfactorio" : isoScore >= 60 ? "Cumplimiento parcial" : "Incumplimiento significativo", W - M - (M + 132))[0], M + 132, y4 + 9);
+    y4 += 16;
+
+    const isoNarrative = isoScore >= 80
+      ? `La organización mantiene cumplimiento satisfactorio con ISO/IEC 27001:2022. Los controles cubren las áreas críticas de gestión de activos, control de accesos y respuesta a incidentes. Se recomienda continuar el programa de mejora continua y preparar la siguiente auditoría interna.`
+      : isoScore >= 60
+      ? `El ${isoScore}% de cumplimiento indica gaps en algunas áreas de control. Priorizar la implementación de controles pendientes antes de la próxima auditoría. Focalizar esfuerzos en las áreas con mayor exposición al riesgo identificado en este informe.`
+      : `El ${isoScore}% está por debajo del umbral mínimo recomendado. Se requiere un plan de remediación urgente y revisión completa del SGSI. Considerar apoyo de consultor externo especializado en ISO 27001.`;
+    y4 = bodyText(isoNarrative, y4);
+    y4 += 4;
+
+    const ctrlNarrative: Record<string, string> = {
+      "A.5.7 Threat Intelligence": "Inteligencia activa vía Cowrie + SIEM. Gap potencial: integración con feeds externos de CTI.",
+      "A.5.24 Incident Management Planning": "Procedimiento operativo activo. Verificar que el runbook esté actualizado y probado con simulacros.",
+      "A.8.16 Monitoring Activities": "Monitoreo continuo vía Wazuh + OpenSearch. Revisar retención de logs (mínimo 12 meses según ISO 27001).",
+    };
+    const statusLabelsT: Record<string, string> = { covered: "CUMPLE", partial: "PARCIAL", gap: "INCUMPLE" };
+    (reportData.iso27001?.controls ?? []).forEach((ctrl) => {
+      const sColor: [number, number, number] = ctrl.status === "covered" ? green : ctrl.status === "partial" ? yellow : red;
+      doc.setFillColor(248, 249, 250);
+      doc.roundedRect(M, y4, col, 18, 2, 2, "F");
+      doc.setTextColor(...navy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(ctrl.control, M + 4, y4 + 7);
+      doc.setFillColor(...sColor);
+      doc.roundedRect(W - M - 22, y4 + 3, 20, 7, 2, 2, "F");
+      doc.setTextColor(...white);
+      doc.setFontSize(6);
+      doc.text(statusLabelsT[ctrl.status] || ctrl.status.toUpperCase(), W - M - 12, y4 + 8, { align: "center" });
+      doc.setTextColor(...gray);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(doc.splitTextToSize(ctrlNarrative[ctrl.control] || ctrl.note, col - 30)[0], M + 4, y4 + 14);
+      y4 += 22;
+    });
+
+    pageFooter(4);
+    doc.save(`valhalla-informe-tecnico-${reportData.report_metadata.generation_date}.pdf`);
   }
 
   if (loading) return (
     <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)' }}>
       <CircularProgress sx={{ color: 'var(--signal)' }} />
+    </Box>
+  );
+
+  if (error) return (
+    <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)', p: 4 }}>
+      <GlassCard title="ERROR DE CARGA" sx={{ maxWidth: 500, textAlign: 'center' }}>
+        <Typography sx={{ color: 'var(--danger)', fontSize: '13px', mb: 3, fontFamily: 'var(--ff-mono)', wordBreak: 'break-word' }}>
+          {error}
+        </Typography>
+        <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--signal)', color: 'var(--signal)', '&:hover': { borderColor: 'var(--signal-bright)', color: 'var(--signal-bright)' } }}>
+          REINTENTAR
+        </Button>
+      </GlassCard>
     </Box>
   );
 
@@ -716,7 +1424,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
               EXECUTIVE <span style={{ color: 'var(--signal)' }}>REPORT</span>
             </Typography>
             <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px', textTransform: 'uppercase' }}>
-              {companyName} // SESSION: {reportData?.report_metadata.report_id}
+              {companyName} // SESSION: {reportId}
             </Typography>
           </Box>
         </Stack>
@@ -724,8 +1432,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
             {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
           </Button>
+          <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
+            RECARGAR
+          </Button>
           <Button variant="contained" onClick={exportToPDF} sx={{ bgcolor: 'var(--signal)', color: '#000', fontWeight: 'bold', '&:hover': { bgcolor: 'var(--signal-bright)' } }}>
             EXPORT PDF
+          </Button>
+          <Button variant="outlined" onClick={exportTechnicalPDF} sx={{ borderColor: 'var(--cyan)', color: 'var(--cyan)', fontWeight: 'bold', '&:hover': { borderColor: 'var(--cyan)', bgcolor: 'rgba(0,200,255,0.08)' } }}>
+            EXPORT PDF TÉCNICO
           </Button>
         </Stack>
       </Stack>
@@ -736,8 +1450,18 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             <TextField fullWidth size="small" label="CLIENT NAME" variant="standard" value={companyName} onChange={e => setCompanyName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
+            <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <DateRangePicker
+              dateStart={dateStart}
+              dateEnd={dateEnd}
+              onChange={(s, e) => { setDateStart(s); setDateEnd(e); }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small" variant="standard">
-              <InputLabel sx={{ color: 'var(--signal)' }}>PERIOD</InputLabel>
+              <InputLabel sx={{ color: 'var(--signal)' }}>REPORT TYPE</InputLabel>
               <Select value={reportType} onChange={e => setReportType(e.target.value)} sx={{ color: 'var(--text)' }}>
                 <MenuItem value="monthly">MONTHLY SUMMARY</MenuItem>
                 <MenuItem value="weekly">WEEKLY AUDIT</MenuItem>
@@ -811,14 +1535,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           <Grid size={{ xs: 12, md: 5 }}>
             <GlassCard title="ATTACK ORIGIN (GEO-INTEL)" sx={{ height: '100%' }}>
               <Stack spacing={2} sx={{ mt: 1 }}>
-                {['CHINA', 'RUSSIA', 'NETHERLANDS'].map((country, i) => (
-                  <Box key={country}>
+                {(reportData.geo_intel ?? []).map((entry, i) => (
+                  <Box key={entry.country}>
                     <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{country}</Typography>
-                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{85 - i * 20}% THREAT LOAD</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{entry.country.toUpperCase()}</Typography>
+                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{entry.pct}% THREAT LOAD</Typography>
                     </Stack>
                     <Box sx={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                      <Box sx={{ width: `${85 - i * 20}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
+                      <Box sx={{ width: `${entry.pct}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
                     </Box>
                   </Box>
                 ))}

@@ -1,0 +1,22 @@
+title: Descarga o ejecución de criptominero en honeypot
+id: vh-sigma-0001
+status: experimental
+description: Detecta comandos típicos de minería de criptomonedas en sesiones Cowrie
+author: Valhalla SOC
+level: high
+logsource:
+  product: cowrie
+  service: honeypot
+detection:
+  selection:
+    eventid: cowrie.command.input
+    input|contains:
+      - xmrig
+      - minerd
+      - stratum+tcp
+      - cpuminer
+  condition: selection
+tags:
+  - attack.t1496
+falsepositives:
+  - Pruebas internas autorizadas

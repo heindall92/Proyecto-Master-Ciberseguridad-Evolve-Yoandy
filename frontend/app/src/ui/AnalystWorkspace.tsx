@@ -60,14 +60,14 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
 
-export default function AnalystWorkspace({ 
-  lang = "es", 
-  initialData, 
+export default function AnalystWorkspace({
+  lang = "es",
+  initialData,
   onClearInitialData,
   currentUser
-}: { 
-  lang?: "es" | "en", 
-  initialData?: any, 
+}: {
+  lang?: "es" | "en",
+  initialData?: any,
   onClearInitialData?: () => void,
   currentUser: UserOut
 }) {
@@ -134,15 +134,9 @@ export default function AnalystWorkspace({
 
       // Llamadas independientes - si una falla, las demás continúan
       try {
-        const allTickets = await listTickets();
-        // Filtrado multi-sesión: 
-        // Los analistas solo ven sus propios tickets. Los admins ven todo.
-        if (currentUser.role === 'admin') {
-          ticketsData = allTickets;
-        } else {
-          ticketsData = allTickets.filter(t => t.assigned_to_id === currentUser.id);
-        }
-        logger.log('[Workspace] Tickets filtered for session:', ticketsData.length);
+        const allTickets = await listTickets(undefined, undefined, 500, 0, false);
+        ticketsData = allTickets;
+        logger.log('[Workspace] Tickets loaded:', ticketsData.length);
       } catch(e) {
         logger.error('[Workspace] Error loading tickets:', e);
       }
@@ -410,7 +404,7 @@ export default function AnalystWorkspace({
   }
 
   return (
-    <div style={{ height: '100%', padding: '30px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <div className="analyst-workspace" style={{ height: '100%', padding: '30px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       {/* Screen reader announcements */}
       <div aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
         {selectedTicket ? `Opening incident ${selectedTicket.id}: ${selectedTicket.title}` : ''}
@@ -418,27 +412,19 @@ export default function AnalystWorkspace({
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600, color: '#fff', letterSpacing: '0.5px' }}>
+          <h1 className="ws-header-title" style={{ margin: 0, fontSize: '24px', fontWeight: 600, letterSpacing: '0.5px' }}>
             {t('incident_response_board')}
           </h1>
-          <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '5px', display: 'block' }}>
+          <span className="ws-header-sub" style={{ fontSize: '12px', marginTop: '5px', display: 'block' }}>
             {t('manage_workloads')}
           </span>
         </div>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           {/* Filters */}
           <select
+            className="ws-filter-select"
             value={filterPriority}
             onChange={e => setFilterPriority(e.target.value)}
-            style={{
-              background: 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#fff',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              cursor: 'pointer',
-            }}
           >
             <option value="all">{t('all_priorities')}</option>
             {SEVERITY_OPTIONS.map(s => (
@@ -446,17 +432,9 @@ export default function AnalystWorkspace({
             ))}
           </select>
           <select
+            className="ws-filter-select"
             value={filterAnalyst}
             onChange={e => setFilterAnalyst(e.target.value)}
-            style={{
-              background: 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#fff',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              cursor: 'pointer',
-            }}
           >
             <option value="all">{t('all_analysts')}</option>
             <option value="unassigned">{t('unassigned')}</option>
@@ -465,20 +443,9 @@ export default function AnalystWorkspace({
             ))}
           </select>
           <button
+            type="button"
+            className="ws-btn-primary"
             onClick={() => setShowCreateModal(true)}
-            style={{
-              background: 'var(--signal)',
-              color: '#000',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
           >
             + {t('new_incident')}
           </button>
@@ -487,15 +454,15 @@ export default function AnalystWorkspace({
 
       {/* Stats Bar */}
       {stats && (
-        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF0055', fontWeight: 600 }}>{stats.metrics?.tickets_open || 0}</span> {t('open_tickets')}
+        <div className="ws-stats-bar">
+          <div className="ws-stat-item">
+            <span className="ws-stat-num ws-stat-num--open">{stats.metrics?.tickets_open || 0}</span> {t('open_tickets')}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#FF9F1C', fontWeight: 600 }}>{getTicketsByStatus('escalated').length}</span> {t('escalated_tickets')}
+          <div className="ws-stat-item">
+            <span className="ws-stat-num ws-stat-num--escalated">{getTicketsByStatus('escalated').length}</span> {t('escalated_tickets')}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-            <span style={{ color: '#4DFFA6', fontWeight: 600 }}>{getTicketsByStatus('resolved').length}</span> {t('resolved_tickets')}
+          <div className="ws-stat-item">
+            <span className="ws-stat-num ws-stat-num--resolved">{getTicketsByStatus('resolved').length}</span> {t('resolved_tickets')}
           </div>
         </div>
       )}
@@ -525,10 +492,13 @@ export default function AnalystWorkspace({
               {/* Column Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 5px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: col.color, letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>
+                  <span
+                    className={`ws-kanban-col-label ws-kanban-col-label--${col.id}`}
+                    style={{ fontSize: '11px', color: col.color, letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}
+                  >
                     {col.label}
                   </span>
-                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{colTickets.length}</span>
+                  <span className="ws-kanban-count">{colTickets.length}</span>
                 </div>
                 {col.id === 'resolved' && colTickets.length > 0 && (
                   <button
@@ -553,6 +523,7 @@ export default function AnalystWorkspace({
                 {colTickets.map(ticket => (
                   <div
                     key={ticket.id}
+                    className="ws-ticket-card"
                     draggable
                     tabIndex={0}
                     role="button"
@@ -577,6 +548,7 @@ export default function AnalystWorkspace({
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
+                      flexShrink: 0,
                       opacity: draggedId === ticket.id ? 0.5 : 1,
                     }}
                     onMouseEnter={e => {
@@ -603,14 +575,14 @@ export default function AnalystWorkspace({
                     }} />
 
                     {/* Top Section: ID + Menu */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.3)', fontSize: '10px', marginBottom: '8px' }}>
+                    <div className="ws-card-meta" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <span>#{ticket.id}</span>
                         {(() => {
                           const diff = Date.now() - new Date(ticket.created_at).getTime();
                           const hrs = Math.floor(diff / 3600000);
                           const mins = Math.floor((diff % 3600000) / 60000);
-                          return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}>🕒 {hrs}h {mins}m</span>;
+                          return <span style={{ color: hrs > 2 ? '#ef4444' : 'inherit' }}> {hrs}h {mins}m</span>;
                         })()}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -618,10 +590,16 @@ export default function AnalystWorkspace({
                         {currentUser?.role === 'admin' && (
                           <button
                             title="Eliminar Incidente"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.stopPropagation();
                                 if (window.confirm(`¿Estás seguro de que deseas eliminar el incidente #${ticket.id} permanentemente?`)) {
-                                  deleteTicket(ticket.id).then(() => fetchData());
+                                  try {
+                                    await deleteTicket(ticket.id);
+                                    await fetchData();
+                                  } catch (err: any) {
+                                    alert('Error al eliminar: ' + (err?.message || String(err)));
+                                    logger.error('deleteTicket error:', err);
+                                  }
                                 }
                             }}
                             style={{
@@ -638,7 +616,7 @@ export default function AnalystWorkspace({
                     </div>
 
                     {/* Title */}
-                    <div style={{ color: '#fff', fontSize: '14px', fontWeight: 500, lineHeight: '1.4', marginBottom: '10px' }}>
+                    <div className="ws-card-title" style={{ fontSize: '14px', fontWeight: 500, lineHeight: '1.4', marginBottom: '10px' }}>
                       {ticket.title}
                     </div>
 
@@ -671,9 +649,9 @@ export default function AnalystWorkspace({
                     </div>
 
                     {/* Bottom Section: Progress + Avatars */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', flexWrap: 'wrap' }}>
                       {/* Progress Bar */}
-                      <div style={{ width: '40%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ flex: 1, minWidth: '60px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{
                           width: `${ticket.progress}%`,
                           height: '100%',
@@ -683,7 +661,7 @@ export default function AnalystWorkspace({
                       </div>
 
                       {/* Quick Move Menu */}
-                      <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                         {getColumns(t).filter(c => c.id !== ticket.status).map(c => (
                           <button
                             key={c.id}
@@ -708,7 +686,7 @@ export default function AnalystWorkspace({
 
                       {/* Assignee */}
                       {ticket.assignee_username ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                            <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 600 }}>{ticket.assignee_username.toUpperCase()}</span>
                            <div title={`Assigned to ${ticket.assignee_username}`} style={{
                              width: '24px',
@@ -726,7 +704,7 @@ export default function AnalystWorkspace({
                         </div>
                       ) : (
                         <div title="Unassigned" style={{
-                          display: 'flex', alignItems: 'center', gap: '6px'
+                          display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0
                         }}>
                            <span style={{ fontSize: '10px', color: 'var(--danger)', fontWeight: 600 }}>UNASSIGNED</span>
                            <div style={{
@@ -769,21 +747,18 @@ export default function AnalystWorkspace({
               zIndex: 999,
             }}
           />
-          <div style={{
+          <div className="ws-detail-drawer" style={{
           position: 'fixed',
           top: 0,
           right: 0,
           width: '500px',
           height: '100%',
-          background: 'rgba(10, 20, 15, 0.98)',
-          borderLeft: '1px solid var(--signal)',
           padding: '30px',
           overflowY: 'auto',
           zIndex: 1000,
-          boxShadow: '-10px 0 30px rgba(0,0,0,0.5)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>
+            <h2 className="ws-detail-heading" style={{ margin: 0, fontSize: '18px' }}>
               Incident #{selectedTicket.id}
             </h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -795,7 +770,10 @@ export default function AnalystWorkspace({
                       await deleteTicket(selectedTicket.id);
                       setSelectedTicket(null);
                       await fetchData();
-                    } catch (e) { logger.error(e); }
+                    } catch (err: any) {
+                      alert('Error al eliminar: ' + (err?.message || String(err)));
+                      logger.error('deleteTicket drawer error:', err);
+                    }
                   }}
                   style={{ background: 'rgba(255,77,77,0.15)', border: '1px solid rgba(255,77,77,0.4)', color: '#FF4D4D', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer' }}
                 >
@@ -830,7 +808,7 @@ export default function AnalystWorkspace({
           </div>
 
           {/* Title */}
-          <h3 style={{ color: '#fff', margin: '0 0 15px 0', fontSize: '16px' }}>
+          <h3 className="ws-detail-heading" style={{ margin: '0 0 15px 0', fontSize: '16px' }}>
             {selectedTicket.title}
           </h3>
 
@@ -840,7 +818,7 @@ export default function AnalystWorkspace({
               <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 Description
               </label>
-              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', lineHeight: '1.6', margin: '8px 0 0 0' }}>
+              <p className="ws-detail-body" style={{ fontSize: '13px', lineHeight: '1.6', margin: '8px 0 0 0' }}>
                 {selectedTicket.description}
               </p>
             </div>
@@ -912,7 +890,7 @@ export default function AnalystWorkspace({
 
           {/* Analysis Notes */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <label className="ws-detail-section-label">
               Analyst Notes
             </label>
             <textarea
@@ -935,20 +913,10 @@ export default function AnalystWorkspace({
               }}
             />
             <button
+              type="button"
+              className="ws-detail-save-btn"
               onClick={handleSaveNotes}
               disabled={saving}
-              style={{
-                marginTop: '10px',
-                background: 'var(--signal)',
-                color: '#000',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: saving ? 'not-allowed' : 'pointer',
-                opacity: saving ? 0.6 : 1,
-              }}
             >
               {saving ? 'Saving...' : 'Save Notes'}
             </button>
@@ -956,7 +924,7 @@ export default function AnalystWorkspace({
 
           {/* Suggested Runbooks */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ fontSize: '10px', color: '#4DFFA6', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+            <label className="ws-detail-section-label ws-detail-section-label--accent">
               Suggested Runbooks & SOPs
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -965,43 +933,38 @@ export default function AnalystWorkspace({
                 const rbCat = (rb.category || "").toLowerCase();
                 return rbCat.includes(cat) || cat.includes(rbCat) || rb.severity_applicable === 'all' || rb.severity_applicable === selectedTicket.severity;
               }).slice(0, 3).map(rb => (
-                <div 
-                  key={rb.id} 
+                <div
+                  key={rb.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setActiveRunbook(rb)}
-                  style={{ 
-                    padding: '10px', 
-                    background: activeRunbook?.id === rb.id ? 'rgba(77,255,166,0.15)' : 'rgba(77,255,166,0.05)', 
-                    border: `1px solid ${activeRunbook?.id === rb.id ? 'var(--signal)' : 'rgba(77,255,166,0.2)'}`, 
-                    borderRadius: '6px', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`ws-runbook-pick${activeRunbook?.id === rb.id ? ' ws-runbook-pick--active' : ''}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#4DFFA6' }}>{rb.name}</div>
-                    <span style={{ fontSize: '10px' }}>{activeRunbook?.id === rb.id ? '📖' : '👁️'}</span>
+                    <div className="ws-runbook-pick__title">{rb.name}</div>
+                    <span style={{ fontSize: '10px' }}>{activeRunbook?.id === rb.id ? '' : ''}</span>
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>{rb.description.substring(0, 60)}...</div>
+                  <div className="ws-runbook-pick__desc">{rb.description.substring(0, 60)}...</div>
                 </div>
               ))}
-              {runbooks.length === 0 && <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>No matching runbooks found.</div>}
+              {runbooks.length === 0 && <div className="ws-detail-empty">No matching runbooks found.</div>}
             </div>
           </div>
 
           {/* Expanded Runbook Viewer */}
           {activeRunbook && (
-            <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--signal)', borderRadius: '8px' }}>
+            <div className="ws-runbook-procedure" style={{ marginBottom: '25px', padding: '15px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--signal)', fontWeight: 700 }}>PROCEDURE: {activeRunbook.name.toUpperCase()}</div>
-                <button onClick={() => setActiveRunbook(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => setActiveRunbook(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}></button>
               </div>
 
               {[
-                { label: 'Identification', steps: activeRunbook.identification_steps, icon: '🔍' },
-                { label: 'Containment', steps: activeRunbook.containment_steps, icon: '🛑' },
-                { label: 'Eradication', steps: activeRunbook.eradication_steps, icon: '🧹' },
-                { label: 'Recovery', steps: activeRunbook.recovery_steps, icon: '♻️' },
-                { label: 'Post-Mortem', steps: activeRunbook.post_mortem_steps, icon: '📝' }
+                { label: 'Identification', steps: activeRunbook.identification_steps, icon: '' },
+                { label: 'Containment', steps: activeRunbook.containment_steps, icon: '' },
+                { label: 'Eradication', steps: activeRunbook.eradication_steps, icon: '' },
+                { label: 'Recovery', steps: activeRunbook.recovery_steps, icon: '' },
+                { label: 'Post-Mortem', steps: activeRunbook.post_mortem_steps, icon: '' }
               ].map(phase => phase.steps && phase.steps.length > 0 && (
                 <div key={phase.label} style={{ marginBottom: '15px' }}>
                   <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>
@@ -1010,17 +973,17 @@ export default function AnalystWorkspace({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {phase.steps.map((step: any, idx: number) => (
                       <div key={idx} style={{ fontSize: '11px' }}>
-                        <div style={{ color: '#fff', marginBottom: '4px' }}>
+                        <div className="ws-runbook-step-text" style={{ marginBottom: '4px' }}>
                           <span style={{ color: 'var(--signal)', marginRight: '6px' }}>{idx + 1}.</span>
                           {interpolate(step.text || step)}
                         </div>
                         {(step.command) && (
-                          <div style={{ 
-                            padding: '6px 10px', 
-                            background: '#000', 
-                            borderRadius: '4px', 
-                            fontFamily: 'var(--mono)', 
-                            fontSize: '10px', 
+                          <div style={{
+                            padding: '6px 10px',
+                            background: '#000',
+                            borderRadius: '4px',
+                            fontFamily: 'var(--mono)',
+                            fontSize: '10px',
                             color: 'var(--signal)',
                             border: '1px solid rgba(0,255,136,0.2)',
                             display: 'flex',
@@ -1028,7 +991,7 @@ export default function AnalystWorkspace({
                             alignItems: 'center'
                           }}>
                             <code>{interpolate(step.command)}</code>
-                            <button 
+                            <button
                               onClick={() => navigator.clipboard.writeText(interpolate(step.command))}
                               style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '8px', cursor: 'pointer' }}
                             >
@@ -1046,23 +1009,23 @@ export default function AnalystWorkspace({
 
           {/* Evidence / Logs */}
           <div style={{ marginBottom: '25px' }}>
-            <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+            <label className="ws-detail-section-label">
               Evidence & Artifacts
             </label>
-            
+
             {/* File List */}
             {selectedTicket.evidence && selectedTicket.evidence.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
                 {selectedTicket.evidence.map(ev => (
-                  <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                  <div key={ev.id} className="ws-evidence-file">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px' }}>📄</span>
+                      <span style={{ fontSize: '14px' }}></span>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '11px', color: '#fff' }}>{ev.filename}</span>
+                        <span className="ws-evidence-file__name">{ev.filename}</span>
                         <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{(ev.file_size / 1024).toFixed(1)} KB</span>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={async () => {
                         const { getEvidenceDownloadUrl } = await import('../lib/api');
                         window.open(getEvidenceDownloadUrl(ev.id), '_blank');
@@ -1076,19 +1039,20 @@ export default function AnalystWorkspace({
               </div>
             )}
 
-            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '15px', textAlign: 'center', position: 'relative' }}>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>Upload logs or screenshots</div>
-              <input 
-                type="file" 
-                id="evidence-upload" 
-                hidden 
-                onChange={handleFileUpload} 
+            <div className="ws-evidence-drop">
+              <div className="ws-evidence-drop__hint">Upload logs or screenshots</div>
+              <input
+                type="file"
+                id="evidence-upload"
+                hidden
+                onChange={handleFileUpload}
                 disabled={saving}
               />
-              <button 
+              <button
+                type="button"
+                className="ws-btn-outline"
                 onClick={() => document.getElementById('evidence-upload')?.click()}
                 disabled={saving}
-                style={{ marginTop: '8px', background: 'transparent', border: '1px solid var(--signal)', color: '#fff', fontSize: '10px', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}
               >
                 {saving ? 'UPLOADING...' : 'SELECT FILE'}
               </button>
@@ -1097,25 +1061,17 @@ export default function AnalystWorkspace({
 
           {/* Assign Analyst */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>
+            <label className="ws-detail-section-label" style={{ marginBottom: '10px' }}>
               Reassign Analyst
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {users.map(u => (
                 <button
                   key={u.id}
+                  type="button"
                   onClick={() => handleAssign(u.id)}
                   disabled={saving || u.username === selectedTicket.assignee_username}
-                  style={{
-                    padding: '6px 12px',
-                    background: u.username === selectedTicket.assignee_username ? 'rgba(77,159,255,0.3)' : 'rgba(0,0,0,0.3)',
-                    border: `1px solid ${u.username === selectedTicket.assignee_username ? 'rgba(77,159,255,0.5)' : 'rgba(255,255,255,0.15)'}`,
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '12px',
-                    cursor: (saving || u.username === selectedTicket.assignee_username) ? 'default' : 'pointer',
-                    opacity: (saving || u.username === selectedTicket.assignee_username) ? 0.6 : 1,
-                  }}
+                  className={`ws-assign-btn${u.username === selectedTicket.assignee_username ? ' ws-assign-btn--selected' : ''}`}
                 >
                   {u.username.toUpperCase()}
                 </button>
@@ -1126,23 +1082,12 @@ export default function AnalystWorkspace({
           {/* Move to Resolved */}
           {selectedTicket.status !== 'resolved' && (
             <button
+              type="button"
+              className="ws-resolve-btn"
               onClick={async () => {
                 await updateTicket(selectedTicket.id, { status: 'resolved' });
                 setSelectedTicket(null);
                 fetchData();
-              }}
-              style={{
-                width: '100%',
-                background: 'rgba(77,255,166,0.1)',
-                color: '#4DFFA6',
-                border: '1px solid rgba(77,255,166,0.3)',
-                padding: '12px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
               }}
             >
               Mark as Resolved
@@ -1154,110 +1099,56 @@ export default function AnalystWorkspace({
 
       {/* Create Ticket Modal */}
       {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1001,
-        }}>
-          <div style={{
-            background: 'rgba(10, 20, 15, 0.98)',
-            border: '1px solid var(--signal)',
-            borderRadius: '12px',
-            padding: '30px',
-            width: '500px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>Create New Incident</h2>
+        <div className="ws-modal-backdrop" onClick={() => setShowCreateModal(false)}>
+          <div
+            className="ws-create-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ws-create-modal-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="ws-create-modal__header">
+              <h2 id="ws-create-modal-title" className="ws-create-modal__title">
+                Create New Incident
+              </h2>
               <button
+                type="button"
+                className="ws-create-modal__close"
                 onClick={() => setShowCreateModal(false)}
                 aria-label="Close create incident modal"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-dim)',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  lineHeight: 1,
-                }}
               >
                 ×
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                  Title *
-                </label>
+            <div className="ws-create-modal__body">
+              <div className="ws-create-modal__field">
+                <label className="ws-create-modal__label">Title *</label>
                 <input
+                  className="ws-create-modal__input"
                   value={createForm.title}
                   onChange={e => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="e.g., Suspicious Login Attempt"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '12px',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
-                  }}
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                  Description
-                </label>
+              <div className="ws-create-modal__field">
+                <label className="ws-create-modal__label">Description</label>
                 <textarea
+                  className="ws-create-modal__input ws-create-modal__textarea"
                   value={createForm.description}
                   onChange={e => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Detailed description of the incident..."
-                  style={{
-                    width: '100%',
-                    minHeight: '80px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '12px',
-                    fontSize: '13px',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                  }}
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    Severity
-                  </label>
+              <div className="ws-create-modal__grid">
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">Severity</label>
                   <select
+                    className="ws-create-modal__input ws-create-modal__select"
                     value={createForm.severity}
                     onChange={e => setCreateForm(prev => ({ ...prev, severity: e.target.value }))}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                    }}
                   >
                     {SEVERITY_OPTIONS.map(s => (
                       <option key={s} value={s}>{s.toUpperCase()}</option>
@@ -1265,111 +1156,56 @@ export default function AnalystWorkspace({
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    Category
-                  </label>
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">Category</label>
                   <input
+                    className="ws-create-modal__input"
                     value={createForm.category}
                     onChange={e => setCreateForm(prev => ({ ...prev, category: e.target.value }))}
                     placeholder="e.g., Authentication"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    Source IP
-                  </label>
+              <div className="ws-create-modal__grid">
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">Source IP</label>
                   <input
+                    className="ws-create-modal__input"
                     value={createForm.source_ip}
                     onChange={e => setCreateForm(prev => ({ ...prev, source_ip: e.target.value }))}
                     placeholder="192.168.1.100"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    Affected Asset
-                  </label>
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">Affected Asset</label>
                   <input
+                    className="ws-create-modal__input"
                     value={createForm.affected_asset}
                     onChange={e => setCreateForm(prev => ({ ...prev, affected_asset: e.target.value }))}
                     placeholder="workstation-01"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    MITRE Technique ID
-                  </label>
+              <div className="ws-create-modal__grid">
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">MITRE Technique ID</label>
                   <input
+                    className="ws-create-modal__input"
                     value={createForm.mitre_technique}
                     onChange={e => setCreateForm(prev => ({ ...prev, mitre_technique: e.target.value }))}
                     placeholder="e.g., T1110"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                    Assign To
-                  </label>
+                <div className="ws-create-modal__field">
+                  <label className="ws-create-modal__label">Assign To</label>
                   <select
+                    className="ws-create-modal__input ws-create-modal__select"
                     value={createForm.assigned_to_id}
                     onChange={e => setCreateForm(prev => ({ ...prev, assigned_to_id: e.target.value }))}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      padding: '12px',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                    }}
                   >
                     <option value="">Unassigned</option>
                     {users.map(u => (
@@ -1379,37 +1215,19 @@ export default function AnalystWorkspace({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <div className="ws-create-modal__actions">
                 <button
+                  type="button"
+                  className="ws-create-modal__submit"
                   onClick={handleCreateTicket}
                   disabled={saving || !createForm.title.trim()}
-                  style={{
-                    flex: 1,
-                    background: 'var(--signal)',
-                    color: '#000',
-                    border: 'none',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                    opacity: saving ? 0.6 : 1,
-                  }}
                 >
                   {saving ? 'Creating...' : 'Create Incident'}
                 </button>
                 <button
+                  type="button"
+                  className="ws-create-modal__cancel"
                   onClick={() => setShowCreateModal(false)}
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    color: 'var(--text-dim)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
                 >
                   Cancel
                 </button>
