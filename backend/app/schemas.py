@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 import re
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, AliasChoices
 
 def _sanitize_html(v: str | None) -> str | None:
     if v is None: return v
@@ -431,7 +431,7 @@ class PlaybookActionIn(BaseModel):
 
 
 class ChatMessageIn(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str | None = None
     text: str = Field(..., min_length=1, max_length=8000)
@@ -443,6 +443,20 @@ class ChatMessageIn(BaseModel):
     @classmethod
     def sanitize_text(cls, v: str) -> str:
         return _sanitize_html(v) or ""
+
+
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str
+    user_id: int = Field(..., validation_alias=AliasChoices("userId", "user_id"), serialization_alias="userId")
+    username: str
+    text: str | None = None
+    timestamp: datetime
+    chat_id: str = Field(..., validation_alias=AliasChoices("chatId", "chat_id"), serialization_alias="chatId")
+    mentions: list[str] = Field(default_factory=list)
+    attachment: dict[str, Any] | None = None
+
 
 
 class AiSettingsUpdate(BaseModel):

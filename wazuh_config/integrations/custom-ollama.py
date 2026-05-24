@@ -65,7 +65,7 @@ def query_ollama(alert):
     )
     
     payload = {
-        "model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+        "model": os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct"),
         "prompt": prompt,
         "stream": False,
         "options": {

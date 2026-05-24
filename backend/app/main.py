@@ -1322,7 +1322,7 @@ async def abuseipdb_scan_ip(ip: str, request: Request, db: AsyncSession = Depend
     return await abuse.check_ip(ip, key)
 
 # CHAT PERSISTENCE
-@app.get("/api/chat/{chat_id}")
+@app.get("/api/chat/{chat_id}", response_model=list[ChatMessageOut])
 async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     _require_chat_access(current, chat_id)
     q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
@@ -1330,7 +1330,7 @@ async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = De
     # Return in chronological order
     return sorted(rows, key=lambda x: x.timestamp)
 
-@app.post("/api/chat")
+@app.post("/api/chat", response_model=ChatMessageOut)
 async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     chat_id = msg.chat_id
     _require_chat_access(current, chat_id)
@@ -1348,23 +1348,14 @@ async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_d
     await db.refresh(new_msg)
     
     # Broadcast via WS
-    broadcast_data = {
-        "id": new_msg.id,
-        "userId": new_msg.user_id,
-        "username": new_msg.username,
-        "text": new_msg.text,
-        "timestamp": new_msg.timestamp.isoformat(),
-        "chatId": new_msg.chat_id,
-        "mentions": new_msg.mentions,
-        "attachment": new_msg.attachment
-    }
+    broadcast_data = ChatMessageOut.model_validate(new_msg).model_dump(by_alias=True, mode="json")
     await manager.broadcast(json.dumps(broadcast_data))
 
     # Chatbot IA: si mencionan al asistente, responde en background.
     if _AI_CHAT_TRIGGER.search(msg.text or ""):
         asyncio.create_task(_ai_chat_reply(chat_id, current.id, msg.text or ""))
 
-    return broadcast_data
+    return new_msg
 
 
 _AI_CHAT_TRIGGER = _re.compile(r"@(chatbot|ia|valhalla|heimdall)\b", _re.IGNORECASE)
@@ -1374,8 +1365,31 @@ _TICKET_RE = _re.compile(r"\b(?:ticket|incidente|caso)\s*#?\s*(\d{1,10})\b", _re
 _ALERT_RE = _re.compile(r"\b(?:alerta|alert|wazuh)\s*#?\s*([A-Za-z0-9_.:-]{2,80})\b", _re.IGNORECASE)
 
 
+def _wants_soc_snapshot(question: str) -> bool:
+    q = (question or "").lower()
+    return any(word in q for word in (
+        "log", "logs", "lgos", "alerta", "alertas", "wazuh", "siem", "resumen",
+        "resume", "cuantos", "cuantas", "cuánto", "cuánta", "hoy", "24h",
+        "dia", "día", "estado", "dashboard", "incidente", "incidentes", "ticket", "tickets",
+    ))
+
+
 def _chat_context_needed(question: str) -> bool:
     q = (question or "").lower()
+    context_words = (
+        "ioc", "alerta", "alertas", "incidente", "incidentes", "ticket", "tickets",
+        "log", "logs", "lgos", "resumen", "resume", "analiza", "analizar", "estado",
+        "dashboard", "wazuh", "siem", "runbook", "monitor", "paso", "pasado",
+        "ocurrio", "ocurri", "hoy", "24h", "ultimas", "activo", "activos",
+        "agente", "agentes", "auditoria", "auditoría", "honeypot", "honeypots",
+        "cowrie", "threat", "intel", "iocs", "mapa", "threatmap", "lsa",
+        "bifrost", "bifröst", "heimdall", "cve", "cves", "vulnerabilidad",
+        "vulnerabilidades", "usuario", "usuarios", "firewall", "bloqueadas",
+        "bloqueados", "health", "salud", "integraciones", "metrica", "métrica",
+        "metricas", "métricas", "hunting",
+    )
+    if any(word in q for word in context_words):
+        return True
     return bool(
         _IP_RE.search(q)
         or _TICKET_RE.search(q)
@@ -1384,12 +1398,99 @@ def _chat_context_needed(question: str) -> bool:
     )
 
 
+async def _build_direct_soc_answer(db: AsyncSession, user: User, question: str) -> str | None:
+    """Respuesta directa para consultas SOC frecuentes; no depende de Ollama."""
+    if not _wants_soc_snapshot(question):
+        return None
+
+    q = (question or "").lower()
+    wants_health = any(word in q for word in ("health", "salud", "integraciones", "servicios", "stack"))
+    if wants_health:
+        return None
+    wants_tickets = "ticket" in q or "tickets" in q or "incidente" in q or "incidentes" in q
+    wants_logs = any(word in q for word in (
+        "log", "logs", "lgos", "alerta", "alertas", "wazuh", "siem", "resumen",
+        "resume", "hoy", "24h", "dia", "dÃ­a", "dashboard", "estado",
+    ))
+
+    if wants_tickets and not wants_logs:
+        ticket_q = _tickets_assignee_filter(
+            select(Ticket).where(Ticket.status.in_(["open", "in_progress", "escalated"])).order_by(desc(Ticket.created_at)).limit(10),
+            user,
+        )
+        tickets = (await db.execute(ticket_q)).scalars().all()
+        if not tickets:
+            return "No tienes tickets abiertos visibles ahora mismo."
+        lines = [f"Tienes {len(tickets)} tickets abiertos visibles:"]
+        for t in tickets:
+            lines.append(
+                f"- #{t.id} {t.severity.upper()} {t.status}: {t.title[:140]} "
+                f"activo={t.affected_asset or 'N/A'} ip={t.source_ip or 'N/A'}"
+            )
+        return "\n".join(lines)[:1800]
+
+    try:
+        stats = await osc.get_dashboard_stats(24)
+    except Exception as e:
+        logger.debug("Direct SOC stats unavailable: %s", e)
+        stats = {}
+
+    try:
+        recent_alerts = await osc.get_recent_alerts(limit=10, hours=24)
+    except Exception as e:
+        logger.debug("Direct SOC alerts unavailable: %s", e)
+        recent_alerts = []
+
+    ticket_q = _tickets_assignee_filter(
+        select(Ticket).where(Ticket.status.in_(["open", "in_progress", "escalated"])).order_by(desc(Ticket.created_at)).limit(5),
+        user,
+    )
+    tickets = (await db.execute(ticket_q)).scalars().all()
+
+    total = int(stats.get("total_alerts_24h") or len(recent_alerts) or 0)
+    critical = int(stats.get("critical_alerts") or 0)
+    high = int(stats.get("high_alerts") or 0)
+    unique_agents = int(stats.get("unique_agents") or 0)
+    unique_attackers = int(stats.get("unique_attackers") or 0)
+
+    if "cuant" in q and ("log" in q or "lgo" in q or "alert" in q):
+        return (
+            f"Hoy hay {total} eventos/alertas Wazuh en las ultimas 24h. "
+            f"Criticas: {critical}; altas: {high}; agentes implicados: {unique_agents}; "
+            f"origenes unicos: {unique_attackers}. Tickets abiertos visibles: {len(tickets)}."
+        )
+
+    lines = [
+        f"Resumen de logs/alertas de hoy: {total} eventos en 24h, {critical} criticos y {high} altos.",
+        f"Agentes implicados: {unique_agents}; origenes unicos detectados: {unique_attackers}; tickets abiertos visibles: {len(tickets)}.",
+    ]
+    if recent_alerts:
+        lines.append("Ultimas alertas destacadas:")
+        for a in recent_alerts[:5]:
+            lines.append(
+                f"- {a.get('severity', 'N/A').upper()} regla {a.get('rule_id') or 'N/A'} "
+                f"en {a.get('agent_name') or 'N/A'} ip={a.get('source_ip') or 'N/A'}: "
+                f"{str(a.get('description') or '')[:140]}"
+            )
+    else:
+        lines.append("No pude leer alertas recientes desde OpenSearch ahora mismo; si el panel muestra datos, revisa conectividad backend-indexer.")
+
+    if tickets:
+        lines.append("Tickets abiertos relevantes:")
+        for t in tickets[:3]:
+            lines.append(f"- #{t.id} {t.severity.upper()} {t.status}: {t.title[:120]}")
+
+    lines.append("Siguiente paso recomendado: priorizar los eventos HIGH/CRITICAL repetidos por agente, validar si hay IP origen real y abrir/incorporar ticket si hay patron persistente.")
+    return "\n".join(lines)[:1800]
+
+
 async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) -> str:
     """Contexto interno acotado para el chatbot: solo lectura, pocos registros y sin secretos."""
     if not _chat_context_needed(question):
         return ""
 
     context: list[str] = []
+    q = (question or "").lower()
     ips = []
     for raw_ip in _IP_RE.findall(question or "")[:3]:
         try:
@@ -1399,6 +1500,181 @@ async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) ->
 
     ticket_ids = [int(x) for x in _TICKET_RE.findall(question or "")[:3]]
     alert_refs = [x.strip() for x in _ALERT_RE.findall(question or "")[:3]]
+
+    if any(word in q for word in ("activo", "activos", "agente", "agentes", "endpoint", "endpoints")):
+        try:
+            agents = await wazuh.get_agents()
+            if agents:
+                active = sum(1 for a in agents if str(a.get("status", "")).lower() == "active")
+                context.append(f"Activos/Agentes Wazuh: total={len(agents)} activos={active}")
+                for a in agents[:8]:
+                    context.append(
+                        f"- id={a.get('id')} nombre={a.get('name')} ip={a.get('ip', 'N/A')} "
+                        f"estado={a.get('status')} os={a.get('os', {}).get('name') if isinstance(a.get('os'), dict) else a.get('os', 'N/A')}"
+                    )
+        except Exception as e:
+            logger.debug("AI chat agents context unavailable: %s", e)
+
+    if any(word in q for word in ("auditoria", "auditoría", "audit", "acciones", "usuarios")):
+        if user.role == "admin":
+            audits = (await db.execute(select(AuditLog).order_by(desc(AuditLog.timestamp)).limit(8))).scalars().all()
+            if audits:
+                context.append("Auditoria reciente:")
+                for a in audits:
+                    context.append(f"- {a.timestamp.isoformat()} usuario={a.username or 'N/A'} accion={a.action} ruta={a.route} ip={a.ip_address or 'N/A'}")
+        else:
+            context.append("Auditoria: se requiere rol admin para ver eventos de auditoria.")
+
+    if any(word in q for word in ("usuario", "usuarios", "equipo", "analistas")):
+        if user.role == "admin":
+            users = (await db.execute(select(User).order_by(User.username).limit(12))).scalars().all()
+            context.append(f"Usuarios: total_muestra={len(users)}")
+            for u in users:
+                context.append(f"- id={u.id} username={u.username} rol={u.role} rango={u.security_rank}")
+
+    if any(word in q for word in ("ioc", "iocs", "threat intel", "intel", "indicador", "indicadores")):
+        iocs_q = select(IOC).order_by(desc(IOC.updated_at)).limit(10)
+        iocs = (await db.execute(iocs_q)).scalars().all()
+        if iocs:
+            context.append("Threat Intel / IOCs:")
+            for i in iocs:
+                context.append(
+                    f"- {i.value} tipo={i.ioc_type} estado={i.status} score={i.malicious_score}/{i.total_engines} "
+                    f"pais={i.country or 'N/A'} tags={','.join(i.tags or [])}"
+                )
+
+    if any(word in q for word in ("firewall", "bloqueada", "bloqueadas", "bloqueado", "bloqueados", "block")):
+        blocked = (await db.execute(
+            select(IOC).where(IOC.status == "blocked", IOC.ioc_type == "ip").order_by(desc(IOC.updated_at)).limit(10)
+        )).scalars().all()
+        context.append(f"Firewall / IPs bloqueadas: total_muestra={len(blocked)}")
+        for b in blocked:
+            context.append(f"- ip={b.value} pais={b.country or 'N/A'} tags={','.join(b.tags or [])} desde={b.updated_at.isoformat()}")
+
+    if any(word in q for word in ("honeypot", "honeypots", "cowrie", "ssh/tel", "telnet")):
+        try:
+            hp = await osc.get_cowrie_stats(24)
+            context.append(f"Honeypot Cowrie 24h: total={hp.get('total', 'N/A')} attackers={hp.get('unique_attackers', 'N/A')}")
+            sessions = await osc.get_cowrie_sessions(limit=5, hours=24)
+            if sessions:
+                context.append("Sesiones Cowrie recientes:")
+                for s in sessions[:5]:
+                    context.append(f"- {s}")
+        except Exception as e:
+            logger.debug("AI chat cowrie context unavailable: %s", e)
+
+    if any(word in q for word in ("mapa", "threatmap", "geo", "geograf", "pais", "país", "ataques geo")):
+        try:
+            tm = await get_threat_map_data(24)
+            context.append(f"Threat Map 24h: ataques={tm.get('total_attacks', 'N/A') if isinstance(tm, dict) else 'N/A'}")
+            attacks = tm.get("attacks", []) if isinstance(tm, dict) else []
+            for a in attacks[:8]:
+                context.append(f"- ip={a.get('ip')} pais={a.get('country')} ciudad={a.get('city')} count={a.get('count')}")
+        except Exception as e:
+            logger.debug("AI chat threat map context unavailable: %s", e)
+
+    if any(word in q for word in ("lsa", "lsass", "credencial", "credential dumping")):
+        try:
+            from app.lsa_monitor import fetch_lsa_alerts
+            lsa_alerts = await fetch_lsa_alerts(24)
+            context.append(f"LSA Monitor 24h: alertas={len(lsa_alerts)}")
+            for a in lsa_alerts[:6]:
+                context.append(f"- host={a.hostname} severidad={a.severity} usuario={a.user or 'N/A'} proceso={a.process_name} desc={a.description[:160]}")
+        except Exception as e:
+            logger.debug("AI chat LSA context unavailable: %s", e)
+
+    if any(word in q for word in ("bifrost", "bifröst", "madurez", "metrica", "métrica", "metricas", "métricas", "hunting")):
+        if user.role.lower() in ("admin", "analyst", "analista"):
+            try:
+                metrics = await soc_metrics(db, user)
+                context.append(
+                    f"Bifrost/Metricas SOC: tickets={metrics.get('tickets')} mttr_min={metrics.get('mttr_minutes')} "
+                    f"dwell_min={metrics.get('dwell_open_avg_minutes')} attack_coverage={metrics.get('attack_coverage_pct')}%"
+                )
+                context.append(f"Severidad tickets={metrics.get('by_severity')} alertas_24h={metrics.get('alerts_24h')}")
+            except Exception as e:
+                logger.debug("AI chat metrics context unavailable: %s", e)
+
+    if any(word in q for word in ("heimdall", "informe", "intel report", "reporte")):
+        if user.role.lower() in ("admin", "analyst", "analista"):
+            try:
+                report = await _build_heimdall_data(db, user.username)
+                context.append(
+                    f"Heimdall: tickets={report.get('incident_management')} iso={report.get('iso27001', {}).get('overall')} "
+                    f"attack_coverage={report.get('attack_coverage_pct')} metrics={report.get('wazuh_metrics')}"
+                )
+            except Exception as e:
+                logger.debug("AI chat Heimdall context unavailable: %s", e)
+
+    if any(word in q for word in ("cve", "cves", "vulnerabilidad", "vulnerabilidades", "kev", "exploit")):
+        try:
+            cves = await cve_feed.get_latest_cves(10)
+            context.append("CVE Intel recientes:")
+            for c in cves[:8]:
+                context.append(
+                    f"- {c.get('id')} sev={c.get('severity', 'N/A')} ransomware={c.get('ransomware', False)} "
+                    f"producto={c.get('product', 'N/A')} resumen={str(c.get('summary', ''))[:180]}"
+                )
+        except Exception as e:
+            logger.debug("AI chat CVE context unavailable: %s", e)
+
+    if any(word in q for word in ("health", "salud", "estado", "integraciones", "servicios", "stack")):
+        try:
+            services = await wazuh_services()
+            context.append(f"Estado integraciones/stack: {services}")
+        except Exception as e:
+            logger.debug("AI chat health context unavailable: %s", e)
+
+    if any(word in q for word in ("resumen", "resume", "dashboard", "estado", "hoy", "24h", "alerta", "alertas", "siem", "wazuh", "log", "logs", "lgos")):
+        try:
+            stats = await osc.get_dashboard_stats(24)
+            context.append(
+                "Resumen SOC 24h: "
+                f"alertas_totales={stats.get('total_alerts_24h', stats.get('total_alerts', 'N/A'))} "
+                f"criticas={stats.get('critical_alerts', 'N/A')} altas={stats.get('high_alerts', 'N/A')} "
+                f"agentes_activos={stats.get('active_agents', 'N/A')}"
+            )
+        except Exception as e:
+            logger.debug("AI chat dashboard context unavailable: %s", e)
+
+        try:
+            recent_alerts = await osc.get_recent_alerts(limit=10, hours=24)
+            if recent_alerts:
+                context.append("Alertas Wazuh ultimas 24h:")
+                for a in recent_alerts[:10]:
+                    context.append(
+                        f"- hora={a.get('timestamp') or 'N/A'} regla={a.get('rule_id') or 'N/A'} "
+                        f"sev={a.get('severity') or 'N/A'} ip={a.get('source_ip') or 'N/A'} "
+                        f"agente={a.get('agent_name') or 'N/A'} desc={str(a.get('description') or '')[:220]}"
+                    )
+        except Exception as e:
+            logger.debug("AI chat recent alerts context unavailable: %s", e)
+
+    if any(word in q for word in ("runbook", "procedimiento", "pasos", "contener", "mitigar")):
+        runbooks = (await db.execute(
+            select(Runbook).where(Runbook.is_active.is_(True)).order_by(Runbook.name).limit(5)
+        )).scalars().all()
+        if runbooks:
+            context.append("Runbooks activos:")
+            for r in runbooks:
+                context.append(
+                    f"- {r.name} categoria={r.category} severidad={r.severity_applicable} "
+                    f"descripcion={r.description[:180]} identificacion={str(r.identification_steps)[:180]} "
+                    f"contencion={str(r.containment_steps)[:180]}"
+                )
+
+    if any(word in q for word in ("monitor", "monitores", "regla", "reglas", "config")):
+        monitor_q = select(Monitor).order_by(Monitor.name).limit(8)
+        if user.role != "admin":
+            monitor_q = monitor_q.where(Monitor.enabled.is_(True))
+        monitors = (await db.execute(monitor_q)).scalars().all()
+        if monitors:
+            context.append("Monitores SOC:")
+            for m in monitors:
+                context.append(
+                    f"- {m.name} enabled={m.enabled} umbral={m.threshold} severidad_min={m.severity_floor} "
+                    f"patron={m.rule_id_pattern or 'N/A'} descripcion={(m.description or '')[:180]}"
+                )
 
     ticket_q = select(Ticket).order_by(desc(Ticket.created_at)).limit(5)
     filters = []
@@ -1471,6 +1747,7 @@ async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) ->
 
 async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None:
     """Genera y publica la respuesta del asistente IA en el chat interno."""
+    await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": True}))
     clean_question = _AI_CHAT_TRIGGER.sub("", question or "").strip()
     clean_question = clean_question[:_AI_CHAT_MAX_QUESTION_CHARS]
     if not clean_question:
@@ -1478,14 +1755,20 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
     try:
         async with SessionLocal() as db:
             requester = (await db.execute(select(User).where(User.id == requester_id))).scalar_one_or_none()
-            app_context = await _build_ai_chat_context(db, requester, clean_question) if requester else ""
-        answer = await chat_assistant(clean_question, app_context=app_context)
+            if not requester:
+                await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
+                return
+            direct_answer = await _build_direct_soc_answer(db, requester, clean_question)
+            app_context = "" if direct_answer else await _build_ai_chat_context(db, requester, clean_question)
+        answer = direct_answer or await chat_assistant(clean_question, app_context=app_context)
     except Exception as e:
         logger.warning("AI chat reply falló: %s", e)
+        await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
         return
     async with SessionLocal() as db:
         ai = (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none()
         if not ai:
+            await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
             return
         m = ChatMessage(
             id=f"ai-{secrets.token_hex(8)}",
@@ -1498,11 +1781,9 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
         db.add(m)
         await db.commit()
         await db.refresh(m)
-        await manager.broadcast(json.dumps({
-            "id": m.id, "userId": ai.id, "username": "VALHALLA-IA", "rank": "AI",
-            "text": answer, "timestamp": m.timestamp.isoformat(),
-            "chatId": chat_id, "mentions": [str(requester_id)], "attachment": None,
-        }))
+        broadcast_data = ChatMessageOut.model_validate(m).model_dump(by_alias=True, mode="json")
+        await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
+        await manager.broadcast(json.dumps(broadcast_data))
 
 # WEBHOOKS
 @app.post("/api/webhook/wazuh")
