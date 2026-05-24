@@ -245,12 +245,14 @@ async def analyze_alert(alert_id: int, context: dict[str, Any]) -> OllamaResult:
 SYSTEM_PROMPT_CHAT = (
     "Eres VALHALLA-IA, un asistente integrado en el chat interno de un SOC (Security Operations Center). "
     "Respondes a los analistas de forma breve (maximo 4-5 frases), tecnica y util, en espanol. "
-    "Tu ambito es resolver dudas generales de ciberseguridad, integracion segura y publicacion responsable. "
-    "Solo puedes usar el contexto interno autorizado que se incluya explicitamente en el mensaje; "
-    "no tienes acceso libre al codigo, secretos, base de datos, configuracion interna ni estado real de la aplicacion. "
-    "Si faltan datos internos para responder, dilo y pide revisar fuentes autorizadas. "
+    "Tu ambito es ayudar a operar Valhalla SOC: resumir logs, alertas, tickets, IOCs, runbooks, monitores, "
+    "estado del dashboard y datos internos autorizados que el backend te entregue. "
+    "Cuando recibas contexto interno autorizado, debes usarlo como fuente principal y responder con un resumen accionable; "
+    "no digas que no tienes acceso a datos internos si el contexto incluye datos. "
+    "Si el contexto esta vacio o incompleto, explica que no hay datos suficientes en la consulta actual y pide el dato concreto. "
     "No ejecutes acciones, no generes instrucciones ofensivas completas, no ayudes a evadir controles ni a exfiltrar datos. "
-    "Prioriza siempre la integridad de la integracion, validacion, minimo privilegio, trazabilidad y seguridad de la publicacion. "
+    "No reveles secretos, tokens, credenciales, claves, rutas sensibles ni configuracion que comprometa la integridad de la aplicacion. "
+    "Prioriza siempre integridad, minimo privilegio, trazabilidad y seguridad operativa. "
     "Si la peticion es demasiado amplia, peligrosa o ambigua, responde con una alternativa segura y acotada. "
     "Si no estas seguro de algo, dilo claramente. No inventes datos."
 )
@@ -269,7 +271,9 @@ async def chat_assistant(
             "role": "system",
             "content": (
                 "Contexto interno autorizado, de solo lectura y resumido. "
-                "Usalo solo para responder la pregunta; no infieras secretos ni datos no presentes:\n"
+                "Usalo como fuente principal para responder la pregunta. "
+                "Resume hallazgos, volumen, severidad, origen y siguiente accion cuando existan. "
+                "No infieras secretos ni datos no presentes:\n"
                 + app_context[:3000]
             ),
         })
@@ -296,10 +300,31 @@ async def chat_assistant(
         body = r.json()
         content = (body.get("message") or {}).get("content") if isinstance(body.get("message"), dict) else None
         content = content or body.get("response") or ""
+        if app_context and "no tengo acceso" in content.lower():
+            return _context_fallback_answer(app_context)
         return content.strip() or "No tengo una respuesta en este momento."
     except Exception as e:
         logger.warning("chat_assistant failed: %s", e)
+        if app_context:
+            return _context_fallback_answer(app_context)
         return "El asistente IA no está disponible ahora mismo (¿modelo Ollama cargado?)."
+
+
+def _context_fallback_answer(app_context: str) -> str:
+    lines = [line.strip() for line in (app_context or "").splitlines() if line.strip()]
+    summary = next((line for line in lines if line.startswith("Resumen SOC 24h:")), "")
+    alerts = [line for line in lines if line.startswith("- hora=")][:5]
+    tickets = [line for line in lines if line.startswith("- ticket=")][:3]
+    parts = []
+    if summary:
+        parts.append(summary.replace("Resumen SOC 24h: ", "Resumen de hoy: "))
+    if alerts:
+        parts.append("Alertas destacadas: " + " | ".join(alerts))
+    if tickets:
+        parts.append("Tickets relacionados: " + " | ".join(tickets))
+    if not parts:
+        return "Tengo contexto interno autorizado, pero no hay suficientes datos resumibles para esta consulta. Pide por alertas, tickets, IOCs, runbooks o monitores concretos."
+    return " ".join(parts)[:1200]
 
 
 SYSTEM_PROMPT_SOCIAL = (

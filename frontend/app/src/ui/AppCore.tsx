@@ -38,6 +38,7 @@ import {
   setTeamUsers, setDmUserIds, addDmUser,
   setUnreadForChat, incrementUnread, clearUnread,
   setChatInput, setMentionFilter, setShowMentionDrop, setPendingAttachment,
+  setAiTyping,
   ChatMessage, ChatAttachment,
 } from "../store/chatSlice";
 
@@ -158,6 +159,7 @@ export default function App() {
   const mentionFilter = useAppSelector((s) => s.chat.mentionFilter);
   const showMentionDrop = useAppSelector((s) => s.chat.showMentionDrop);
   const pendingAttachment = useAppSelector((s) => s.chat.pendingAttachment);
+  const isAiTyping = useAppSelector((s) => s.chat.isAiTyping);
 
   // ── Local UI state (no necesita store global) ──
   const [tweaksOpen, setTweaksOpen] = useState(false);
@@ -173,6 +175,18 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  const chatOpenRef = useRef(chatOpen);
+  const activeChatIdRef = useRef(activeChatId);
+
+  useEffect(() => {
+    chatOpenRef.current = chatOpen;
+  }, [chatOpen]);
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+    dispatch(setAiTyping(false));
+  }, [activeChatId, dispatch]);
 
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
 
@@ -385,15 +399,9 @@ export default function App() {
     } catch {}
   }, [user?.id]);
 
-  // WebSocket / Sync logic
+  // WebSocket connection logic (only on mount / login / logout)
   useEffect(() => {
     if (!user) return;
-
-    getChatHistory(activeChatId).then(history => {
-      if (history?.length > 0) {
-        dispatch(setHistoryForChat({ chatId: activeChatId, messages: history }));
-      }
-    }).catch(() => {});
 
     const wsUrl = getChatWsUrl();
     let ws: WebSocket;
@@ -410,60 +418,71 @@ export default function App() {
       };
 
       ws.onmessage = (e) => {
-      try {
-        const payload = JSON.parse(e.data);
-        if (payload?.type === "NEW_ALERT") {
-          const sev = payload.data?.severity || "medium";
-          if (sev === "critical" || sev === "high") {
-            playNotificationSound();
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload?.type === "NEW_ALERT") {
+            const sev = payload.data?.severity || "medium";
+            if (sev === "critical" || sev === "high") {
+              playNotificationSound();
+            }
+            dispatch(setNotifSeen(false));
+            return;
           }
-          dispatch(setNotifSeen(false));
-          return;
-        }
+          if (payload?.type === "AI_TYPING") {
+            if (!payload.chatId || payload.chatId === activeChatIdRef.current) {
+              dispatch(setAiTyping(Boolean(payload.isTyping)));
+            }
+            return;
+          }
 
-        const msg: ChatMessage = payload;
+          const msg: ChatMessage = payload;
+          dispatch(upsertMessage(msg));
+          if (msg.username?.toLowerCase() === "valhalla-ia") {
+            dispatch(setAiTyping(false));
+          }
 
-        dispatch(upsertMessage(msg));
+          const myId = user?.id ?? -1;
+          const myUsername = (user?.username || '').toLowerCase();
 
-        const myId = user?.id ?? -1;
-        const myUsername = (user?.username || '').toLowerCase();
+          const isFromMe = msg.userId === myId;
+          if (isFromMe) return;
 
-        const isFromMe = msg.userId === myId;
-        if (isFromMe) return;
+          const isMentionOfMe = Array.isArray(msg.mentions) &&
+            msg.mentions.some(m => m.toLowerCase() === myUsername);
 
-        const isMentionOfMe = Array.isArray(msg.mentions) &&
-          msg.mentions.some(m => m.toLowerCase() === myUsername);
+          const isDmToMe = msg.chatId.startsWith('dm:') &&
+            msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
 
-        const isDmToMe = msg.chatId.startsWith('dm:') &&
-          msg.chatId.replace('dm:', '').split('-').map(Number).includes(myId);
+          const isGlobal = msg.chatId === 'global';
+          const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
 
-        const isGlobal = msg.chatId === 'global';
-        const shouldNotify = isMentionOfMe || isDmToMe || isGlobal;
+          const currentChatOpen = chatOpenRef.current;
+          const currentActiveChatId = activeChatIdRef.current;
 
-        if (shouldNotify && (!chatOpen || activeChatId !== msg.chatId)) {
-          dispatch(incrementUnread(msg.chatId));
-          const stored = JSON.parse(localStorage.getItem('valhalla.unread') || '{}');
-          stored[msg.chatId] = (stored[msg.chatId] || 0) + 1;
-          localStorage.setItem('valhalla.unread', JSON.stringify(stored));
-          if (isMentionOfMe) playMentionSound();
-          else playChatSound();
-        }
+          if (shouldNotify && (!currentChatOpen || currentActiveChatId !== msg.chatId)) {
+            dispatch(incrementUnread(msg.chatId));
+            const stored = JSON.parse(localStorage.getItem('valhalla.unread') || '{}');
+            stored[msg.chatId] = (stored[msg.chatId] || 0) + 1;
+            localStorage.setItem('valhalla.unread', JSON.stringify(stored));
+            if (isMentionOfMe) playMentionSound();
+            else playChatSound();
+          }
 
-        if (msg.chatId.startsWith('dm:') && !isFromMe) {
-          const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
-          const otherId = parts.find(id => id !== myId);
-          if (otherId) {
-            dispatch(addDmUser(otherId));
-            const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(myId)) || '[]');
-            if (!stored.includes(otherId)) {
-              localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify([...stored, otherId]));
+          if (msg.chatId.startsWith('dm:') && !isFromMe) {
+            const parts = msg.chatId.replace('dm:', '').split('-').map(Number);
+            const otherId = parts.find(id => id !== myId);
+            if (otherId) {
+              dispatch(addDmUser(otherId));
+              const stored = JSON.parse(localStorage.getItem(DM_LIST_KEY(myId)) || '[]');
+              if (!stored.includes(otherId)) {
+                localStorage.setItem(DM_LIST_KEY(myId), JSON.stringify([...stored, otherId]));
+              }
             }
           }
+        } catch (err) {
+          if (import.meta.env.DEV) console.error("WS Message Error", err);
         }
-      } catch (err) {
-        if (import.meta.env.DEV) console.error("WS Message Error", err);
-      }
-    };
+      };
 
       ws.onclose = () => {
         if (disposed) return;
@@ -483,6 +502,23 @@ export default function App() {
       clearInterval(pingInterval);
       ws?.close();
     };
+  }, [user?.id]);
+
+  // Load chat history when switching channels or opening chat panel
+  useEffect(() => {
+    if (!user || !chatOpen) return;
+
+    getChatHistory(activeChatId).then(history => {
+      const currentMessages = chatMsgsByChat[activeChatId] || [];
+      if (history?.length > 0) {
+        const byId = new Map<string, ChatMessage>();
+        [...history, ...currentMessages].forEach((msg) => byId.set(msg.id, msg));
+        const merged = Array.from(byId.values())
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+          .slice(-200);
+        dispatch(setHistoryForChat({ chatId: activeChatId, messages: merged }));
+      }
+    }).catch(() => {});
   }, [user?.id, activeChatId, chatOpen]);
 
   useEffect(() => {
@@ -572,7 +608,13 @@ export default function App() {
       ...(pendingAttachment ? { attachment: pendingAttachment } : {})
     };
     dispatch(upsertMessage(msg));
-    postChatMessage(msg).catch(err => console.error("Chat Send Error", err));
+    if (/@(chatbot|ia|valhalla|heimdall)\b/i.test(msg.text)) {
+      dispatch(setAiTyping(true));
+    }
+    postChatMessage(msg).catch(err => {
+      dispatch(setAiTyping(false));
+      console.error("Chat Send Error", err);
+    });
     dispatch(setChatInput(''));
     dispatch(setPendingAttachment(null));
     dispatch(setShowMentionDrop(false));
@@ -1144,6 +1186,12 @@ export default function App() {
                       )}
                     </div>
                   ))}
+                  {isAiTyping && (
+                    <div className="chat-ai-typing" role="status" aria-live="polite">
+                      <span className="chat-ai-typing__orb" />
+                      <span>IA escribiendo...</span>
+                    </div>
+                  )}
                   <div ref={chatEndRef} />
                 </div>
 

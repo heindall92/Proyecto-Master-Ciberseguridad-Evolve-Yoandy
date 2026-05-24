@@ -31,6 +31,7 @@ interface ChatState {
   mentionFilter: string;
   showMentionDrop: boolean;
   pendingAttachment: ChatAttachment | null;
+  isAiTyping: boolean;
 }
 
 const initialState: ChatState = {
@@ -44,6 +45,7 @@ const initialState: ChatState = {
   mentionFilter: "",
   showMentionDrop: false,
   pendingAttachment: null,
+  isAiTyping: false,
 };
 
 const chatSlice = createSlice({
@@ -107,6 +109,9 @@ const chatSlice = createSlice({
     setPendingAttachment(state, action: PayloadAction<ChatAttachment | null>) {
       state.pendingAttachment = action.payload;
     },
+    setAiTyping(state, action: PayloadAction<boolean>) {
+      state.isAiTyping = action.payload;
+    },
   },
 });
 
@@ -126,5 +131,6 @@ export const {
   setMentionFilter,
   setShowMentionDrop,
   setPendingAttachment,
+  setAiTyping,
 } = chatSlice.actions;
 export default chatSlice.reducer;
