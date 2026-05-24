@@ -364,6 +364,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://192.168.46.1:3000,http://192.168.1.17:3000}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
+      OLLAMA_LIGHT_MODEL: ${OLLAMA_LIGHT_MODEL:-qwen2.5:3b-instruct}
       OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-45}
       WAZUH_API: ${WAZUH_API_URL:-https://wazuh.manager:55000}

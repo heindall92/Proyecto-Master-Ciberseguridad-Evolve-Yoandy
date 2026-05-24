@@ -45,8 +45,8 @@ class Settings(BaseSettings):
 
     # ── Ollama (local AI) ────────────────────────────────────────────────────
     ollama_base_url: str = "http://ollama:11434"
-    ollama_model: str = "qwen2.5-coder:7b"           # análisis pesado (triage, informes)
-    ollama_light_model: str = "qwen2.5:1.5b"          # interactivo (chat, post CVE) — no sobrecarga
+    ollama_model: str = "qwen2.5:3b-instruct"         # análisis pesado (triage, informes)
+    ollama_light_model: str = "qwen2.5:3b-instruct"   # interactivo (chat, post CVE)
     ollama_temperature: float = 0.0
     ollama_timeout_seconds: float = 45.0
 
