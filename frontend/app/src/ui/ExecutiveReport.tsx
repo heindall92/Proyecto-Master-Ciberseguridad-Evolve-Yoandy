@@ -295,6 +295,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [dateEnd, setDateEnd] = useState("");
   const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"api" | "fallback">("fallback");
 
   async function load() {
     setLoading(true);
@@ -365,6 +366,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
+      setDataSource(raw.source);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -419,6 +421,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     doc.setFillColor(...navy);
     doc.rect(0, 0, W, 45, "F");
+
+    if (logo) {
+      const ext = logo.split(';')[0].split('/')[1];
+      const fmt = (ext === 'jpeg' || ext === 'jpg') ? 'JPEG' : 'PNG';
+      doc.addImage(logo, fmt, W - M - 20, 5, 18, 12);
+    }
 
     doc.setTextColor(...white);
     doc.setFont("helvetica", "bold");
@@ -885,16 +893,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const isoScore2 = reportData.iso27001?.overall ?? 73;
     const isoColor2: [number, number, number] = isoScore2 >= 80 ? green : isoScore2 >= 60 ? yellow : red;
-    doc.setFillColor(240, 243, 247);
-    doc.roundedRect(M, remY2, col, 14, 2, 2, "F");
     doc.setTextColor(...black);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Nivel de cumplimiento global estimado:", M + 4, remY2 + 9);
+    doc.text("Nivel de cumplimiento global estimado:", M + 4, remY2 + 5);
     doc.setTextColor(...isoColor2);
     doc.setFontSize(13);
-    doc.text(`${isoScore2}%`, M + 120, remY2 + 9);
-    remY2 += 18;
+    doc.text(`${isoScore2}%`, M + 120, remY2 + 5);
+    remY2 += 12;
 
     const ctrlExplained: Record<string, string> = {
       "A.5.7 Threat Intelligence": "Uso de información sobre amenazas externas para anticipar ataques",
@@ -1033,6 +1039,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.rect(0, 0, W, 297, "F");
     doc.setFillColor(...navy);
     doc.rect(0, 0, W, 52, "F");
+
+    if (logo) {
+      const ext = logo.split(';')[0].split('/')[1];
+      const fmt = (ext === 'jpeg' || ext === 'jpg') ? 'JPEG' : 'PNG';
+      doc.addImage(logo, fmt, W - M - 20, 5, 18, 12);
+    }
+
     doc.setTextColor(...white);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
@@ -1428,7 +1441,19 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             </Typography>
           </Box>
         </Stack>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Chip
+            label={dataSource === "api" ? "● DATOS REALES" : "○ SIMULACIÓN"}
+            size="small"
+            variant="outlined"
+            sx={{
+              color: dataSource === "api" ? 'var(--signal)' : 'var(--amber)',
+              borderColor: dataSource === "api" ? 'rgba(60,255,158,0.4)' : 'rgba(255,159,26,0.4)',
+              fontSize: '9px',
+              fontWeight: 'bold',
+              letterSpacing: '1px',
+            }}
+          />
           <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
             {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
           </Button>
