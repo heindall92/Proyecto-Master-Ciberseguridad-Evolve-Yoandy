@@ -406,7 +406,7 @@ export async function fetchExecutiveReportData(): Promise<ExecutiveReportData> {
       honeypotIntel: data.honeypot_intel,
       incidentManagement: data.incident_management,
       remediationSteps: data.remediation_steps,
-      backendKeyFinding: data.executive_summary?.key_finding,
+      backendKeyFinding: data.executive_summary?.key_finding ?? data.executiveSummary,
       analystNameFromBackend: data.report_metadata?.analyst_name,
     };
   } catch (e) {
