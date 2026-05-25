@@ -1,5 +1,20 @@
 # Registro de cambios - Julieta
 
+## 2026-05-25 (fix coordenadas logo en portadas PDF ejecutivo y técnico)
+
+### Problema
+El logo aparecía demasiado grande y se superponía con el texto del header en `exportTechnicalPDF` (y potencialmente en `exportToPDF`). Las coordenadas anteriores `W-M-22, 4, 20, 14` generaban un área de 20×14mm que invadía la zona de texto.
+
+### Solución
+- `doc.addImage` en `exportToPDF`: coordenadas cambiadas a `W - M - 16, 6, 12, 12`.
+- `doc.addImage` en `exportTechnicalPDF`: mismas coordenadas `W - M - 16, 6, 12, 12`.
+- El logo queda como un cuadrado de 12×12mm, ligeramente más a la izquierda y más abajo dentro del band navy, sin pisar los textos del header.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — coordenadas de `doc.addImage` en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
 ## 2026-05-25 (fix botones barra superior + fix logo en PDF)
 
 ### Problema 1 — Botones cambiaron de tamaño visual
