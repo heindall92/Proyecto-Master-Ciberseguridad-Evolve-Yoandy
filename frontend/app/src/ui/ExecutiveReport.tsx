@@ -423,9 +423,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.rect(0, 0, W, 45, "F");
 
     if (logo) {
-      const ext = logo.split(';')[0].split('/')[1];
-      const fmt = (ext === 'jpeg' || ext === 'jpg') ? 'JPEG' : 'PNG';
-      doc.addImage(logo, fmt, W - M - 20, 5, 18, 12);
+      try {
+        const imgFormat = logo.startsWith('data:image/png')
+          ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, W - M - 22, 4, 20, 14);
+      } catch (e) {
+        console.warn('Logo no pudo agregarse al PDF:', e);
+      }
     }
 
     doc.setTextColor(...white);
@@ -1041,9 +1045,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.rect(0, 0, W, 52, "F");
 
     if (logo) {
-      const ext = logo.split(';')[0].split('/')[1];
-      const fmt = (ext === 'jpeg' || ext === 'jpg') ? 'JPEG' : 'PNG';
-      doc.addImage(logo, fmt, W - M - 20, 5, 18, 12);
+      try {
+        const imgFormat = logo.startsWith('data:image/png')
+          ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, W - M - 22, 4, 20, 14);
+      } catch (e) {
+        console.warn('Logo no pudo agregarse al PDF:', e);
+      }
     }
 
     doc.setTextColor(...white);
@@ -1441,7 +1449,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
             </Typography>
           </Box>
         </Stack>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2}>
           <Chip
             label={dataSource === "api" ? "● DATOS REALES" : "○ SIMULACIÓN"}
             size="small"

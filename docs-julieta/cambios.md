@@ -1,5 +1,27 @@
 # Registro de cambios - Julieta
 
+## 2026-05-25 (fix botones barra superior + fix logo en PDF)
+
+### Problema 1 — Botones cambiaron de tamaño visual
+El `alignItems="center"` agregado al Stack en el commit anterior hizo que los botones dejaran de estirarse (`stretch`) y adoptaran solo su altura natural, quedando visualmente más pequeños.
+
+### Solución
+- Se quitó únicamente `alignItems="center"` del Stack de la barra superior.
+- El `Chip` de fuente de datos se mantiene sin cambios.
+
+### Problema 2 — Logo no aparecía en los PDFs
+El `doc.addImage(logo, fmt, ...)` fallaba silenciosamente porque jsPDF necesita detectar el formato desde el propio data URL cuando el primer argumento es un data URL, y la lógica de extracción del tipo MIME era frágil (podía producir un `fmt` incorrecto para ciertos tipos).
+
+### Solución
+- Se reemplazó el bloque `if (logo)` en **ambas** funciones (`exportToPDF` y `exportTechnicalPDF`) por una versión con `try/catch` y detección directa del formato: `logo.startsWith('data:image/png')` → `'PNG'`, cualquier otro → `'JPEG'`.
+- Si `addImage` lanza un error (formato no soportado, data URL corrupto), se captura y se loguea como `console.warn` sin interrumpir la generación del PDF.
+- Coordenadas ajustadas: `x = W - M - 22`, `y = 4`, `w = 20`, `h = 14` (ligeramente mayor que el bloque anterior, más visible).
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — Stack barra superior + bloques `if (logo)` en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
 ## 2026-05-25 (datos reales del backend: fallback key_finding + indicador de fuente)
 
 ### Problema
