@@ -424,22 +424,33 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     if (logo) {
       try {
-        const imgFormat = logo.startsWith('data:image/png')
-          ? 'PNG' : 'JPEG';
-        doc.addImage(logo, imgFormat, W - M - 16, 6, 12, 12);
+        const imgFormat = logo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, M, 7, 16, 16);
       } catch (e) {
         console.warn('Logo no pudo agregarse al PDF:', e);
       }
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(M + 18, 8, M + 18, 23);
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("INFORME EJECUTIVO DE SEGURIDAD", M + 21, 17);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Security Operations Center — Valhalla SOC", M + 21, 24);
+    } else {
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Security Operations Center — Valhalla SOC", M, 30);
     }
 
     doc.setTextColor(...white);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
-    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Security Operations Center — Valhalla SOC", M, 30);
-
     doc.setFontSize(8);
     doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 25, { align: "right" });
@@ -1046,23 +1057,39 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     if (logo) {
       try {
-        const imgFormat = logo.startsWith('data:image/png')
-          ? 'PNG' : 'JPEG';
-        doc.addImage(logo, imgFormat, W - M - 16, 6, 12, 12);
+        const imgFormat = logo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, M, 10, 18, 18);
       } catch (e) {
         console.warn('Logo no pudo agregarse al PDF:', e);
       }
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(M + 20, 11, M + 20, 27);
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("INFORME TÉCNICO DE SEGURIDAD", M + 23, 20);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Security Operations Center — Valhalla SOC", M + 23, 28);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(7.5);
+      doc.text("Orientado a CISO y Responsables de Seguridad", M + 23, 35);
+    } else {
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("INFORME TÉCNICO DE SEGURIDAD", M, 18);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Security Operations Center — Valhalla SOC", M, 27);
+      doc.setFontSize(8);
+      doc.text("Orientado a CISO y Responsables de Seguridad", M, 35);
     }
 
     doc.setTextColor(...white);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("INFORME TÉCNICO DE SEGURIDAD", M, 18);
-    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Security Operations Center — Valhalla SOC", M, 27);
     doc.setFontSize(8);
-    doc.text("Orientado a CISO y Responsables de Seguridad", M, 35);
     doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 26, { align: "right" });
     doc.text(`Período: ${period}`, W - M, 34, { align: "right" });

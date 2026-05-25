@@ -1,5 +1,35 @@
 # Registro de cambios - Julieta
 
+## 2026-05-25 (rediseño header PDF ejecutivo y técnico: logo izquierda + título al lado)
+
+### Problema
+El logo se posicionaba en la esquina superior derecha del header, encima de los textos de metadata (Ref, Fecha, Período, Analista). No había separación visual clara entre logo, título y metadata.
+
+### Nuevo layout del header (ambos PDFs)
+Diseño en dos bloques dentro del band navy:
+- **Bloque izquierdo:** logo (16×16mm ejecutivo / 18×18mm técnico) + línea divisoria vertical blanca fina (0.3px) + título en bold + subtítulo(s)
+- **Bloque derecho:** metadata (Ref, Fecha, Período, Analista, Cliente) right-aligned en x=W-M=190, sin cambios
+
+Cuando no hay logo subido: layout original conservado (título a x=M, fuente 16pt).
+
+### Coordenadas ejecutivo (band=45mm)
+- Logo: x=M, y=7, 16×16mm
+- Divider: x=M+18, y=8 a y=23
+- Título "INFORME EJECUTIVO...": x=M+21, y=17, bold 12pt, blanco
+- Subtítulo "Security Operations Center...": x=M+21, y=24, normal 8pt, blanco
+
+### Coordenadas técnico (band=52mm)
+- Logo: x=M, y=10, 18×18mm
+- Divider: x=M+20, y=11 a y=27
+- Título "INFORME TÉCNICO...": x=M+23, y=20, bold 13pt, blanco
+- Subtítulo 1 "Security Operations Center...": x=M+23, y=28, normal 8pt, blanco
+- Subtítulo 2 "Orientado a CISO...": x=M+23, y=35, italic 7.5pt, blanco
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — bloque header en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
 ## 2026-05-25 (fix coordenadas logo en portadas PDF ejecutivo y técnico)
 
 ### Problema
