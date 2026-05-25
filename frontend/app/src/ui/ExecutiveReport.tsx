@@ -426,7 +426,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       try {
         const imgFormat = logo.startsWith('data:image/png')
           ? 'PNG' : 'JPEG';
-        doc.addImage(logo, imgFormat, W - M - 22, 4, 20, 14);
+        doc.addImage(logo, imgFormat, W - M - 16, 6, 12, 12);
       } catch (e) {
         console.warn('Logo no pudo agregarse al PDF:', e);
       }
@@ -1048,7 +1048,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       try {
         const imgFormat = logo.startsWith('data:image/png')
           ? 'PNG' : 'JPEG';
-        doc.addImage(logo, imgFormat, W - M - 22, 4, 20, 14);
+        doc.addImage(logo, imgFormat, W - M - 16, 6, 12, 12);
       } catch (e) {
         console.warn('Logo no pudo agregarse al PDF:', e);
       }
