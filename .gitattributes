@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Valhalla SOC — Git line endings
+#
+# Shell scripts and Python files must be LF on all platforms.
+# Mounted as Docker bind volumes, CRLF shebangs break Linux containers.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Default: auto-detect
+* text=auto
+
+# Force LF for files executed inside Linux containers or scripts
+*.sh    text eol=lf
+*.py    text eol=lf
+*.bash  text eol=lf
+
+# XML/YAML configs mounted into containers
+*.xml   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Windows-specific scripts keep CRLF
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
