@@ -22,6 +22,24 @@
 
 ---
 
+## Quick Start — Un solo comando
+
+**Windows (PowerShell como Administrador):**
+```powershell
+irm https://raw.githubusercontent.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/main/install.ps1 | iex
+```
+
+**Linux / macOS / WSL:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/main/install.sh | bash
+```
+
+El script comprueba los requisitos, clona el repo, genera los secretos, levanta todos los contenedores y descarga el modelo de IA. En ~5 minutos tienes el SOC funcionando en `http://localhost:3000`.
+
+> **Requisitos mínimos:** Docker Desktop, Git, Python 3 · 8 GB RAM · 20 GB disco libre
+
+---
+
 ## Índice
 
 <details>
