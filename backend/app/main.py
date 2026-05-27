@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 import json
 import secrets
 from starlette.middleware.base import BaseHTTPMiddleware
-from sqlalchemy import select, desc, func, delete, or_
+from sqlalchemy import select, desc, func, delete, or_, text, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -287,10 +287,22 @@ def _safe_evidence_filename(raw: str) -> str:
 
 ALLOWED_EVIDENCE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".txt", ".log", ".json", ".csv", ".pcap", ".zip"}
 
+
+def _migrate_users_rank_column(sync_conn) -> None:
+    """Renombra users.rank → security_rank en BDs creadas antes de la rama Rosa."""
+    if "users" not in inspect(sync_conn).get_table_names():
+        return
+    cols = {c["name"] for c in inspect(sync_conn).get_columns("users")}
+    if "rank" in cols and "security_rank" not in cols:
+        sync_conn.execute(text("ALTER TABLE users RENAME COLUMN rank TO security_rank"))
+        logger.info("Migración DB: users.rank → users.security_rank")
+
+
 @app.on_event("startup")
 async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_migrate_users_rank_column)
     
     # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
@@ -520,7 +532,7 @@ async def update_user_ep(user_id: int, req: UserUpdate, db: AsyncSession = Depen
     if req.username: u.username = req.username
     if req.email: u.email = req.email
     if req.role and current.role == "admin": u.role = req.role
-    if req.rank: u.rank = req.rank
+    if req.security_rank: u.security_rank = req.security_rank
     if req.avatar_url is not None: u.avatar_url = req.avatar_url
     if req.password: u.password_hash = get_password_hash(req.password)
     
