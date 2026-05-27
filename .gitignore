@@ -12,6 +12,7 @@ credenciales.txt
 
 # ── Claude / AI internal files ────────────────────────────────────────────────
 .claude/
+.codegraph/
 .remember/
 .playwright-mcp/
 
