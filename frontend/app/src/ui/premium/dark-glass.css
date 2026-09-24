@@ -1,0 +1,147 @@
+/* ======================================================
+   VALHALLA SOC — Modo oscuro "glass" neutro.
+   Base grafito común a todos los acentos (antes cada esquema teñía fondo,
+   texto y líneas de su color). El acento (--signal) queda para iconos,
+   estados activos y detalles. Referencia: ENS Compliance Studio (oscuro).
+   Selector [data-theme="dark"][data-scheme] para ganar a HUD.css/accents.css.
+   ====================================================== */
+
+body[data-theme="dark"],
+body[data-theme="dark"][data-scheme] {
+  --bg-void: #0b1114;
+  --bg-panel: rgba(18, 26, 30, 0.78);
+  --bg-panel-2: rgba(22, 32, 37, 0.72);
+  --bg-panel-deep: #0f171b;
+  --bg-glass: rgba(18, 26, 30, 0.55);
+  --text: #dfe7ea;
+  --text-dim: #8b9ca4;
+  --text-faint: #5f6f77;
+  --text-bright: #f3f7f8;
+  --line: #212d33;
+  --line-strong: #2d3b42;
+  --line-faint: #182227;
+  --scanline-color: rgba(255, 255, 255, 0.012);
+  --signal-deep: color-mix(in srgb, var(--signal) 16%, #121a1e);
+  --signal-glow: color-mix(in srgb, var(--signal) 28%, transparent);
+  --danger: #f07f75;
+  --amber: #e5b45a;
+  --cyan: #6fc3e6;
+
+  --dg-glass: rgba(18, 26, 30, 0.72);
+  --dg-glass-strong: rgba(22, 32, 37, 0.82);
+  --dg-blur: blur(18px) saturate(1.4);
+  --dg-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --dg-sh-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --dg-sh-2: 0 8px 28px -8px rgba(0, 0, 0, 0.6);
+  --dg-accent-soft: color-mix(in srgb, var(--signal) 12%, #121a1e);
+  --dg-accent-line: color-mix(in srgb, var(--signal) 34%, #2d3b42);
+
+  --vp-surface: rgba(18, 26, 30, 0.94);
+  --vp-surface-2: rgba(22, 32, 37, 0.8);
+  --vp-hover: color-mix(in srgb, var(--signal) 9%, transparent);
+  --vp-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px #2d3b42;
+}
+
+/* ---------- Lienzo ---------- */
+body[data-theme="dark"] .app {
+  background:
+    radial-gradient(55% 45% at 0% 0%, color-mix(in srgb, var(--signal) 7%, transparent), transparent 70%),
+    radial-gradient(45% 40% at 100% 100%, color-mix(in srgb, var(--signal) 4%, transparent), transparent 70%),
+    var(--bg-void);
+}
+/* Viñeta más suave que la original */
+body[data-theme="dark"]::after { background: radial-gradient(rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.22) 100%) !important; }
+
+/* ---------- Barra superior ---------- */
+body[data-theme="dark"] .topbar {
+  background: var(--dg-glass-strong);
+  backdrop-filter: var(--dg-blur); -webkit-backdrop-filter: var(--dg-blur);
+  border: 1px solid var(--line);
+  box-shadow: var(--dg-inset), var(--dg-sh-1);
+  --tb-fg: var(--text);
+  --tb-fg-dim: var(--text-dim);
+  --tb-border: var(--line-strong);
+  --tb-bg: rgba(255, 255, 255, 0.03);
+  --tb-bg-hover: color-mix(in srgb, var(--signal) 10%, transparent);
+  --tb-accent: var(--signal);
+}
+body[data-theme="dark"] .topbar .topbar__logo { background: var(--dg-accent-soft) !important; border-color: var(--dg-accent-line) !important; box-shadow: none !important; }
+body[data-theme="dark"] .topbar-stat__label { color: var(--text-faint); }
+body[data-theme="dark"] .topbar-stat__divider { background: var(--line-strong); }
+body[data-theme="dark"] .topbar-stat__value--warn { color: var(--danger); }
+body[data-theme="dark"] .vp-kbd { background: rgba(0, 0, 0, 0.25); }
+body[data-theme="dark"] .vp-iconbtn:hover { box-shadow: none; }
+
+/* ---------- Menú lateral (forma cyberpunk intacta, colores neutros) ---------- */
+body[data-theme="dark"] .sidenav {
+  background: var(--dg-glass);
+  backdrop-filter: var(--dg-blur); -webkit-backdrop-filter: var(--dg-blur);
+  border: 1px solid var(--line);
+  box-shadow: var(--dg-inset);
+}
+body[data-theme="dark"] .navbtn::before {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
+}
+body[data-theme="dark"] .navbtn::after { border-left-color: var(--text-faint); opacity: 0.6; }
+body[data-theme="dark"] .navbtn__icon-wrap { border: 1px solid var(--dg-accent-line); background: var(--dg-accent-soft); }
+body[data-theme="dark"] .navbtn__icon { stroke: var(--signal); filter: none; }
+body[data-theme="dark"] .navbtn__main { color: var(--text); }
+body[data-theme="dark"] .navbtn__sub { color: var(--text-faint); }
+body[data-theme="dark"] .navbtn__badge { color: var(--text-dim); }
+body[data-theme="dark"] .navbtn__badge.danger { color: var(--danger); text-shadow: none; }
+body[data-theme="dark"] .navbtn:hover::before { background: color-mix(in srgb, var(--signal) 7%, rgba(255, 255, 255, 0.03)); box-shadow: none; }
+body[data-theme="dark"] .navbtn.active::before {
+  background: color-mix(in srgb, var(--signal) 15%, #121a1e);
+  box-shadow: inset 3px 0 0 var(--signal);
+}
+body[data-theme="dark"] .navbtn.active .navbtn__icon-wrap { background: var(--signal); border-color: var(--signal); }
+body[data-theme="dark"] .navbtn.active .navbtn__icon { stroke: #0b1114; }
+body[data-theme="dark"] .navbtn.active .navbtn__main { color: var(--text-bright); }
+body[data-theme="dark"] .navbtn.active .navbtn__sub { color: var(--signal); }
+body[data-theme="dark"] .navbtn.active::after { border-left-color: var(--signal); opacity: 1; }
+
+/* ---------- Paneles ---------- */
+body[data-theme="dark"] .panel {
+  background: var(--dg-glass-strong);
+  backdrop-filter: var(--dg-blur); -webkit-backdrop-filter: var(--dg-blur);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--dg-inset), var(--dg-sh-1);
+}
+body[data-theme="dark"] .panel__head { border-bottom: 1px solid var(--line); background: transparent; }
+body[data-theme="dark"] .panel__title { color: var(--text-bright); }
+
+/* ---------- Formularios: 1px y foco suave ---------- */
+body[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] select {
+  background-color: var(--bg-panel-deep) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 9px;
+  color: var(--text-bright) !important;
+}
+body[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+body[data-theme="dark"] textarea:hover,
+body[data-theme="dark"] select:hover { border-color: color-mix(in srgb, var(--signal) 40%, var(--line-strong)) !important; }
+body[data-theme="dark"] input:focus,
+body[data-theme="dark"] textarea:focus,
+body[data-theme="dark"] select:focus {
+  border-color: var(--signal) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 18%, transparent) !important;
+}
+
+/* ---------- Popovers / centro de ayuda ---------- */
+body[data-theme="dark"] .vp-pop { background: var(--vp-surface); border-color: var(--line-strong); box-shadow: var(--dg-inset), var(--dg-sh-2); }
+body[data-theme="dark"] .vp-pop::before { opacity: 0.5; }
+body[data-theme="dark"] .vp-help { background: var(--bg-void); border-left-color: var(--line-strong); }
+body[data-theme="dark"] .vp-help__hero { background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--signal) 12%, transparent) 0%, transparent 55%), #121a1e; border-color: var(--line); }
+body[data-theme="dark"] .vp-topic,
+body[data-theme="dark"] .vp-faq-group,
+body[data-theme="dark"] .vp-ref,
+body[data-theme="dark"] .vp-shortcut { background: #121a1e; border-color: var(--line); }
+body[data-theme="dark"] .pf-card { background: var(--dg-glass-strong); border-color: var(--line); box-shadow: var(--dg-inset), var(--dg-sh-1); }
+body[data-theme="dark"] .pf-avatar__img { border-color: #121a1e; background: linear-gradient(135deg, var(--dg-accent-soft), #0b1114); }
+body[data-theme="dark"] .pf-avatar__status { border-color: #121a1e; }
+body[data-theme="dark"] .pf-tl__dot { background: #121a1e; }
