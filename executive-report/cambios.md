@@ -1,5 +1,138 @@
 # Registro de cambios - Julieta
 
+## 2026-05-25 (rediseño header PDF ejecutivo y técnico: logo izquierda + título al lado)
+
+### Problema
+El logo se posicionaba en la esquina superior derecha del header, encima de los textos de metadata (Ref, Fecha, Período, Analista). No había separación visual clara entre logo, título y metadata.
+
+### Nuevo layout del header (ambos PDFs)
+Diseño en dos bloques dentro del band navy:
+- **Bloque izquierdo:** logo (16×16mm ejecutivo / 18×18mm técnico) + línea divisoria vertical blanca fina (0.3px) + título en bold + subtítulo(s)
+- **Bloque derecho:** metadata (Ref, Fecha, Período, Analista, Cliente) right-aligned en x=W-M=190, sin cambios
+
+Cuando no hay logo subido: layout original conservado (título a x=M, fuente 16pt).
+
+### Coordenadas ejecutivo (band=45mm)
+- Logo: x=M, y=7, 16×16mm
+- Divider: x=M+18, y=8 a y=23
+- Título "INFORME EJECUTIVO...": x=M+21, y=17, bold 12pt, blanco
+- Subtítulo "Security Operations Center...": x=M+21, y=24, normal 8pt, blanco
+
+### Coordenadas técnico (band=52mm)
+- Logo: x=M, y=10, 18×18mm
+- Divider: x=M+20, y=11 a y=27
+- Título "INFORME TÉCNICO...": x=M+23, y=20, bold 13pt, blanco
+- Subtítulo 1 "Security Operations Center...": x=M+23, y=28, normal 8pt, blanco
+- Subtítulo 2 "Orientado a CISO...": x=M+23, y=35, italic 7.5pt, blanco
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — bloque header en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
+## 2026-05-25 (fix coordenadas logo en portadas PDF ejecutivo y técnico)
+
+### Problema
+El logo aparecía demasiado grande y se superponía con el texto del header en `exportTechnicalPDF` (y potencialmente en `exportToPDF`). Las coordenadas anteriores `W-M-22, 4, 20, 14` generaban un área de 20×14mm que invadía la zona de texto.
+
+### Solución
+- `doc.addImage` en `exportToPDF`: coordenadas cambiadas a `W - M - 16, 6, 12, 12`.
+- `doc.addImage` en `exportTechnicalPDF`: mismas coordenadas `W - M - 16, 6, 12, 12`.
+- El logo queda como un cuadrado de 12×12mm, ligeramente más a la izquierda y más abajo dentro del band navy, sin pisar los textos del header.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — coordenadas de `doc.addImage` en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
+## 2026-05-25 (fix botones barra superior + fix logo en PDF)
+
+### Problema 1 — Botones cambiaron de tamaño visual
+El `alignItems="center"` agregado al Stack en el commit anterior hizo que los botones dejaran de estirarse (`stretch`) y adoptaran solo su altura natural, quedando visualmente más pequeños.
+
+### Solución
+- Se quitó únicamente `alignItems="center"` del Stack de la barra superior.
+- El `Chip` de fuente de datos se mantiene sin cambios.
+
+### Problema 2 — Logo no aparecía en los PDFs
+El `doc.addImage(logo, fmt, ...)` fallaba silenciosamente porque jsPDF necesita detectar el formato desde el propio data URL cuando el primer argumento es un data URL, y la lógica de extracción del tipo MIME era frágil (podía producir un `fmt` incorrecto para ciertos tipos).
+
+### Solución
+- Se reemplazó el bloque `if (logo)` en **ambas** funciones (`exportToPDF` y `exportTechnicalPDF`) por una versión con `try/catch` y detección directa del formato: `logo.startsWith('data:image/png')` → `'PNG'`, cualquier otro → `'JPEG'`.
+- Si `addImage` lanza un error (formato no soportado, data URL corrupto), se captura y se loguea como `console.warn` sin interrumpir la generación del PDF.
+- Coordenadas ajustadas: `x = W - M - 22`, `y = 4`, `w = 20`, `h = 14` (ligeramente mayor que el bloque anterior, más visible).
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — Stack barra superior + bloques `if (logo)` en `exportToPDF` y `exportTechnicalPDF`
+
+---
+
+## 2026-05-25 (datos reales del backend: fallback key_finding + indicador de fuente)
+
+### Problema
+Dos gaps en el uso de datos reales:
+1. En `reportApi.ts`, `backendKeyFinding` se llenaba **solo** desde `data.executive_summary?.key_finding`. Si ese campo era null (e.g. el backend devuelve el resumen IA únicamente en `executiveSummary` y no en el objeto anidado `executive_summary`), el `key_finding` del PDF caía al texto hardcodeado aunque hubiera un resumen IA disponible.
+2. En `ExecutiveReport.tsx` no había ningún indicador visual que le dijera al analista si los datos del dashboard y los PDFs provienen del backend real (OpenSearch + Ollama + DB) o del modo fallback (datos simulados).
+
+### Solución aplicada en `reportApi.ts`
+- `backendKeyFinding` ahora usa `data.executive_summary?.key_finding ?? data.executiveSummary`: si el objeto `executive_summary` no tiene `key_finding`, toma el campo de nivel superior `executiveSummary` (ambos contienen el resumen generado por Ollama en el backend actual).
+
+### Solución aplicada en `ExecutiveReport.tsx`
+- Se agrega estado `dataSource: "api" | "fallback"` (default `"fallback"`).
+- En `load()`, después de `setReportData(structured)`, se llama `setDataSource(raw.source)` para registrar la fuente real del dato.
+- En la barra superior de la UI se agrega un `Chip` con variante `outlined` que muestra:
+  - `"● DATOS REALES"` en verde (`var(--signal)`) cuando `dataSource === "api"`
+  - `"○ SIMULACIÓN"` en ámbar (`var(--amber)`) cuando `dataSource === "fallback"`
+- El chip se ubica al inicio del grupo de botones (antes de PREVIEW UI), alineado verticalmente al centro del stack.
+
+### Nota sobre los PDFs
+Los PDFs ya usan los datos reales vía `reportData` (que viene de `load()`), por lo que no requieren cambios adicionales para este fix.
+
+### Archivos modificados
+- `frontend/app/src/lib/reportApi.ts` — línea `backendKeyFinding` en `fetchExecutiveReportData()`
+- `frontend/app/src/ui/ExecutiveReport.tsx` — estado `dataSource`, `load()`, barra de botones
+
+---
+
+## 2026-05-25 (fix recuadro ISO 27001 página 4 PDF ejecutivo)
+
+### Problema
+En la página 4 del PDF ejecutivo (`exportToPDF`), el recuadro gris de "Nivel de cumplimiento global estimado:" tenía altura fija de 14mm. Si `remY2` acumula espacio suficiente antes de llegar a esa sección (muchas recomendaciones + acciones), el recuadro puede quedar cortado por el footer en y=285, truncando el texto visible.
+
+### Solución aplicada en `ExecutiveReport.tsx`
+- Se eliminan las dos líneas que dibujaban el fondo del recuadro:
+  - `doc.setFillColor(240, 243, 247);`
+  - `doc.roundedRect(M, remY2, col, 14, 2, 2, "F");`
+- El texto "Nivel de cumplimiento global estimado:" y el porcentaje `${isoScore2}%` se mantienen idénticos pero ahora se renderizan directamente sobre el fondo blanco, sin caja detrás.
+- La posición Y del texto se ajusta de `remY2 + 9` a `remY2 + 5` (ya no hay caja que centre verticalmente).
+- `remY2 += 18` se reduce a `remY2 += 12` para compensar el espacio que ocupaba la caja eliminada.
+- Los recuadros individuales de cada control ISO (en el `forEach` siguiente) no se tocan — esos son elementos independientes y no estaban causando el problema.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — función `exportToPDF`, sección 9 ISO 27001
+
+---
+
+## 2026-05-25 (fix logo en portada PDF ejecutivo y PDF técnico)
+
+### Problema
+El logo subido por el usuario (campo "UPLOAD COMPANY LOGO") se cargaba correctamente en el estado `logo` (base64 data URL) pero ninguna de las dos funciones de exportación lo usaba. Ambos PDFs generaban portadas sin logo.
+
+### Solución aplicada en `ExecutiveReport.tsx`
+- En `exportToPDF()`: se inserta `doc.addImage()` inmediatamente después de dibujar el rectángulo del encabezado navy (`doc.rect(0, 0, W, 45, "F")`), antes de cualquier texto.
+- En `exportTechnicalPDF()`: misma inserción después de `doc.rect(0, 0, W, 52, "F")` de la portada.
+- Posición del logo: `x = W - M - 20 = 170mm`, `y = 5mm`, `w = 18mm`, `h = 12mm` — extremo superior derecho del encabezado navy, fuera del área de cualquier texto (los textos del lado derecho empiezan en `y=18`, el logo termina en `y=17`).
+- Detección de formato: se extrae el tipo MIME del data URL (`data:image/TYPE;base64,...`) para pasar `'JPEG'` o `'PNG'` a jsPDF. Solo se dibuja si `logo !== null`.
+
+### Comportamiento
+- Si no se subió logo: los PDFs se generan igual que antes (sin cambios).
+- Si se subió logo: aparece en la esquina superior derecha del encabezado de la portada en ambos PDFs.
+
+### Archivos modificados
+- `frontend/app/src/ui/ExecutiveReport.tsx` — funciones `exportToPDF` y `exportTechnicalPDF`
+
+---
+
 ## 2026-05-22 (date range picker visual estilo Airbnb — React puro)
 
 ### Cambio
