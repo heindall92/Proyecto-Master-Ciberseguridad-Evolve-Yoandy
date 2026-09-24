@@ -67,6 +67,7 @@ import CinematicIntro from "./components/CinematicIntro";
 import "./premium/premium.css";
 import "./premium/accents.css";
 import "./premium/light-glass.css";
+import "./premium/dark-glass.css";
 import CommandPalette, { PaletteCommand } from "./premium/CommandPalette";
 import HelpCenter from "./premium/HelpCenter";
 import QuickSettings from "./premium/QuickSettings";
@@ -809,7 +810,6 @@ export default function App() {
         {!tvMode && (
         <header
           className="topbar"
-          style={theme === 'dark' ? { background: 'rgba(10, 25, 20, 0.95)', borderBottom: '1px solid var(--signal-dim)' } : undefined}
         >
           <div className="topbar__brand" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div className="topbar__logo" style={{ width: '32px', height: '32px', background: 'rgba(60,255,158,0.05)', border: '1px solid var(--signal)', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'rotate(45deg)', boxShadow: '0 0 10px var(--signal-glow)', marginRight: '8px' }}>
