@@ -35,6 +35,8 @@ export type UserOut = {
   is_superuser: boolean;
   role: string;
   security_rank: string;
+  avatar_url?: string | null;
+  created_at?: string;
 };
 
 export type AgentOut = {
@@ -662,4 +664,16 @@ export function getMySession() {
   return http<{ username: string; ip: string; user_agent: string; expires_minutes: number }>(
     "/api/auth/me/session"
   );
+}
+
+export interface MyActivityEntry {
+  id: number;
+  method: string;
+  route: string;
+  ip: string | null;
+  timestamp: string;
+}
+
+export function getMyActivity(limit = 20) {
+  return http<MyActivityEntry[]>(`/api/auth/me/activity?limit=${limit}`);
 }

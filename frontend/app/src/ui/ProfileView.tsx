@@ -1,328 +1,479 @@
-import { useState, useEffect } from "react";
-import { UserOut, updateUser, uploadMyAvatar, getMySession } from "../lib/api";
-import { translations } from "./translations";
+import { useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Camera, Trash2, Mail, CalendarDays, Hash, ShieldCheck, KeyRound, Eye, EyeOff, Check, X,
+  Save, Siren, CircleCheckBig, ScrollText, Timer, MonitorSmartphone, Globe, Clock, Activity,
+  LogIn, LogOut, UserPen, UserCheck, Paperclip, MessageSquare, SlidersHorizontal, Plus,
+  Bell, Volume2, AtSign, ShieldAlert, Briefcase, BookOpen, Bug, ChevronRight, AlertCircle,
+} from "lucide-react";
+import {
+  UserOut, updateUser, uploadMyAvatar, getMySession, getMyActivity, listTickets, MyActivityEntry,
+} from "../lib/api";
+import { getSoundPrefs, setSoundPrefs, SoundCategory } from "./audio";
+import "./premium/profile.css";
 
-export default function ProfileView({
-  user,
-  lang = "es",
-  onUpdate,
-  profilePic,
-  setProfilePic
-}: {
-  user: UserOut,
-  lang?: "es" | "en",
-  onUpdate: (u: UserOut) => void,
-  profilePic: string | null,
-  setProfilePic: (pic: string | null) => void
-}) {
-  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
+type Lang = "es" | "en";
+
+// Reglas idénticas a InputValidator.validate_password (backend/app/security.py).
+function passwordChecks(pw: string) {
+  return {
+    length: pw.length >= 8,
+    mixed: /[a-z]/.test(pw) && /[A-Z]/.test(pw),
+    digit: /\d/.test(pw),
+    symbol: /[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(pw),
+  };
+}
+
+// Traduce una entrada del log de auditoría (método + ruta) a algo legible.
+function describeActivity(e: MyActivityEntry, es: boolean): { label: string; icon: LucideIcon } {
+  const r = e.route;
+  const m = e.method.toUpperCase();
+  if (r === "/api/auth/login") return { label: es ? "Inicio de sesión" : "Signed in", icon: LogIn };
+  if (r === "/api/auth/logout") return { label: es ? "Cierre de sesión" : "Signed out", icon: LogOut };
+  if (r === "/api/users/me/avatar") return { label: es ? "Foto de perfil actualizada" : "Profile picture updated", icon: Camera };
+  if (/^\/api\/users\/\d+$/.test(r) && m === "PUT") return { label: es ? "Perfil actualizado" : "Profile updated", icon: UserPen };
+  if (/^\/api\/tickets\/\d+\/assign/.test(r)) return { label: es ? "Incidente asignado" : "Incident assigned", icon: UserCheck };
+  if (/^\/api\/tickets\/\d+\/evidence/.test(r)) return { label: es ? "Evidencia adjuntada" : "Evidence attached", icon: Paperclip };
+  if (r === "/api/tickets" && m === "POST") return { label: es ? "Incidente creado" : "Incident created", icon: Plus };
+  if (/^\/api\/tickets/.test(r)) return { label: es ? "Incidente actualizado" : "Incident updated", icon: Siren };
+  if (/^\/api\/chat/.test(r)) return { label: es ? "Mensaje en el chat" : "Chat message", icon: MessageSquare };
+  if (/^\/api\/settings/.test(r)) return { label: es ? "Ajustes del sistema" : "System settings", icon: SlidersHorizontal };
+  if (m === "DELETE") return { label: es ? "Elemento eliminado" : "Item deleted", icon: Trash2 };
+  return { label: `${m} ${r}`, icon: Activity };
+}
+
+function relativeTime(iso: string, lang: Lang) {
+  const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
+  const steps: [number, Intl.RelativeTimeFormatUnit][] = [[60, "second"], [60, "minute"], [24, "hour"], [7, "day"], [4.35, "week"], [12, "month"]];
+  let value = diff;
+  for (const [size, unit] of steps) {
+    if (Math.abs(value) < size) return rtf.format(Math.round(value), unit);
+    value /= size;
+  }
+  return rtf.format(Math.round(value), "year");
+}
+
+function parseAgent(ua: string) {
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "—";
+  const os = /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /(iPhone|iPad)/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "—";
+  return { browser, os };
+}
+
+interface Props {
+  user: UserOut;
+  lang?: Lang;
+  onUpdate: (u: UserOut) => void;
+  profilePic: string | null;
+  setProfilePic: (pic: string | null) => void;
+}
+
+type Notice = { kind: "ok" | "err"; text: string } | null;
+
+export default function ProfileView({ user, lang = "es", onUpdate, profilePic, setProfilePic }: Props) {
+  const es = lang === "es";
+
   const [email, setEmail] = useState(user.email || "");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [accountNotice, setAccountNotice] = useState<Notice>(null);
 
-  // Security Notifications state
-  const [notifs, setNotifs] = useState({
-    critical: true,
-    login: true,
-    reports: false
-  });
-  const [sessionInfo, setSessionInfo] = useState<{
-    ip: string;
-    user_agent: string;
-    expires_minutes: number;
-  } | null>(null);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
+  const [pwNotice, setPwNotice] = useState<Notice>(null);
+
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [session, setSession] = useState<{ ip: string; user_agent: string; expires_minutes: number } | null>(null);
+  const [activity, setActivity] = useState<MyActivityEntry[] | null>(null);
+  const [kpis, setKpis] = useState<{ open: number; resolved: number } | null>(null);
+  const [sounds, setSounds] = useState(getSoundPrefs);
 
   useEffect(() => {
-    getMySession()
-      .then((s) => setSessionInfo({ ip: s.ip, user_agent: s.user_agent, expires_minutes: s.expires_minutes }))
-      .catch(() => {});
-  }, []);
+    getMySession().then(setSession).catch(() => setSession(null));
+    getMyActivity(40)
+      .then((rows) => setActivity(rows.filter((r) => r.route !== "/api/auth/refresh")))
+      .catch(() => setActivity([]));
+    listTickets(undefined, undefined, 200)
+      .then((tickets) => {
+        const mine = tickets.filter((tk) => tk.assigned_to_id === user.id);
+        setKpis({
+          open: mine.filter((tk) => ["open", "in_progress", "escalated"].includes(tk.status)).length,
+          resolved: mine.filter((tk) => ["resolved", "closed"].includes(tk.status)).length,
+        });
+      })
+      .catch(() => setKpis(null));
+  }, [user.id]);
 
-  const passwordsMatch = password && password === confirmPassword;
-  const passwordError = password && confirmPassword && password !== confirmPassword;
+  const checks = useMemo(() => passwordChecks(newPw), [newPw]);
+  const score = newPw ? Object.values(checks).filter(Boolean).length : 0;
+  const pwValid = checks.length && checks.mixed && checks.digit;
+  const pwMatch = newPw.length > 0 && newPw === confirmPw;
+  const canSavePw = !!currentPw && pwValid && pwMatch && !savingPw;
 
-  const handleSave = async () => {
-    if (password && !passwordsMatch) return;
-    setLoading(true);
+  const initials = user.username.slice(0, 2).toUpperCase();
+  const memberSince = user.created_at ? new Date(user.created_at).toLocaleDateString(lang, { day: "numeric", month: "long", year: "numeric" }) : null;
+  const agent = session ? parseAgent(session.user_agent) : null;
+  const errText = (err: unknown) => String(err).replace(/^Error:\s*/, "").replace(/^HTTP \d+:\s*/, "").replace(/^\{"detail":"(.*)"\}$/, "$1");
+
+  const saveAccount = async () => {
+    setSavingAccount(true);
+    setAccountNotice(null);
     try {
-      const payload: any = { email };
-      if (password) payload.password = password;
-      const updated = await updateUser(user.id, payload);
+      const updated = await updateUser(user.id, { email });
       onUpdate(updated);
-      alert(lang === 'es' ? "Perfil actualizado correctamente" : "Profile updated successfully");
-      setPassword("");
-      setConfirmPassword("");
+      setAccountNotice({ kind: "ok", text: es ? "Datos de la cuenta guardados." : "Account details saved." });
     } catch (err) {
-      alert(String(err));
+      setAccountNotice({ kind: "err", text: errText(err) });
     } finally {
-      setLoading(false);
+      setSavingAccount(false);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const savePassword = async () => {
+    if (!canSavePw) return;
+    setSavingPw(true);
+    setPwNotice(null);
+    try {
+      await updateUser(user.id, { password: newPw, current_password: currentPw });
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      setPwNotice({ kind: "ok", text: es ? "Contraseña actualizada." : "Password updated." });
+    } catch (err) {
+      setPwNotice({ kind: "err", text: errText(err) });
+    } finally {
+      setSavingPw(false);
+    }
+  };
+
+  const onAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert(lang === 'es' ? "La imagen es demasiado grande (Máx 2MB)" : "Image is too large (Max 2MB)");
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await uploadMyAvatar(file);
-        setProfilePic(res.avatar_url);
-        // Also update local user object to sync with HUD
-        onUpdate({ ...user, avatar_url: res.avatar_url });
-      } catch (err) {
-        alert(lang === 'es' ? "Error al subir avatar" : "Error uploading avatar");
-      } finally {
-        setLoading(false);
-      }
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setAccountNotice({ kind: "err", text: es ? "La imagen supera 2 MB." : "Image is larger than 2 MB." });
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const res = await uploadMyAvatar(file);
+      setProfilePic(res.avatar_url);
+      onUpdate({ ...user, avatar_url: res.avatar_url });
+    } catch (err) {
+      setAccountNotice({ kind: "err", text: errText(err) });
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
-  const handleRemoveAvatar = async () => {
-      setLoading(true);
-      try {
-          await updateUser(user.id, { avatar_url: "" });
-          setProfilePic(null);
-          onUpdate({ ...user, avatar_url: null });
-      } catch (err) {
-          alert(String(err));
-      } finally {
-          setLoading(false);
-      }
+  const removeAvatar = async () => {
+    setAvatarBusy(true);
+    try {
+      await updateUser(user.id, { avatar_url: "" });
+      setProfilePic(null);
+      onUpdate({ ...user, avatar_url: null });
+    } catch (err) {
+      setAccountNotice({ kind: "err", text: errText(err) });
+    } finally {
+      setAvatarBusy(false);
+    }
   };
+
+  const toggleSound = (cat: SoundCategory) => {
+    const next = { ...sounds, [cat]: !sounds[cat] };
+    setSounds(next);
+    setSoundPrefs(next);
+  };
+
+  const go = (view: string) => window.dispatchEvent(new CustomEvent("navigate-to-view", { detail: { view } }));
+
+  const quickLinks: { view: string; icon: LucideIcon; es: string; en: string }[] = [
+    { view: "workspace", icon: Briefcase, es: "Mis incidentes", en: "My incidents" },
+    { view: "threat", icon: ShieldAlert, es: "Threat Intel", en: "Threat Intel" },
+    { view: "runbooks", icon: BookOpen, es: "Runbooks", en: "Runbooks" },
+    { view: "cowrie", icon: Bug, es: "Honeypot", en: "Honeypot" },
+  ];
+
+  const Toast = ({ n }: { n: Notice }) => n && (
+    <div className={`pf-toast pf-toast--${n.kind}`} role={n.kind === "err" ? "alert" : "status"}>
+      {n.kind === "ok" ? <Check size={14} /> : <AlertCircle size={14} />}{n.text}
+    </div>
+  );
+
+  const rule = (ok: boolean, text: string, optional = false) => (
+    <li data-ok={ok}>{ok ? <Check size={12} /> : <X size={12} />}{text}{optional && <em style={{ fontStyle: "normal", opacity: 0.7 }}> · {es ? "recomendado" : "recommended"}</em>}</li>
+  );
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '30px', maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-
-      {/* Left Column: Main Settings */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <h2 style={{ fontFamily: 'var(--ff-mono)', color: 'var(--signal)', fontSize: '18px', letterSpacing: '2px', margin: 0 }}>
-          // {t('profile_settings')}
-        </h2>
-
-        <div className="panel">
-          <div className="panel__head">
-            <span className="panel__title">{lang === 'es' ? 'GESTIÓN DE IDENTIDAD' : 'IDENTITY MANAGEMENT'}</span>
+    <div className="pf">
+      {/* ---------- Identidad ---------- */}
+      <section className="pf-card pf-hero">
+        <div className="pf-hero__banner" />
+        <div className="pf-hero__row">
+          <div className="pf-avatar">
+            <div className="pf-avatar__img">
+              {profilePic ? <img src={profilePic} alt="" /> : initials}
+            </div>
+            <label className="pf-avatar__upload" aria-label={es ? "Cambiar foto" : "Change picture"}>
+              <Camera size={20} />
+              {avatarBusy ? "…" : es ? "Cambiar" : "Change"}
+              <input type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif" onChange={onAvatarFile} disabled={avatarBusy} />
+            </label>
+            <span className="pf-avatar__status" title={es ? "Conectado" : "Online"} />
           </div>
-          <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
 
-            {/* Header with Circular Profile Pic */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '25px' }}>
-              <div style={{ position: 'relative' }}>
-                <div style={{
-                  width: '100px', height: '100px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '2px solid var(--signal-dim)', overflow: 'hidden',
-                  boxShadow: '0 0 25px rgba(0,255,136,0.3)',
-                  transition: 'all 0.3s ease'
-                }}>
-                  {profilePic ? (
-                    <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: '50px' }}></span>
-                  )}
-                </div>
-                <label style={{
-                  position: 'absolute', bottom: '0px', right: '0px',
-                  width: '32px', height: '32px', borderRadius: '50%',
-                  background: 'var(--bg-panel-deep)', border: '1px solid var(--signal)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', fontSize: '14px',
-                  boxShadow: '0 4px 10px rgba(0,0,0,0.5)'
-                }}>
+          <div className="pf-hero__id">
+            <h1 className="pf-hero__name">{user.username.toUpperCase()}</h1>
+            <div className="pf-hero__chips">
+              <span className="vp-chip"><ShieldCheck size={11} />{user.security_rank || "L1 Analyst"}</span>
+              <span className="vp-chip vp-chip--cyan"><KeyRound size={11} />{user.role.toUpperCase()}</span>
+            </div>
+            <div className="pf-hero__meta">
+              <span><Mail size={13} />{user.email || (es ? "Sin correo" : "No email")}</span>
+              {memberSince && <span><CalendarDays size={13} />{es ? "Miembro desde" : "Member since"} {memberSince}</span>}
+              <span><Hash size={13} />ID {user.id.toString().padStart(5, "0")}</span>
+            </div>
+          </div>
 
-                  <input type="file" hidden accept="image/*" onChange={handleFileChange} />
-                </label>
-              </div>
+          {profilePic && (
+            <div className="pf-hero__actions">
+              <button className="vp-btn" onClick={removeAvatar} disabled={avatarBusy}><Trash2 size={13} />{es ? "Quitar foto" : "Remove photo"}</button>
+            </div>
+          )}
+        </div>
 
+        <div className="pf-kpis">
+          <div className="pf-kpi">
+            <span className="pf-kpi__label"><Siren size={12} />{es ? "Asignados abiertos" : "Assigned open"}</span>
+            <span className="pf-kpi__value">{kpis ? kpis.open : "—"}</span>
+            <span className="pf-kpi__hint">{es ? "Incidentes en curso" : "Incidents in progress"}</span>
+          </div>
+          <div className="pf-kpi">
+            <span className="pf-kpi__label"><CircleCheckBig size={12} />{es ? "Resueltos" : "Resolved"}</span>
+            <span className="pf-kpi__value">{kpis ? kpis.resolved : "—"}</span>
+            <span className="pf-kpi__hint">{es ? "Cerrados por ti" : "Closed by you"}</span>
+          </div>
+          <div className="pf-kpi">
+            <span className="pf-kpi__label"><ScrollText size={12} />{es ? "Acciones" : "Actions"}</span>
+            <span className="pf-kpi__value">{activity ? activity.length : "—"}</span>
+            <span className="pf-kpi__hint">{es ? "Registradas en auditoría" : "Recorded in audit log"}</span>
+          </div>
+          <div className="pf-kpi">
+            <span className="pf-kpi__label"><Timer size={12} />{es ? "Sesión" : "Session"}</span>
+            <span className="pf-kpi__value">{session ? `${session.expires_minutes}′` : "—"}</span>
+            <span className="pf-kpi__hint">{es ? "Duración del token de acceso" : "Access token lifetime"}</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="pf-grid">
+        <div className="pf-col">
+          {/* ---------- Cuenta ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><UserPen size={16} /></span>
               <div>
-                <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-bright)', fontFamily: 'var(--ff-mono)' }}>{user.username.toUpperCase()}</div>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
-                  <span style={{ padding: '2px 8px', background: 'rgba(60,255,158,0.1)', color: 'var(--signal)', fontSize: '10px', border: '1px solid var(--signal-dim)', fontFamily: 'var(--ff-mono)' }}>
-                    {user.security_rank?.toUpperCase() || 'L1 ANALYST'}
-                  </span>
-                  <span style={{ padding: '2px 8px', background: 'rgba(0,255,255,0.1)', color: 'var(--cyan)', fontSize: '10px', border: '1px solid rgba(0,255,255,0.3)', fontFamily: 'var(--ff-mono)' }}>
-                    ID: {user.id.toString().padStart(5, '0')}
-                  </span>
+                <div className="pf-card__title">{es ? "Cuenta" : "Account"}</div>
+                <div className="pf-card__sub">{es ? "Datos de contacto e identidad" : "Contact and identity details"}</div>
+              </div>
+            </div>
+            <div className="pf-card__body">
+              <div className="pf-fields">
+                <div className="pf-field pf-field--full">
+                  <label className="pf-label" htmlFor="pf-email">{es ? "Correo electrónico" : "Email"}</label>
+                  <div className="pf-input-wrap">
+                    <Mail size={15} />
+                    <input id="pf-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="analista@empresa.com" autoComplete="email" />
+                  </div>
                 </div>
-                <button onClick={handleRemoveAvatar} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '9px', cursor: 'pointer', marginTop: '10px', textDecoration: 'underline', padding: 0 }}>
-                   {lang === 'es' ? 'ELIMINAR AVATAR' : 'REMOVE AVATAR'}
+                <div className="pf-field">
+                  <span className="pf-label">{es ? "Usuario" : "Username"}</span>
+                  <div className="pf-readonly"><KeyRound size={14} />{user.username}</div>
+                </div>
+                <div className="pf-field">
+                  <span className="pf-label">{es ? "Rol y rango" : "Role & rank"}</span>
+                  <div className="pf-readonly"><ShieldCheck size={14} />{user.role} · {user.security_rank}</div>
+                </div>
+                <p className="pf-help pf-field--full" style={{ margin: 0 }}>
+                  {es ? "El usuario, el rol y el rango solo los puede cambiar un administrador." : "Username, role and rank can only be changed by an administrator."}
+                </p>
+              </div>
+              <Toast n={accountNotice} />
+              <div className="pf-actions">
+                <button className="vp-btn vp-btn--primary" onClick={saveAccount} disabled={savingAccount || email === (user.email || "")}>
+                  <Save size={13} />{savingAccount ? (es ? "Guardando…" : "Saving…") : es ? "Guardar cambios" : "Save changes"}
                 </button>
               </div>
             </div>
+          </section>
 
-            {/* Basic Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '1px' }}>COM_LINK (EMAIL)</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--line)', color: 'var(--signal)', padding: '12px', fontFamily: 'var(--ff-mono)', outline: 'none' }}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '1px' }}>{lang === 'es' ? 'NIVEL DE ACCESO (BLOQUEADO)' : 'ACCESS LEVEL (LOCKED)'}</label>
-                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', color: 'var(--text-dim)', border: '1px solid var(--line-faint)', fontSize: '13px' }}>
-                  {user.role.toUpperCase()}
-                </div>
+          {/* ---------- Seguridad ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><KeyRound size={16} /></span>
+              <div>
+                <div className="pf-card__title">{es ? "Seguridad" : "Security"}</div>
+                <div className="pf-card__sub">{es ? "Cambia tu contraseña de acceso" : "Change your sign-in password"}</div>
               </div>
             </div>
-
-            {/* Password Section */}
-            <div style={{ borderTop: '1px solid var(--line-faint)', paddingTop: '20px' }}>
-              <h3 style={{ fontSize: '11px', color: 'var(--amber)', margin: '0 0 15px 0', letterSpacing: '2px' }}>{lang === 'es' ? 'SEGURIDAD: CAMBIAR LLAVE' : 'SECURITY: CHANGE KEY'}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-bright)' }}>{lang === 'es' ? 'NUEVA CONTRASEÑA' : 'NEW PASSWORD'}</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    style={{
-                      background: 'rgba(0,0,0,0.4)',
-                      border: `1px solid ${password ? (passwordsMatch ? 'var(--signal)' : 'var(--danger)') : 'var(--line)'}`,
-                      color: 'var(--text)', padding: '12px', outline: 'none'
-                    }}
-                    placeholder="********"
-                  />
+            <div className="pf-card__body">
+              <div className="pf-fields">
+                <div className="pf-field pf-field--full">
+                  <label className="pf-label" htmlFor="pf-current">{es ? "Contraseña actual" : "Current password"}</label>
+                  <div className="pf-input-wrap">
+                    <KeyRound size={15} />
+                    <input id="pf-current" type={showPw ? "text" : "password"} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-bright)' }}>{lang === 'es' ? 'CONFIRMAR CONTRASEÑA' : 'CONFIRM PASSWORD'}</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    style={{
-                      background: 'rgba(0,0,0,0.4)',
-                      border: `1px solid ${confirmPassword ? (passwordsMatch ? 'var(--signal)' : 'var(--danger)') : 'var(--line)'}`,
-                      color: 'var(--text)', padding: '12px', outline: 'none'
-                    }}
-                    placeholder="********"
-                  />
+                <div className="pf-field">
+                  <label className="pf-label" htmlFor="pf-new">{es ? "Nueva contraseña" : "New password"}</label>
+                  <div className="pf-input-wrap">
+                    <KeyRound size={15} />
+                    <input id="pf-new" type={showPw ? "text" : "password"} value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+                    <button type="button" className="pf-eye" onClick={() => setShowPw(!showPw)} aria-label={showPw ? (es ? "Ocultar" : "Hide") : (es ? "Mostrar" : "Show")}>
+                      {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="pf-field">
+                  <label className="pf-label" htmlFor="pf-confirm">{es ? "Repetir contraseña" : "Repeat password"}</label>
+                  <div className="pf-input-wrap">
+                    <KeyRound size={15} />
+                    <input id="pf-confirm" type={showPw ? "text" : "password"} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+                  </div>
                 </div>
               </div>
-              {passwordError && <div style={{ color: 'var(--danger)', fontSize: '10px', marginTop: '5px' }}>{lang === 'es' ? 'Las llaves no coinciden' : 'Keys do not match'}</div>}
-              {passwordsMatch && <div style={{ color: 'var(--signal)', fontSize: '10px', marginTop: '5px' }}> {lang === 'es' ? 'Llaves sincronizadas' : 'Keys synchronized'}</div>}
+              <div className="pf-meter" data-score={score} aria-hidden="true"><span /><span /><span /><span /></div>
+              <ul className="pf-rules">
+                {rule(checks.length, es ? "Mínimo 8 caracteres" : "At least 8 characters")}
+                {rule(checks.mixed, es ? "Mayúsculas y minúsculas" : "Upper and lower case")}
+                {rule(checks.digit, es ? "Al menos un número" : "At least one number")}
+                {rule(checks.symbol, es ? "Un símbolo" : "A symbol", true)}
+                {rule(pwMatch, es ? "Ambas coinciden" : "Both match")}
+              </ul>
+              <Toast n={pwNotice} />
+              <div className="pf-actions">
+                <button className="vp-btn vp-btn--primary" onClick={savePassword} disabled={!canSavePw}>
+                  <ShieldCheck size={13} />{savingPw ? (es ? "Actualizando…" : "Updating…") : es ? "Actualizar contraseña" : "Update password"}
+                </button>
+              </div>
             </div>
+          </section>
 
-            <button
-              onClick={handleSave}
-              disabled={loading || (password && !passwordsMatch)}
-              className="action-btn"
-              style={{ padding: '14px', marginTop: '10px', cursor: 'pointer', textAlign: 'center', fontWeight: 'bold', fontSize: '12px' }}
-            >
-              {loading ? 'SYNCING...' : (lang === 'es' ? 'ACTUALIZAR PERFIL OPERATIVO' : 'UPDATE OPERATIONAL PROFILE')}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Column: Activity & Sessions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-        {/* Quick navigation */}
-        <div className="panel">
-          <div className="panel__head">
-            <span className="panel__title">{lang === 'es' ? 'ACCESOS RÁPIDOS' : 'QUICK ACCESS'}</span>
-          </div>
-          <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {[
-              { view: 'threat', label: lang === 'es' ? 'Threat Intel — API VirusTotal' : 'Threat Intel — VirusTotal API' },
-              { view: 'workspace', label: lang === 'es' ? 'Workspace de incidentes' : 'Incident workspace' },
-              { view: 'runbooks', label: lang === 'es' ? 'Runbooks / playbooks' : 'Runbooks / playbooks' },
-              { view: 'cowrie', label: lang === 'es' ? 'Honeypot Cowrie' : 'Cowrie honeypot' },
-            ].map((link) => (
-              <button
-                key={link.view}
-                type="button"
-                className="profile-quick-link"
-                onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-view', { detail: { view: link.view } }))}
-              >
-                → {link.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Active Session Info */}
-        <div className="panel">
-          <div className="panel__head">
-            <span className="panel__title">{lang === 'es' ? 'SESIÓN ACTUAL' : 'CURRENT SESSION'}</span>
-          </div>
-          <div className="panel__body" style={{ fontSize: '11px', lineHeight: '1.6' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-dim)' }}>IP_SOURCE:</span>
-              <span style={{ color: 'var(--cyan)' }}>{sessionInfo?.ip || '—'}</span>
+          {/* ---------- Sonidos ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><Volume2 size={16} /></span>
+              <div>
+                <div className="pf-card__title">{es ? "Sonidos" : "Sounds"}</div>
+                <div className="pf-card__sub">{es ? "Avisos sonoros en este navegador" : "Audio cues in this browser"}</div>
+              </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-dim)' }}>AGENT:</span>
-              <span style={{ color: 'var(--text-bright)', maxWidth: '60%', textAlign: 'right', wordBreak: 'break-word' }}>
-                {sessionInfo?.user_agent?.slice(0, 48) || '—'}
-              </span>
+            <div className="pf-card__body" style={{ paddingTop: 8 }}>
+              {([
+                ["incidents", Bell, es ? "Incidentes nuevos y resueltos" : "New and resolved incidents"],
+                ["chat", MessageSquare, es ? "Mensajes del chat" : "Chat messages"],
+                ["mentions", AtSign, es ? "Menciones directas" : "Direct mentions"],
+              ] as [SoundCategory, LucideIcon, string][]).map(([cat, Icon, label]) => (
+                <div key={cat} className="vp-switch-row" role="switch" aria-checked={sounds[cat]} tabIndex={0}
+                  onClick={() => toggleSound(cat)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggleSound(cat))}>
+                  <Icon size={16} />
+                  <div>{label}</div>
+                  <span className="vp-switch" data-on={sounds[cat]} />
+                </div>
+              ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-dim)' }}>TTL:</span>
-              <span style={{ color: 'var(--text-bright)' }}>
-                {sessionInfo ? `${sessionInfo.expires_minutes} min` : '—'}
-              </span>
-            </div>
-            <p style={{ marginTop: '12px', fontSize: '9px', color: 'var(--text-faint)', lineHeight: 1.5 }}>
-              {lang === 'es'
-                ? 'Sesión JWT stateless. Cierre de sesión desde el menú superior.'
-                : 'Stateless JWT session. Sign out from the top menu.'}
-            </p>
-          </div>
+          </section>
         </div>
 
-        {/* Activity Log */}
-        <div className="panel" style={{ flex: 1 }}>
-          <div className="panel__head">
-            <span className="panel__title">{lang === 'es' ? 'LOG DE ACTIVIDAD' : 'ACTIVITY LOG'}</span>
-          </div>
-          <div className="panel__body" style={{ padding: '0' }}>
-             {[
-               { time: '10:45', action: 'LOGIN_SUCCESS', ip: '192.168.1.52' },
-               { time: 'Yesterday', action: 'PASSWORD_CHANGED', ip: '192.168.1.52' },
-               { time: 'Yesterday', action: 'INCIDENT_ESCALATED', id: '#241' },
-               { time: '2 days ago', action: 'API_KEY_REVOKED', ip: '192.168.1.52' },
-               { time: '2 days ago', action: 'LOGIN_SUCCESS', ip: '192.168.1.52' },
-             ].map((log, i) => (
-               <div key={i} style={{ padding: '12px 15px', borderBottom: '1px solid rgba(255,255,255,0.03)', fontSize: '10px' }}>
-                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                   <span style={{ color: 'var(--signal)', fontWeight: 'bold' }}>{log.action}</span>
-                   <span style={{ color: 'var(--text-faint)' }}>{log.time}</span>
-                 </div>
-                 <div style={{ color: 'var(--text-dim)', fontSize: '9px' }}>{log.ip || log.id}</div>
-               </div>
-             ))}
-          </div>
-        </div>
+        <div className="pf-col">
+          {/* ---------- Sesión actual ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><MonitorSmartphone size={16} /></span>
+              <div>
+                <div className="pf-card__title">{es ? "Sesión actual" : "Current session"}</div>
+                <div className="pf-card__sub">{es ? "Este dispositivo" : "This device"}</div>
+              </div>
+            </div>
+            <div className="pf-card__body">
+              {session && agent ? (
+                <dl className="pf-kv">
+                  <dt><MonitorSmartphone size={13} />{es ? "Dispositivo" : "Device"}</dt><dd>{agent.browser} · {agent.os}</dd>
+                  <dt><Globe size={13} />IP</dt><dd>{session.ip}</dd>
+                  <dt><Clock size={13} />{es ? "Token de acceso" : "Access token"}</dt><dd>{session.expires_minutes} min</dd>
+                </dl>
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}><div className="pf-skel" /><div className="pf-skel" style={{ width: "70%" }} /></div>
+              )}
+              <p className="pf-note">
+                {es
+                  ? "Cookies httpOnly con token de acceso y renovación automática. Al cerrar sesión, los tokens se revocan en el servidor."
+                  : "httpOnly cookies with access token and automatic refresh. Signing out revokes the tokens server-side."}
+              </p>
+            </div>
+          </section>
 
-        {/* Security Notifications */}
-        <div className="panel">
-           <div className="panel__head">
-              <span className="panel__title">{lang === 'es' ? 'NOTIFICACIONES DE SEGURIDAD' : 'SECURITY ALERTS'}</span>
-           </div>
-           <div className="panel__body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '11px' }}>
-                 <input type="checkbox" checked={notifs.critical} onChange={() => setNotifs({...notifs, critical: !notifs.critical})} />
-                 {lang === 'es' ? 'Alertas Críticas (Email)' : 'Critical Alerts (Email)'}
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '11px' }}>
-                 <input type="checkbox" checked={notifs.login} onChange={() => setNotifs({...notifs, login: !notifs.login})} />
-                 {lang === 'es' ? 'Nuevo inicio de sesión' : 'New login attempt'}
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '11px' }}>
-                 <input type="checkbox" checked={notifs.reports} onChange={() => setNotifs({...notifs, reports: !notifs.reports})} />
-                 {lang === 'es' ? 'Reportes semanales' : 'Weekly summaries'}
-              </label>
-           </div>
+          {/* ---------- Actividad ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><Activity size={16} /></span>
+              <div>
+                <div className="pf-card__title">{es ? "Actividad reciente" : "Recent activity"}</div>
+                <div className="pf-card__sub">{es ? "Tu rastro en el log de auditoría" : "Your trail in the audit log"}</div>
+              </div>
+            </div>
+            <div className="pf-card__body">
+              {activity === null && <div style={{ display: "grid", gap: 10 }}><div className="pf-skel" /><div className="pf-skel" /><div className="pf-skel" style={{ width: "60%" }} /></div>}
+              {activity && activity.length === 0 && (
+                <div className="vp-empty" style={{ padding: "18px 8px" }}>
+                  <ScrollText size={22} />
+                  {es ? "Aún no hay acciones registradas." : "No actions recorded yet."}
+                </div>
+              )}
+              {activity && activity.length > 0 && (
+                <div className="pf-scroll">
+                  <ul className="pf-timeline">
+                    {activity.map((e) => {
+                      const { label, icon: Icon } = describeActivity(e, es);
+                      return (
+                        <li key={e.id} className="pf-tl">
+                          <span className="pf-tl__dot"><Icon size={14} /></span>
+                          <div className="pf-tl__main">
+                            <div className="pf-tl__title">{label}</div>
+                            <div className="pf-tl__meta">
+                              <span title={new Date(e.timestamp).toLocaleString(lang)}>{relativeTime(e.timestamp, lang)}</span>
+                              {e.ip && <span>{e.ip}</span>}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ---------- Accesos rápidos ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><ChevronRight size={16} /></span>
+              <div className="pf-card__title">{es ? "Accesos rápidos" : "Quick access"}</div>
+            </div>
+            <div className="pf-card__body">
+              <div className="pf-quick">
+                {quickLinks.map((q) => {
+                  const Icon = q.icon;
+                  return (
+                    <button key={q.view} onClick={() => go(q.view)}>
+                      <Icon size={16} />{es ? q.es : q.en}<ChevronRight size={14} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>

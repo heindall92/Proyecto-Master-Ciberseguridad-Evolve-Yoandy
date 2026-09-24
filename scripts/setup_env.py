@@ -76,18 +76,25 @@ def patch_integration_credentials(path: Path = ENV_PATH) -> bool:
     values = _parse_env(path)
     patches = {
         "OPENSEARCH_USER": "admin",
-        "OPENSEARCH_PASSWORD": "admin",
         "WAZUH_API_USER": "wazuh-wui",
         "WAZUH_API_PASSWORD": "wazuh-wui",
     }
+    # Indexer: una única contraseña fuerte compartida por indexer, manager, dashboard y backend.
+    # Estas claves se escriben aunque no sean placeholder, para que las tres coincidan siempre.
+    forced: dict[str, str] = {}
+    if _is_placeholder(values.get("INDEXER_PASSWORD", "")):
+        pw = _generate_indexer_password()
+        forced = {"INDEXER_PASSWORD": pw, "OPENSEARCH_PASSWORD": pw, "DASHBOARD_PASSWORD": pw}
+    elif values.get("OPENSEARCH_PASSWORD") != values.get("INDEXER_PASSWORD"):
+        forced = {"OPENSEARCH_PASSWORD": values["INDEXER_PASSWORD"]}
     changed = False
     lines: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if "=" in line and not line.strip().startswith("#"):
             key, _, val = line.partition("=")
             k = key.strip()
-            if k in patches and _is_placeholder(val.strip()):
-                lines.append(f"{k}={patches[k]}")
+            if k in forced or (k in patches and _is_placeholder(val.strip())):
+                lines.append(f"{k}={forced.get(k, patches.get(k))}")
                 changed = True
                 continue
         lines.append(line)
@@ -116,6 +123,11 @@ def _generate_secret_key() -> str:
 
 def _generate_webhook_secret() -> str:
     return secrets.token_urlsafe(32)
+
+
+def _generate_indexer_password() -> str:
+    """Contraseña del usuario admin del Wazuh Indexer (sin '$' para no romper la interpolación de Compose)."""
+    return f"Vh-{secrets.token_urlsafe(18)}-9a"
 
 
 def _prompt_admin_password(non_interactive: bool, provided: str | None) -> str:
@@ -157,7 +169,6 @@ def _merge_env(
         "VITE_ALLOW_OFFLINE_DEMO": "false",
         # Credenciales por defecto del stack Wazuh 4.9 en Docker (laboratorio)
         "OPENSEARCH_USER": "admin",
-        "OPENSEARCH_PASSWORD": "admin",
         "WAZUH_API_USER": "wazuh-wui",
         "WAZUH_API_PASSWORD": "wazuh-wui",
         "TLS_VERIFY_SSL": "false",
