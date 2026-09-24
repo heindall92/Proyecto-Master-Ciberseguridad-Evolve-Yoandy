@@ -88,31 +88,33 @@ async def _search(body: dict[str, Any]) -> dict[str, Any]:
 
 async def get_top_attackers(limit: int = 20, hours: int = 24) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    sub_aggs = {
+        "last_seen": {"max": {"field": "@timestamp"}},
+        "attack_type": {"terms": {"field": "rule.description", "size": 1}},
+    }
+    # Wazuh guarda la IP origen en data.srcip y Cowrie en data.src_ip: se agregan ambos.
     body = {
         "size": 0,
         "query": {"range": {"@timestamp": {"gte": since}}},
         "aggs": {
-            "top_ips": {
-                "terms": {"field": "data.srcip", "size": limit, "missing": "unknown"},
-                "aggs": {
-                    "last_seen": {"max": {"field": "@timestamp"}},
-                    "attack_type": {"terms": {"field": "rule.description", "size": 1}}
-                }
-            }
-        }
+            "by_srcip": {"terms": {"field": "data.srcip", "size": limit}, "aggs": sub_aggs},
+            "by_src_ip": {"terms": {"field": "data.src_ip", "size": limit}, "aggs": sub_aggs},
+        },
     }
     resp = await _search(body)
-    buckets = resp.get("aggregations", {}).get("top_ips", {}).get("buckets", [])
-    result = []
-    for b in buckets:
-        top_desc = b.get("attack_type", {}).get("buckets", [])
-        result.append({
-            "ip": b["key"],
-            "count": b["doc_count"],
-            "last_seen": b.get("last_seen", {}).get("value_as_string", ""),
-            "attack_type": top_desc[0]["key"] if top_desc else "Generic Attack",
-        })
-    return result
+    aggs = resp.get("aggregations", {})
+    merged: dict[str, dict] = {}
+    for name in ("by_srcip", "by_src_ip"):
+        for b in aggs.get(name, {}).get("buckets", []):
+            top_desc = b.get("attack_type", {}).get("buckets", [])
+            last = b.get("last_seen", {}).get("value_as_string", "")
+            entry = merged.setdefault(b["key"], {"ip": b["key"], "count": 0, "last_seen": "", "attack_type": "Generic Attack"})
+            entry["count"] += b["doc_count"]
+            if last > entry["last_seen"]:
+                entry["last_seen"] = last
+                if top_desc:
+                    entry["attack_type"] = top_desc[0]["key"]
+    return sorted(merged.values(), key=lambda e: e["count"], reverse=True)[:limit]
 
 
 # ── Alert Levels Distribution ────────────────────────────────────────────────
@@ -346,7 +348,7 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
         "_source": [
             "@timestamp", "rule.id", "rule.description", "rule.level",
             "rule.groups", "rule.mitre.technique", "rule.mitre.tactic",
-            "agent.name", "agent.id", "data.srcip", "full_log"
+            "agent.name", "agent.id", "data.srcip", "data.src_ip", "full_log"
         ]
     }
     resp = await _search(body)
@@ -366,7 +368,9 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
             severity = "medium"
         else:
             severity = "low"
+        src_ip = _cowrie_src_ip(data, rule.get("description", ""))
         result.append({
+            "id": h.get("_id", ""),
             "timestamp": src.get("@timestamp", ""),
             "rule_id": str(rule.get("id", "")),
             "rule_level": level,
@@ -376,7 +380,8 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
             "mitre_tactic": rule.get("mitre", {}).get("tactic", []),
             "agent_name": agent.get("name", "unknown"),
             "agent_id": agent.get("id", ""),
-            "source_ip": data.get("srcip", ""),
+            # Wazuh usa data.srcip; Cowrie data.src_ip
+            "source_ip": "" if src_ip == "unknown" else src_ip,
             "severity": severity,
         })
     return result
@@ -523,8 +528,9 @@ async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
                 "must": [
                     {"range": {"@timestamp": {"gte": since}}},
                     {"bool": {"should": [
-                        {"term": {"data.src_ip.keyword": ip}},
-                        {"term": {"data.srcip.keyword": ip}},
+                        # Ambos campos están mapeados como keyword (sin subcampo .keyword)
+                        {"term": {"data.src_ip": ip}},
+                        {"term": {"data.srcip": ip}},
                     ], "minimum_should_match": 1}}
                 ]
             }

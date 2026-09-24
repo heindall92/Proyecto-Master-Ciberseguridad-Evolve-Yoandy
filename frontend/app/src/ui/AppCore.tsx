@@ -71,6 +71,8 @@ import "./premium/dark-glass.css";
 import CommandPalette, { PaletteCommand } from "./premium/CommandPalette";
 import HelpCenter from "./premium/HelpCenter";
 import QuickSettings from "./premium/QuickSettings";
+import { Toaster } from "./premium/widgets";
+import "./premium/dashboard.css";
 import {
   Search, MessageSquare, Bell, BellOff, LifeBuoy, Palette, Sun, Moon, ChevronDown,
   UserRound, SlidersHorizontal, LayoutGrid, Lock, Unlock, RefreshCw, Play, LogOut,
@@ -1092,6 +1094,7 @@ export default function App() {
             <Minimize2 size={13} />{es ? 'Salir del modo TV (Esc)' : 'Exit TV mode (Esc)'}
           </button>
         )}
+        <Toaster />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} lang={lang} />
         <HelpCenter
           open={helpOpen}

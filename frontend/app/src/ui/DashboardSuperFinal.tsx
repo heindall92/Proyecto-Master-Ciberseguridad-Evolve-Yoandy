@@ -1,43 +1,35 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import logger from "../lib/logger";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
-import { getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts, getMitreCoverage, getWazuhServices, AlertOut, AgentOut } from "../lib/api";
+import {
+  getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts,
+  getMitreCoverage, getWazuhServices, createTicket, blockIp, getBlockedIps, AgentOut,
+} from "../lib/api";
 import { translations } from "./translations";
-import { motion, AnimatePresence } from "framer-motion";
+import { useAppDispatch } from "../store/hooks";
+import { setView, navigateToIntel } from "../store/uiSlice";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity, ShieldAlert, Server, Siren, Layers, RefreshCw, ChevronLeft, ChevronRight, Plus, Ban,
+  BarChart3, Crosshair, Target, HeartPulse, Database, Bug, Radar, Swords, Plug, X, LayoutGrid, Inbox,
+} from "lucide-react";
+import { KpiCard, StatusDot, HoldButton, toast } from "./premium/widgets";
+import "./premium/dashboard.css";
+
+// Claves de persistencia del layout (antes se guardaba en v3 y se leía de v6: nunca persistía).
+const LAYOUT_KEY = "valhalla.dashboard.layout.v8";
+const WIDGETS_KEY = "valhalla.dashboard.widgets.v8";
 
 function useContainerWidth() {
   const [width, setWidth] = useState(1200);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!ref.current) return;
-    const observer = new ResizeObserver((entries) => {
-      setWidth(entries[0].contentRect.width);
-    });
+    const observer = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
-
   return { ref, width };
-}
-
-function CountUp({ value, color }: { value: number, color: string }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    let start = display;
-    const end = value;
-    if (start === end) return;
-    const duration = 1000;
-    const stepTime = Math.abs(Math.floor(duration / (end - start || 1)));
-    const timer = setInterval(() => {
-      start += end > start ? 1 : -1;
-      setDisplay(start);
-      if (start === end) clearInterval(timer);
-    }, Math.max(stepTime, 10));
-    return () => clearInterval(timer);
-  }, [value]);
-
-  return <span style={{ color, textShadow: `0 0 10px ${color}40` }}>{display.toLocaleString()}</span>;
 }
 
 function buildVolumeFallback(alerts: { timestamp?: string }[], hours: number): { points: number[]; labels: string[] } {
@@ -58,201 +50,151 @@ function buildVolumeFallback(alerts: { timestamp?: string }[], hours: number): {
   return { points: buckets, labels };
 }
 
-function AreaChart({ points, color, gradientId, labels }: { points: number[], color: string, gradientId: string, labels?: string[] }) {
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  if (!points || points.length === 0) return (
-    <div className="dash-chart-empty" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', letterSpacing: '2px' }}>SIN DATOS</div>
-  );
-  const chartPoints = points.length === 1 ? [points[0], points[0]] : points;
-  const W = 400; const H = 120;
-  const max = Math.max(...chartPoints, 1);
-  const pts = chartPoints.map((v, i) => ({
-    x: (i / (chartPoints.length - 1)) * W,
-    y: H - (v / max) * (H - 12)
-  }));
-  const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
-
+function VolumeChart({ points, labels, emptyText }: { points: number[]; labels: string[]; emptyText: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  if (!points.length) return <div className="vx-empty"><BarChart3 size={22} />{emptyText}</div>;
+  const data = points.length === 1 ? [points[0], points[0]] : points;
+  const W = 400, H = 120;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => ({ x: (i / (data.length - 1)) * W, y: H - (v / max) * (H - 14) - 2 }));
+  // Curva suavizada (Catmull-Rom a Bézier)
+  const line = pts.reduce((d, p, i, a) => {
+    if (i === 0) return `M${p.x},${p.y}`;
+    const p0 = a[i - 2] || a[i - 1], p1 = a[i - 1], p3 = a[i + 1] || p;
+    const c1x = p1.x + (p.x - p0.x) / 6, c1y = p1.y + (p.y - p0.y) / 6;
+    const c2x = p.x - (p3.x - p1.x) / 6, c2y = p.y - (p3.y - p1.y) / 6;
+    return `${d} C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }, "");
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ width: '100%', flex: 1, display: 'block', cursor: 'crosshair' }}
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = ((e.clientX - rect.left) / rect.width) * (chartPoints.length - 1);
-          setHoverIdx(Math.round(x));
-        }}
-        onMouseLeave={() => setHoverIdx(null)}
-      >
+    <div className="vx-chart">
+      {hover !== null && <span className="vx-chart__tip">{data[hover]} alertas</span>}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setHover(Math.round(((e.clientX - r.left) / r.width) * (data.length - 1))); }}
+        onMouseLeave={() => setHover(null)}>
         <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+          <linearGradient id="vx-vol-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--signal)" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="var(--signal)" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <motion.path
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          d={areaPath} fill={`url(#${gradientId})`}
-        />
-        <motion.path
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.5, ease: "easeInOut" }}
-          d={linePath} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"
-        />
-        {hoverIdx !== null && pts[hoverIdx] && (
+        <path d={`${line} L${W},${H} L0,${H} Z`} fill="url(#vx-vol-grad)" />
+        <path d={line} fill="none" stroke="var(--signal)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        {hover !== null && pts[hover] && (
           <g>
-            <line x1={pts[hoverIdx].x} y1="0" x2={pts[hoverIdx].x} y2={H} stroke="rgba(255,255,255,0.2)" strokeDasharray="2,2" />
-            <circle cx={pts[hoverIdx].x} cy={pts[hoverIdx].y} r="4" fill="#fff" style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+            <line x1={pts[hover].x} x2={pts[hover].x} y1="0" y2={H} stroke="var(--line-strong)" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            <circle cx={pts[hover].x} cy={pts[hover].y} r="3.5" fill="var(--signal)" />
           </g>
         )}
       </svg>
-      {labels && labels.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 2px 0' }}>
-          {labels.map((l, i) => (
-            <span key={i} style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{l}</span>
-          ))}
-        </div>
-      )}
+      {labels.length > 0 && <div className="vx-chart__axis">{labels.map((l, i) => <span key={i}>{l}</span>)}</div>}
     </div>
   );
 }
 
-function SevBar({ label, count, total, color }: { label: string, count: number, total: number, color: string }) {
-  const pct = total > 0 ? (count / total) * 100 : 0;
+function CardHead({ icon: Icon, title, meta, tone, children }: { icon: LucideIcon; title: string; meta?: React.ReactNode; tone?: string; children?: React.ReactNode }) {
   return (
-    <div className="dash-sev-bar" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="dash-sev-bar__label" style={{ fontSize: '10px', letterSpacing: '1.5px', fontWeight: 600 }}>{label}</span>
-        <span className="dash-sev-bar__count" style={{ fontSize: '12px', fontFamily: 'var(--mono)', color, fontWeight: 700 }}>{count}</span>
-      </div>
-      <div className="dash-sev-bar__track" style={{ height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-        <div style={{
-          width: `${pct}%`, height: '100%', background: color, borderRadius: '2px',
-          boxShadow: `0 0 6px ${color}60`,
-          transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-        }} />
-      </div>
+    <div className="vx-card__head">
+      <span className="vx-card__icon" style={tone ? { ["--tone" as string]: tone } : undefined}><Icon size={15} /></span>
+      <span className="vx-card__title">{title}</span>
+      {meta && <span className="vx-card__meta">{meta}</span>}
+      {children && <div className="vx-card__tools" onMouseDown={(e) => e.stopPropagation()}>{children}</div>}
     </div>
   );
 }
+
+const SEV_ORDER = ["critical", "high", "medium", "low"] as const;
 
 const DEFAULT_ACTIVE = ["kpi-1", "kpi-2", "kpi-3", "kpi-4", "siem-flow", "chart-vol", "chart-levels", "top-attack", "mitre-tech", "stack-health"];
-
 const DEFAULT_LAYOUT: any = {
   lg: [
-    { i: "kpi-1", x: 0, y: 0, w: 2, h: 2 },
-    { i: "kpi-2", x: 2, y: 0, w: 2, h: 2 },
-    { i: "kpi-3", x: 4, y: 0, w: 2, h: 2 },
-    { i: "kpi-4", x: 6, y: 0, w: 2, h: 2 },
-    { i: "siem-flow", x: 0, y: 2, w: 9, h: 26 },
-    { i: "chart-vol", x: 9, y: 2, w: 3, h: 8 },
-    { i: "chart-levels", x: 9, y: 10, w: 3, h: 8 },
-    { i: "top-attack", x: 9, y: 18, w: 3, h: 10 },
-    { i: "mitre-tech", x: 0, y: 28, w: 6, h: 10 },
-    { i: "stack-health", x: 6, y: 28, w: 6, h: 10 },
-  ]
+    { i: "kpi-1", x: 0, y: 0, w: 3, h: 3 },
+    { i: "kpi-2", x: 3, y: 0, w: 3, h: 3 },
+    { i: "kpi-3", x: 6, y: 0, w: 3, h: 3 },
+    { i: "kpi-4", x: 9, y: 0, w: 3, h: 3 },
+    { i: "siem-flow", x: 0, y: 3, w: 8, h: 17 },
+    { i: "chart-vol", x: 8, y: 3, w: 4, h: 6 },
+    { i: "chart-levels", x: 8, y: 9, w: 4, h: 5 },
+    { i: "top-attack", x: 8, y: 14, w: 4, h: 6 },
+    { i: "mitre-tech", x: 0, y: 20, w: 6, h: 9 },
+    { i: "stack-health", x: 6, y: 20, w: 6, h: 9 },
+  ],
+  // Pantallas estrechas (< 1000 px de contenido): 6 columnas, apilado
+  md: [
+    { i: "kpi-1", x: 0, y: 0, w: 3, h: 3 },
+    { i: "kpi-2", x: 3, y: 0, w: 3, h: 3 },
+    { i: "kpi-3", x: 0, y: 3, w: 3, h: 3 },
+    { i: "kpi-4", x: 3, y: 3, w: 3, h: 3 },
+    { i: "siem-flow", x: 0, y: 6, w: 6, h: 16 },
+    { i: "chart-vol", x: 0, y: 22, w: 3, h: 6 },
+    { i: "chart-levels", x: 3, y: 22, w: 3, h: 6 },
+    { i: "top-attack", x: 0, y: 28, w: 6, h: 6 },
+    { i: "mitre-tech", x: 0, y: 34, w: 6, h: 9 },
+    { i: "stack-health", x: 0, y: 43, w: 6, h: 9 },
+  ],
+};
+
+const readJson = <T,>(key: string, fallback: T): T => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 };
 
 export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog = false, setShowWidgetCatalog, lang = "es" }: { isLockedProp?: boolean; showWidgetCatalog?: boolean; setShowWidgetCatalog?: (v: boolean) => void; lang?: "es" | "en" }) {
   const { ref, width } = useContainerWidth();
+  const dispatch = useAppDispatch();
+  const es = lang === "es";
   const t = (key: keyof typeof translations.es) => translations[lang][key] || key;
 
-  const [layouts, setLayouts] = useState(() => {
-    const saved = localStorage.getItem("valhalla.dashboard.layout.v6");
-    return saved ? JSON.parse(saved) : DEFAULT_LAYOUT;
-  });
+  const [layouts, setLayouts] = useState(() => ({ ...DEFAULT_LAYOUT, ...readJson(LAYOUT_KEY, {}) }));
+  const [activeWidgets, setActiveWidgets] = useState<string[]>(() => readJson(WIDGETS_KEY, DEFAULT_ACTIVE));
+  const [catalogInternal, setCatalogInternal] = useState(false);
+  const catalogOpen = showWidgetCatalog !== undefined ? showWidgetCatalog : catalogInternal;
+  const setCatalogOpen = setShowWidgetCatalog || setCatalogInternal;
 
-  const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
-    const saved = localStorage.getItem("valhalla.dashboard.widgets.v11");
-    return saved ? JSON.parse(saved) : DEFAULT_ACTIVE;
-  });
-
-  const [internalIsLocked, setInternalIsLocked] = useState(true);
-  const [showCatalogInternal, setShowCatalogInternal] = useState(false);
-  const [siemPageInternal, setSiemPageInternal] = useState(0);
-
-  const lockState = isLockedProp !== undefined ? isLockedProp : internalIsLocked;
-  const catalogState = showWidgetCatalog !== undefined ? showWidgetCatalog : showCatalogInternal;
-  const setCatalogState = setShowWidgetCatalog || setShowCatalogInternal;
-  const siemPageState = siemPageInternal;
-  const setSiemPageState = setSiemPageInternal;
-
-  const handleHardReset = () => {
-    localStorage.removeItem("valhalla.dashboard.layout.v6");
-    localStorage.removeItem("valhalla.dashboard.widgets.v6");
-    window.location.reload();
-  };
-
-  const [summary, setSummary] = useState<any>({ metrics: { alerts: 0, events: 0, tickets_open: 0, total_alerts_24h: 0, critical_alerts: 0, unique_agents: 0 } });
+  const [summary, setSummary] = useState<any>({ metrics: { tickets_open: 0, total_alerts_24h: 0, critical_alerts: 0, unique_agents: 0 } });
   const [alerts, setAlerts] = useState<any[]>([]);
   const [topAttackers, setTopAttackers] = useState<any[]>([]);
   const [volumePoints, setVolumePoints] = useState<number[]>([]);
   const [volumeLabels, setVolumeLabels] = useState<string[]>([]);
   const [agents, setAgents] = useState<AgentOut[]>([]);
   const [mitreData, setMitreData] = useState<any[]>([]);
-  const [wazuhServices, setWazuhServices] = useState<any>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{created: number, skipped: number} | null>(null);
-  const [timeRange, setTimeRange] = useState<number>(24); // 1, 24, 168
+  const [services, setServices] = useState<any>(null);
+  const [blocked, setBlocked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [timeRange, setTimeRange] = useState<number>(24);
+  const [page, setPage] = useState(0);
+
+  const rangeLabel = timeRange === 1 ? "1 h" : timeRange === 24 ? "24 h" : "7 d";
 
   const fetchData = async () => {
     try {
-      const dash = await getDashboardSummary(timeRange);
+      const [dash, recent, top, vol, ags, mitre, svc, blk] = await Promise.all([
+        getDashboardSummary(timeRange),
+        getRecentAlerts(100, timeRange).catch(() => []),
+        getTopAttackers(8, timeRange).catch(() => []),
+        getAlertVolume(timeRange, timeRange <= 1 ? "5m" : "1h").catch(() => []),
+        listAgents().catch(() => []),
+        getMitreCoverage(timeRange).catch(() => []),
+        getWazuhServices().catch(() => null),
+        getBlockedIps().catch(() => []),
+      ]);
       setSummary(dash);
+      setAlerts(recent || []);
+      setTopAttackers(top || []);
+      setAgents(ags || []);
+      setMitreData(mitre || []);
+      setServices(svc);
+      setBlocked(new Set((blk || []).map((b) => b.ip)));
 
-      let recentAlerts: any[] = [];
-      try {
-        recentAlerts = await getRecentAlerts(100, timeRange) || [];
-        setAlerts(recentAlerts);
-      } catch(e) { setAlerts([]); }
-
-      try {
-        const top = await getTopAttackers(10, timeRange);
-        setTopAttackers(top || []);
-      } catch(e) { setTopAttackers([]); }
-
-      let volPoints: number[] = [];
-      let volLabels: string[] = [];
-      try {
-        const vol = await getAlertVolume(timeRange, timeRange <= 1 ? "5m" : "1h");
-        if (vol && vol.length > 0) {
-          volPoints = vol.map((p: any) => (typeof p === "object" ? (p.count ?? 0) : p));
-          volLabels = vol.map((p: any, i: number) => {
-            if (i === 0 || i === vol.length - 1 || i === Math.floor(vol.length / 2)) {
-              const date = new Date(p.time);
-              return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            }
-            return "";
-          }).filter((l: string) => l !== "");
-        }
-      } catch (e) { /* fallback below */ }
-      if (volPoints.length === 0 && recentAlerts.length > 0) {
-        const fb = buildVolumeFallback(recentAlerts, timeRange);
-        volPoints = fb.points;
-        volLabels = fb.labels;
+      let pts: number[] = [];
+      let lbls: string[] = [];
+      if (vol && vol.length > 0) {
+        pts = vol.map((p: any) => (typeof p === "object" ? p.count ?? 0 : p));
+        lbls = vol.map((p: any, i: number) => (i === 0 || i === vol.length - 1 || i === Math.floor(vol.length / 2))
+          ? new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "").filter(Boolean);
+      } else if ((recent || []).length > 0) {
+        ({ points: pts, labels: lbls } = buildVolumeFallback(recent, timeRange));
       }
-      setVolumePoints(volPoints);
-      setVolumeLabels(volLabels);
-
-      try {
-        const ags = await listAgents();
-        setAgents(ags || []);
-      } catch(e) { setAgents([]); }
-
-      try {
-        const mitre = await getMitreCoverage(timeRange);
-        setMitreData(mitre || []);
-      } catch(e) { setMitreData([]); }
-
-      try {
-        const services = await getWazuhServices();
-        setWazuhServices(services);
-      } catch(e) { setWazuhServices(null); }
-
+      setVolumePoints(pts);
+      setVolumeLabels(lbls);
     } catch (e) {
       logger.error("fetchData error:", e);
     }
@@ -260,443 +202,315 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
 
   useEffect(() => {
     fetchData();
+    setPage(0);
     const interval = setInterval(fetchData, 30000);
-
-    const handleNewAlert = (e: any) => {
-      setAlerts(prev => {
-        // Avoid duplicate alerts if possible (by comparing description and source_ip)
-        const isDuplicate = prev.some(a => a.description === e.detail.description && a.timestamp === e.detail.timestamp);
-        if (isDuplicate) return prev;
-        return [e.detail, ...prev].slice(0, 100);
-      });
-      // Refresh summary to update KPI counts
+    const onNewAlert = (e: any) => {
+      setAlerts((prev) => prev.some((a) => a.description === e.detail.description && a.timestamp === e.detail.timestamp) ? prev : [e.detail, ...prev].slice(0, 100));
       getDashboardSummary(timeRange).then(setSummary).catch(() => {});
     };
-
-    window.addEventListener('valhalla-new-alert', handleNewAlert);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('valhalla-new-alert', handleNewAlert);
-    };
+    window.addEventListener("valhalla-new-alert", onNewAlert);
+    return () => { clearInterval(interval); window.removeEventListener("valhalla-new-alert", onNewAlert); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange]);
 
-  const handleSyncWazuh = async () => {
-    setSyncing(true);
-    setSyncResult(null);
+  const handleSync = async () => {
+    setBusy(true);
     try {
-      const result = await syncWazuhAlerts(1);
-      setSyncResult(result);
-      fetchData();
-    } catch (err) {
-      logger.error("Sync error:", err);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleCreateTicketFromAlert = async (alertData: any) => {
-    try {
-      setSyncing(true);
-      const title = `Wazuh Alert: ${alertData.description || alertData.rule_id}`;
-      const { createTicket } = await import("../lib/api");
-      await createTicket({
-        title: title.slice(0, 200),
-        description: `Source: ${alertData.source_ip || 'N/A'}\nAgent: ${alertData.agent_name || 'N/A'}\nRule: ${alertData.rule_id}\n\n${alertData.description || ''}`,
-        severity: alertData.severity || "medium",
-        category: "wazuh-alert",
-        source_ip: alertData.source_ip || null,
-        affected_asset: alertData.agent_name || alertData.agent_id || "Manager",
-        wazuh_alert_id: String(alertData.id),
-      });
-      window.alert("Ticket de incidencia creado correctamente");
+      const r = await syncWazuhAlerts(1);
+      toast(es ? `Sincronizado: ${r.created} incidentes nuevos, ${r.skipped} ya existían.` : `Synced: ${r.created} new incidents, ${r.skipped} already existed.`, "ok");
       fetchData();
     } catch (e) {
+      toast(es ? "No se pudo sincronizar con Wazuh." : "Could not sync with Wazuh.", "err");
+      logger.error("Sync error:", e);
+    } finally { setBusy(false); }
+  };
+
+  const handleCreateTicket = async (al: any) => {
+    setBusy(true);
+    try {
+      await createTicket({
+        title: `Wazuh Alert: ${al.description || al.rule_id}`.slice(0, 200),
+        description: `Source: ${al.source_ip || "N/A"}\nAgent: ${al.agent_name || "N/A"}\nRule: ${al.rule_id} (level ${al.rule_level ?? "?"})\n\n${al.description || ""}`,
+        severity: al.severity || "medium",
+        category: "wazuh-alert",
+        source_ip: al.source_ip || null,
+        affected_asset: al.agent_name || al.agent_id || "Manager",
+        wazuh_alert_id: al.id ? String(al.id) : null,
+      });
+      toast(es ? "Incidente creado a partir de la alerta." : "Incident created from alert.", "ok");
+      fetchData();
+    } catch (e) {
+      toast(es ? "Error al crear el incidente." : "Failed to create incident.", "err");
       logger.error("Error creating ticket:", e);
-      window.alert("Error al crear el ticket");
-    } finally {
-      setSyncing(false);
+    } finally { setBusy(false); }
+  };
+
+  const handleBlock = async (ip: string) => {
+    try {
+      const r = await blockIp(ip, undefined, "Bloqueo manual desde la Vista general");
+      setBlocked((prev) => new Set(prev).add(ip));
+      toast(es
+        ? `IP ${ip} bloqueada${r.active_response ? " (firewall-drop aplicado)" : " (añadida a la lista CDB de Wazuh)"}.`
+        : `IP ${ip} blocked${r.active_response ? " (firewall-drop applied)" : " (added to Wazuh CDB list)"}.`, "ok");
+    } catch (e) {
+      toast(String(e).replace(/^Error:\s*/, ""), "err");
     }
   };
 
-  const pageSize = 15;
-  const totalPages = Math.ceil(alerts.length / pageSize) || 1;
-  const currentAlerts = alerts.slice(siemPageState * pageSize, (siemPageState + 1) * pageSize);
+  const goIntel = (ip: string) => dispatch(navigateToIntel(ip));
 
-  const WIDGET_REGISTRY = useMemo(() => ({
-    "kpi-1": { name: t('alerts_24h'), w: 2, h: 2, icon: "", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--danger)', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
-        <div className="kpi-card__glow" style={{ background: 'var(--danger)' }} />
-        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
-        <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--danger)', opacity: 0.5 }} />
-        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('alerts_24h').toUpperCase()}</span>
-        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
-          <CountUp value={summary.metrics.total_alerts_24h || 0} color="var(--danger)" />
-        </div>
-        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>LAST {timeRange}H</span>
-      </div>
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(alerts.length / pageSize));
+  const pageAlerts = alerts.slice(page * pageSize, (page + 1) * pageSize);
+
+  const sevCounts = useMemo(() => {
+    const c: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+    alerts.forEach((a) => { const s = (a.severity || "").toLowerCase(); if (s in c) c[s]++; });
+    return c;
+  }, [alerts]);
+  const sevTotal = Object.values(sevCounts).reduce((a, b) => a + b, 0);
+  const sevLabel: Record<string, string> = { critical: t("critical"), high: t("high"), medium: t("medium"), low: t("low") };
+
+  const activeAgents = agents.filter((a) => a.status === "active").length;
+
+  const svcState = (s?: string): "ok" | "warn" | "down" | "idle" =>
+    s === "active" || s === "running" ? "ok" : s === "warning" ? "warn" : s ? "down" : "idle";
+
+  const WIDGETS: Record<string, { name: string; w: number; h: number; render: () => React.ReactNode }> = {
+    "kpi-1": { name: es ? "Alertas" : "Alerts", w: 3, h: 3, render: () => (
+      <KpiCard icon={Activity} tone="accent" label={`${es ? "Alertas" : "Alerts"} · ${rangeLabel}`} value={summary.metrics.total_alerts_24h || 0}
+        sub={es ? "Eventos del SIEM en el periodo" : "SIEM events in range"} spark={volumePoints} onClick={() => dispatch(setView("siem"))} />
     )},
-    "kpi-2": { name: t('critical'), w: 2, h: 2, icon: "", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid #ff4757', background: 'rgba(255, 71, 87, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
-        <div className="kpi-card__glow" style={{ background: '#ff4757' }} />
-        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
-        <div className="kpi-corner kpi-corner--br" style={{ borderColor: '#ff4757', opacity: 0.5 }} />
-        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('critical').toUpperCase()}</span>
-        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
-          <CountUp value={summary.metrics.critical_alerts || 0} color="#ff4757" />
-        </div>
-        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>SEVERITY · CRIT</span>
-      </div>
+    "kpi-2": { name: t("critical"), w: 3, h: 3, render: () => (
+      <KpiCard icon={ShieldAlert} tone="danger" label={es ? "Críticas" : "Critical"} value={summary.metrics.critical_alerts || 0}
+        sub={es ? "Nivel de regla ≥ 12" : "Rule level ≥ 12"} />
     )},
-    "kpi-3": { name: t('agents'), w: 2, h: 2, icon: "", render: () => {
-      const active = agents.filter(a => a.status === 'active').length;
-      const total = agents.length;
-      return (
-        <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--cyan)', background: 'rgba(74, 227, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
-          <div className="kpi-card__glow" style={{ background: 'var(--cyan)' }} />
-          <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
-          <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--cyan)', opacity: 0.5 }} />
-          <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('agents').toUpperCase()}</span>
-          <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
-            <CountUp value={active} color="var(--cyan)" />
-          </div>
-          <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>{active}/{total} ACTIVOS</span>
-        </div>
-      );
-    }},
-    "kpi-4": { name: t('tickets_open'), w: 2, h: 2, icon: "", render: () => (
-      <div className="kpi-card" style={{ height: '100%', border: '1px solid var(--amber)', background: 'rgba(255, 180, 84, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
-        <div className="kpi-card__glow" style={{ background: 'var(--amber)' }} />
-        <div className="kpi-corner kpi-corner--tl" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
-        <div className="kpi-corner kpi-corner--br" style={{ borderColor: 'var(--amber)', opacity: 0.5 }} />
-        <span className="kpi-card__label" style={{ fontSize: '9px', letterSpacing: '1.5px', marginBottom: '3px', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>{t('tickets_open').toUpperCase()}</span>
-        <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'var(--mono)', lineHeight: 1 }}>
-          <CountUp value={summary.metrics.tickets_open || 0} color="var(--amber)" />
-        </div>
-        <span className="kpi-card__sub" style={{ fontSize: '8px', letterSpacing: '1px', marginTop: '3px', fontFamily: 'var(--mono)' }}>EN PROGRESO</span>
-      </div>
+    "kpi-3": { name: t("agents"), w: 3, h: 3, render: () => (
+      <KpiCard icon={Server} tone="info" label={es ? "Agentes activos" : "Active agents"} value={activeAgents}
+        sub={es ? `de ${agents.length} registrados` : `of ${agents.length} registered`} onClick={() => dispatch(setView("assets"))} />
     )},
-    "siem-flow": { name: "SIEM Flow", w: 8, h: 10, icon: "", render: () => {
-      const SEV_COLOR: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e', info: '#38bdf8' };
-      return (
-        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel__head" style={{ cursor: 'move' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 6px var(--signal)', animation: 'pulse 2s infinite', display: 'inline-block' }} />
-              <span className="panel__title">SIEM · {t('siem_sub').toUpperCase()}</span>
-              <span className="siem-meta">{alerts.length} eventos</span>
+    "kpi-4": { name: es ? "Incidentes abiertos" : "Open incidents", w: 3, h: 3, render: () => (
+      <KpiCard icon={Siren} tone="warning" label={es ? "Incidentes abiertos" : "Open incidents"} value={summary.metrics.tickets_open || 0}
+        sub={es ? "Abiertos, en curso o escalados" : "Open, in progress or escalated"} onClick={() => dispatch(setView("workspace"))} />
+    )},
+    "siem-flow": { name: "SIEM", w: 8, h: 17, render: () => (
+      <section className="vx-card">
+        <CardHead icon={Layers} title={es ? "Alertas Wazuh" : "Wazuh alerts"} meta={`${alerts.length} ${es ? "eventos" : "events"}`}>
+          <button className="vx-mini-btn" onClick={handleSync} disabled={busy} title={es ? "Crear incidentes a partir de alertas altas y críticas de la última hora" : "Create incidents from high/critical alerts of the last hour"}>
+            <RefreshCw size={12} className={busy ? "vx-spin" : ""} />{es ? "Sincronizar" : "Sync"}
+          </button>
+          <button className="vx-iconbtn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label={es ? "Anterior" : "Previous"}><ChevronLeft size={15} /></button>
+          <span className="vx-pager">{page + 1}/{totalPages}</span>
+          <button className="vx-iconbtn" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} aria-label={es ? "Siguiente" : "Next"}><ChevronRight size={15} /></button>
+        </CardHead>
+        <div className="vx-card__body">
+          <div className="vx-table">
+            <div className="vx-table__head">
+              <span>{es ? "Sev." : "Sev."}</span><span>{t("time")}</span><span>IP</span><span>{es ? "Agente" : "Agent"}</span><span>{t("description")}</span><span>{t("actions")}</span>
             </div>
-            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-              <button
-                type="button"
-                className="btn-dash-sync"
-                onClick={handleSyncWazuh}
-                disabled={syncing}
-              >{syncing ? '···' : '+INC'}</button>
-              <button onClick={() => setSiemPageState(p => Math.max(0, p - 1))} disabled={siemPageState === 0} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>◄</button>
-              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>{siemPageState + 1}/{totalPages}</span>
-              <button onClick={() => setSiemPageState(p => Math.min(totalPages - 1, p + 1))} disabled={siemPageState >= totalPages - 1} style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--signal)', padding: '1px 5px', cursor: 'pointer', fontSize: '12px' }}>►</button>
-            </div>
-          </div>
-          <div className="siem-table-head" style={{ display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px', gap: '0 8px', padding: '6px 12px 8px' }}>
-            {['SEV',t('time'),t('ip'),t('agents'),t('description'), t('actions')].map((h, idx) => (
-              <span key={idx} style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontWeight: 700, fontFamily: 'var(--mono)' }}>{h.toUpperCase()}</span>
-            ))}
-          </div>
-          <div className="panel__body" style={{ padding: 0, overflowY: 'auto', flex: 1 }}>
-            {currentAlerts.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px', letterSpacing: '2px' }}>{t('no_alerts').toUpperCase()}</div>
-            )}
-            <AnimatePresence initial={false}>
-              {currentAlerts.map((al, i) => {
-                const sev = (al.severity || 'info').toLowerCase();
-                const color = SEV_COLOR[sev] || '#38bdf8';
-                const isSshBrute = al.description?.toLowerCase().includes("ssh") && al.description?.toLowerCase().includes("brute force");
-                return (
-                  <motion.div
-                    key={al.id || i}
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3, delay: i * 0.03 }}
-                    style={{
-                      display: 'grid', gridTemplateColumns: '65px 85px 110px 110px 1fr 140px',
-                      gap: '0 8px', padding: '10px 12px',
-                      borderBottom: '1px solid var(--line-faint)',
-                      alignItems: 'center', fontSize: '12px',
-                      transition: 'background 0.15s',
-                      position: 'relative'
-                    }}
-                    className="siem-row"
-                  >
-                    <span style={{
-                      fontSize: '9px', fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'var(--mono)',
-                      color, padding: '2px 6px', background: `${color}15`,
-                      textAlign: 'center', display: 'inline-block', border: `1px solid ${color}30`
-                    }}>{sev.toUpperCase().slice(0, 4)}</span>
-                    <span className="siem-col-time">
-                      {new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                    <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600 }}>
-                      {al.source_ip || '—'}
-                    </span>
-                    <span className="siem-col-agent" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {al.agent_name || al.agent_id || '—'}
-                    </span>
-                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      <span className="siem-col-desc" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {al.description || `Rule ${al.rule_id}`}
-                      </span>
-                      {isSshBrute && (
-                        <span style={{ fontSize: '9px', color: '#f59e0b', fontStyle: 'italic' }}> Check for "Accepted Password" follow-up</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleCreateTicketFromAlert(al)}
-                        disabled={syncing}
-                        className="btn-mini"
-                      >
-                        +INC
-                      </button>
-                      <button type="button" className="btn-mini btn-mini--danger">BLOCK</button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        </section>
-      );
-    }},
-    "chart-vol": { name: "Volume", w: 4, h: 4, icon: "", render: () => {
-      const lastVal = volumePoints?.slice(-1)?.[0] || 0;
-      const maxVal = Math.max(...(volumePoints || [1]), 1);
-      const trend = volumePoints.length >= 2 ? volumePoints[volumePoints.length - 1] - volumePoints[volumePoints.length - 2] : 0;
-      return (
-        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel__head" style={{ cursor: 'move' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 5px var(--signal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              <span className="panel__title">{t('volume')} · {timeRange}H</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--signal)', fontFamily: 'var(--mono)', lineHeight: 1 }}>{lastVal}</span>
-              <span style={{ fontSize: '8px', color: 'var(--text-faint)', letterSpacing: '1px' }}>{t('eps')}</span>
-              {trend !== 0 && <span style={{ fontSize: '9px', color: trend > 0 ? '#ef4444' : '#22c55e' }}>{trend > 0 ? '▲' : '▼'}</span>}
-            </div>
-          </div>
-          <div style={{ padding: '8px 12px 4px', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>-{timeRange}h</span>
-            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{t('max')}: {maxVal}</span>
-            <span style={{ fontSize: '8px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>{t('now')}</span>
-          </div>
-          <div style={{ flex: 1, padding: '0 12px 12px', minHeight: 0 }}>
-            <AreaChart points={volumePoints} labels={volumeLabels} color="var(--forest)" gradientId="vol-grad" />
-          </div>
-        </section>
-      );
-    }},
-    "chart-levels": { name: "Niveles", w: 4, h: 4, icon: "", render: () => {
-      const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-      alerts.forEach(al => {
-        const s = (al.severity || '').toLowerCase();
-        if (s in counts) counts[s as keyof typeof counts]++;
-      });
-      const total = Object.values(counts).reduce((a, b) => a + b, 0);
-      return (
-        <section className="panel dash-chart-levels" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel__head" style={{ cursor: 'move' }}>
-            <span className="panel__title">{t('distribution')} · SEV</span>
-            <span className="dash-chart-meta" style={{ fontSize: '10px', fontFamily: 'var(--mono)' }}>{total} {t('siem').toLowerCase()}</span>
-          </div>
-          <div className="panel__body" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', flex: 1 }}>
-            <SevBar label={t('critical').toUpperCase()} count={counts.critical} total={total || 1} color="#ef4444" />
-            <SevBar label={t('high').toUpperCase()} count={counts.high} total={total || 1} color="#f97316" />
-            <SevBar label={t('medium').toUpperCase()} count={counts.medium} total={total || 1} color="#eab308" />
-            <SevBar label={t('low').toUpperCase()} count={counts.low} total={total || 1} color="#22c55e" />
-          </div>
-        </section>
-      );
-    }},
-    "mitre-tech": { name: "MITRE Tech", w: 6, h: 5, icon: "", render: () => {
-      const maxCount = Math.max(...(mitreData.map((m: any) => m.count || 0)), 1);
-      return (
-        <section className="panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel__head" style={{ cursor: 'move' }}>
-             <span className="panel__title">{t('mitre_tech').toUpperCase()}</span>
-             <span style={{ fontSize: '9px', color: 'var(--signal)', fontFamily: 'var(--mono)' }}>{mitreData.length} técnicas</span>
-          </div>
-          <div className="panel__body" style={{ padding: '8px 0', overflowY: 'auto', flex: 1 }}>
-            {mitreData.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px' }}>{t('no_data').toUpperCase()}</div>
-            )}
-            {mitreData.slice(0, 10).map((m: any, i: number) => {
-              const barPct = (m.count / maxCount) * 100;
+            {pageAlerts.length === 0 && <div className="vx-empty" style={{ height: 180 }}><Inbox size={22} />{es ? "Sin alertas en este periodo" : "No alerts in this range"}</div>}
+            {pageAlerts.map((al, i) => {
+              const sev = (al.severity || "info").toLowerCase();
+              const ip: string = al.source_ip || "";
+              const isBlocked = !!ip && blocked.has(ip);
               return (
-                <div key={i} style={{ padding: '6px 14px', borderBottom: '1px solid var(--line-faint)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-bright)', fontFamily: 'var(--mono)' }}>{m.technique_id} - {m.technique}</span>
-                    <span style={{ fontSize: '10px', color: 'var(--signal)', fontWeight: 'bold' }}>{m.count}</span>
-                  </div>
-                  <div style={{ height: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '1px' }}>
-                    <div style={{ width: `${barPct}%`, height: '100%', background: 'var(--signal)', opacity: 0.6 }} />
-                  </div>
+                <div key={al.id || `${al.timestamp}-${i}`} className="vx-table__row">
+                  <span><span className={`vx-sev vx-sev--${sev}`}>{sevLabel[sev] || sev}</span></span>
+                  <span className="vx-muted">{new Date(al.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                  <span>{ip ? <button className="vx-ip" onClick={() => goIntel(ip)} title={es ? "Investigar en Threat Intel" : "Investigate in Threat Intel"}>{ip}</button> : <span className="vx-muted">—</span>}</span>
+                  <span className="vx-muted">{al.agent_name || al.agent_id || "—"}</span>
+                  <span title={al.description}>{al.description || `Rule ${al.rule_id}`}</span>
+                  <span className="vx-actions">
+                    <button className="vx-mini-btn" onClick={() => handleCreateTicket(al)} disabled={busy} title={es ? "Crear incidente" : "Create incident"}><Plus size={12} />INC</button>
+                    <HoldButton
+                      onConfirm={() => handleBlock(ip)}
+                      disabled={!ip || isBlocked}
+                      title={!ip ? (es ? "Alerta sin IP de origen" : "No source IP") : isBlocked ? (es ? "IP ya bloqueada" : "IP already blocked") : (es ? `Mantén pulsado para bloquear ${ip}` : `Hold to block ${ip}`)}
+                    >
+                      <Ban size={12} />{isBlocked ? (es ? "Bloqueada" : "Blocked") : "Block"}
+                    </HoldButton>
+                  </span>
                 </div>
               );
             })}
           </div>
+        </div>
+      </section>
+    )},
+    "chart-vol": { name: es ? "Volumen" : "Volume", w: 4, h: 6, render: () => (
+      <section className="vx-card">
+        <CardHead icon={BarChart3} title={es ? "Volumen" : "Volume"} meta={rangeLabel}>
+          <span className="vx-big">{volumePoints.reduce((a, b) => a + b, 0).toLocaleString()}</span>
+        </CardHead>
+        <div className="vx-card__body"><VolumeChart points={volumePoints} labels={volumeLabels} emptyText={es ? "Sin datos" : "No data"} /></div>
+      </section>
+    )},
+    "chart-levels": { name: es ? "Severidad" : "Severity", w: 4, h: 5, render: () => (
+      <section className="vx-card">
+        <CardHead icon={ShieldAlert} title={es ? "Severidad" : "Severity"} meta={`${sevTotal} ${es ? "alertas" : "alerts"}`} />
+        <div className="vx-card__body vx-bars">
+          {SEV_ORDER.map((s) => (
+            <div key={s} className={`vx-sev--${s}`}>
+              <div className="vx-bar__top"><span>{sevLabel[s]}</span><span><b>{sevCounts[s]}</b><small>{sevTotal ? Math.round((sevCounts[s] / sevTotal) * 100) : 0}%</small></span></div>
+              <div className="vx-bar__track"><div className="vx-bar__fill" style={{ width: `${sevTotal ? (sevCounts[s] / sevTotal) * 100 : 0}%` }} /></div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )},
+    "top-attack": { name: es ? "Principales atacantes" : "Top attackers", w: 4, h: 6, render: () => {
+      const max = Math.max(...topAttackers.map((a) => a.count || 0), 1);
+      return (
+        <section className="vx-card">
+          <CardHead icon={Crosshair} title={es ? "Atacantes" : "Attackers"} meta={`${topAttackers.length} IP`} tone="var(--danger)" />
+          <div className="vx-card__body">
+            {topAttackers.length === 0 ? <div className="vx-empty"><Crosshair size={22} />{es ? "Sin IP atacantes en el periodo" : "No attacking IPs in range"}</div> : (
+              <ul className="vx-list">
+                {topAttackers.map((a) => (
+                  <li key={a.ip}>
+                    <div className="vx-list__row">
+                      <button className="vx-ip" onClick={() => goIntel(a.ip)}>{a.ip}</button>
+                      {blocked.has(a.ip) && <span className="vx-sev vx-sev--low">{es ? "bloqueada" : "blocked"}</span>}
+                      <b>{a.count.toLocaleString()}</b>
+                    </div>
+                    <div className="vx-list__sub" title={a.attack_type}>{a.attack_type}</div>
+                    <div className="vx-bar__track vx-sev--critical"><div className="vx-bar__fill" style={{ width: `${(a.count / max) * 100}%` }} /></div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
       );
     }},
-    "stack-health": { name: "Health", w: 6, h: 8, icon: "", render: () => {
-      const services = [
-        { name: t('manager'), status: wazuhServices?.manager || wazuhServices?.status || 'disconnected', icon: '' },
-        { name: t('indexer'), status: wazuhServices?.indexer || (summary.status === 'operational' ? 'active' : 'disconnected'), icon: '' },
-        { name: 'Cowrie SSH/Telnet', status: wazuhServices?.cowrie || 'disconnected', icon: '', hint: wazuhServices?.cowrie_events_24h != null ? `${wazuhServices.cowrie_events_24h} evt/24h` : '' },
-        { name: lang === 'es' ? 'Honeypot (señuelo)' : 'Honeypot (decoy)', status: wazuhServices?.honeypot || wazuhServices?.cowrie || 'disconnected', icon: '' },
-        { name: lang === 'es' ? 'Simulador atacante' : 'Attack simulator', status: wazuhServices?.attacker || 'disconnected', icon: '' },
-        { name: t('api'), status: wazuhServices?.api || 'active', icon: '' },
-      ];
+    "mitre-tech": { name: "MITRE ATT&CK", w: 6, h: 9, render: () => {
+      const max = Math.max(...mitreData.map((m: any) => m.count || 0), 1);
       return (
-        <section className="panel dash-stack-health" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div className="panel__head" style={{ cursor: 'move' }}>
-             <span className="panel__title">{t('stack_health').toUpperCase()}</span>
-          </div>
-          <div className="panel__body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-            {services.map((s, i) => (
-              <div key={i} className="dash-health-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px' }}>
-                <span style={{ fontSize: '18px' }}>{s.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-bright)' }}>{s.name}</div>
-                  <div style={{
-                    fontSize: '9px',
-                    color: s.status === 'active' || s.status === 'running' ? 'var(--signal)' : s.status === 'warning' ? 'var(--amber)' : 'var(--danger)',
-                    textTransform: 'uppercase',
-                  }}>
-                    ● {s.status === 'warning' ? (lang === 'es' ? 'activo · sin eventos' : 'up · no events') : s.status}
-                  </div>
-                </div>
-                {'hint' in s && (s as { hint?: string }).hint ? (
-                  <div style={{ fontSize: '9px', color: 'var(--text-faint)' }}>{(s as { hint?: string }).hint}</div>
-                ) : null}
-              </div>
-            ))}
+        <section className="vx-card">
+          <CardHead icon={Target} title="MITRE ATT&CK" meta={`${mitreData.length} ${es ? "técnicas" : "techniques"}`} />
+          <div className="vx-card__body">
+            {mitreData.length === 0 ? <div className="vx-empty"><Target size={22} />{es ? "Ninguna técnica observada en el periodo" : "No techniques observed in range"}</div> : (
+              <ul className="vx-list">
+                {mitreData.slice(0, 10).map((m: any, i: number) => (
+                  <li key={i}>
+                    <div className="vx-list__row"><span className="vx-code">{m.technique_id}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.technique}</span><b>{m.count}</b></div>
+                    <div className="vx-bar__track" style={{ ["--sev" as string]: "var(--signal)" }}><div className="vx-bar__fill" style={{ width: `${(m.count / max) * 100}%` }} /></div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
       );
-    }}
-  }), [summary, alerts, topAttackers, volumePoints, agents, siemPageState, setSiemPageState, wazuhServices, lang, t, timeRange, syncing]);
-
-  const onLayoutChange = (layout: any, allLayouts: any) => {
-    setLayouts(allLayouts);
-    localStorage.setItem("valhalla.dashboard.layout.v3", JSON.stringify(allLayouts));
-    localStorage.setItem("valhalla.dashboard.widgets.v3", JSON.stringify(activeWidgets));
+    }},
+    "stack-health": { name: es ? "Salud del stack" : "Stack health", w: 6, h: 9, render: () => {
+      const items: { name: string; icon: LucideIcon; status?: string; hint?: string }[] = [
+        { name: "Wazuh Manager", icon: Server, status: services?.manager || services?.status },
+        { name: "Wazuh Indexer", icon: Database, status: services?.indexer || (summary.status === "operational" ? "active" : undefined) },
+        { name: "Cowrie SSH/Telnet", icon: Bug, status: services?.cowrie, hint: services?.cowrie_events_24h != null ? `${services.cowrie_events_24h} evt/24h` : undefined },
+        { name: es ? "Honeypot (señuelo)" : "Honeypot (decoy)", icon: Radar, status: services?.honeypot || services?.cowrie },
+        { name: es ? "Simulador atacante" : "Attack simulator", icon: Swords, status: services?.attacker },
+        { name: "API Valhalla", icon: Plug, status: services?.api || "active" },
+      ];
+      const stateText = { ok: es ? "Operativo" : "Operational", warn: es ? "Activo · sin eventos" : "Up · no events", down: es ? "Caído" : "Down", idle: es ? "Sin datos" : "No data" };
+      return (
+        <section className="vx-card">
+          <CardHead icon={HeartPulse} title={es ? "Salud del stack" : "Stack health"} tone="#2fbf71" />
+          <div className="vx-card__body">
+            <div className="vx-health">
+              {items.map((s) => {
+                const st = svcState(s.status);
+                const Icon = s.icon;
+                return (
+                  <div key={s.name} className="vx-health__item">
+                    <Icon size={18} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="vx-health__name">{s.name}</div>
+                      <div className="vx-health__state">{stateText[st]}{s.hint ? ` · ${s.hint}` : ""}</div>
+                    </div>
+                    <StatusDot state={st} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      );
+    }},
   };
 
+  const saveLayout = (all: any, widgets = activeWidgets) => {
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(all));
+      localStorage.setItem(WIDGETS_KEY, JSON.stringify(widgets));
+    } catch { /* almacenamiento no disponible */ }
+  };
+  const onLayoutChange = (_: any, all: any) => { setLayouts(all); saveLayout(all); };
   const addWidget = (id: string) => {
     if (activeWidgets.includes(id)) return;
-    const widget = WIDGET_REGISTRY[id];
-    const newLg = [...layouts.lg, { i: id, x: 0, y: Infinity, w: widget.w, h: widget.h }];
-    setLayouts({ ...layouts, lg: newLg });
-    const newActive = [...activeWidgets, id];
-    setActiveWidgets(newActive);
-    localStorage.setItem("valhalla.dashboard.widgets.v3", JSON.stringify(newActive));
-    setCatalogState(false);
+    const w = WIDGETS[id];
+    const next = { ...layouts, lg: [...(layouts.lg || []), { i: id, x: 0, y: Infinity, w: w.w, h: w.h }] };
+    const ids = [...activeWidgets, id];
+    setLayouts(next); setActiveWidgets(ids); saveLayout(next, ids);
+    setCatalogOpen(false);
   };
-
   const removeWidget = (id: string) => {
-    const newActive = activeWidgets.filter(w => w !== id);
-    setActiveWidgets(newActive);
-    localStorage.setItem("valhalla.dashboard.widgets.v3", JSON.stringify(newActive));
-    const newLg = layouts.lg.filter((l: any) => l.i !== id);
-    setLayouts({ ...layouts, lg: newLg });
+    const ids = activeWidgets.filter((w) => w !== id);
+    const next = { ...layouts, lg: (layouts.lg || []).filter((l: any) => l.i !== id) };
+    setLayouts(next); setActiveWidgets(ids); saveLayout(next, ids);
   };
+  const available = Object.entries(WIDGETS).filter(([k]) => !activeWidgets.includes(k));
 
   return (
-    <div className="view dash-overview" ref={ref} style={{ flex: 1, padding: '2px 8px 4px', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '2px 12px 4px' }}>
-        {[
-          { label: t('last_hour'), val: 1 },
-          { label: t('last_24h'), val: 24 },
-          { label: t('last_7d'), val: 168 }
-        ].map(r => (
-          <button
-            type="button"
-            key={r.val}
-            onClick={() => setTimeRange(r.val)}
-            className={`dash-filter-btn ${timeRange === r.val ? 'active' : ''}`}
-          >
-            {r.label.toUpperCase()}
-          </button>
-        ))}
+    <div className="view vx-overview" ref={ref}>
+      <div className="vx-overview__bar">
+        <div className="vx-overview__title">
+          <h1>{es ? "Vista general" : "Overview"}</h1>
+          <span>{es ? "Actualización automática cada 30 s" : "Auto-refresh every 30 s"}</span>
+        </div>
+        <div className="vx-seg" role="group" aria-label={es ? "Periodo" : "Range"}>
+          {[{ l: t("last_hour"), v: 1 }, { l: t("last_24h"), v: 24 }, { l: t("last_7d"), v: 168 }].map((r) => (
+            <button key={r.v} aria-pressed={timeRange === r.v} onClick={() => setTimeRange(r.v)}>{r.l}</button>
+          ))}
+        </div>
       </div>
+
       <ResponsiveGridLayout
         className="layout"
         layouts={layouts}
         width={width}
-        breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-        cols={{ lg: 12, md: 10, sm: 6 }}
+        breakpoints={{ lg: 1000, md: 0 }}
+        cols={{ lg: 12, md: 6 }}
         rowHeight={30}
-        draggableHandle=".panel__head"
-        isDraggable={!lockState}
-        isResizable={!lockState}
+        // API de react-grid-layout v2: el bloqueo del panel se aplica aquí
+        dragConfig={{ enabled: !isLockedProp, handle: ".vx-card__head" }}
+        resizeConfig={{ enabled: !isLockedProp }}
         onLayoutChange={onLayoutChange}
-        margin={[12, 8]}
+        margin={[12, 12]}
       >
-        {activeWidgets.map(id => {
-          const widget = WIDGET_REGISTRY[id];
-          if (!widget) return null;
-          return (
-            <div key={id} style={{ position: 'relative' }}>
-              {!lockState && <button onClick={() => removeWidget(id)} style={{ position: 'absolute', top: 2, right: 2, zIndex: 10, background: 'var(--danger)', border: 'none', color: '#fff', borderRadius: '50%', width: '18px', height: '18px', fontSize: '10px', cursor: 'pointer' }}>×</button>}
-              {widget.render()}
-            </div>
-          );
-        })}
+        {activeWidgets.filter((id) => WIDGETS[id]).map((id) => (
+          <div key={id} style={{ position: "relative" }}>
+            {!isLockedProp && <button className="vx-remove" onClick={() => removeWidget(id)} aria-label={es ? "Quitar widget" : "Remove widget"}><X size={12} /></button>}
+            {WIDGETS[id].render()}
+          </div>
+        ))}
       </ResponsiveGridLayout>
-      {catalogState && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setCatalogState(false)}>
-          <div style={{
-            background: 'var(--bg-panel-deep)',
-            border: '1px solid var(--signal)',
-            padding: '24px',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 0 40px rgba(60,255,158,0.2), 0 16px 48px rgba(0,0,0,0.8)',
-            clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--line)' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 6px var(--signal)', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', letterSpacing: '2px', fontSize: '11px', fontWeight: 600 }}>{t('add_widget_title').toUpperCase()}</span>
+
+      {catalogOpen && (
+        <div className="vp-modal-backdrop" onMouseDown={() => setCatalogOpen(false)}>
+          <div className="vp-pop" style={{ position: "static", width: "min(520px, 100%)" }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={t("add_widget_title")}>
+            <div className="vp-pop__head">
+              <LayoutGrid size={16} color="var(--signal)" />
+              <div className="vp-pop__title">{t("add_widget_title")}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
-              {Object.entries(WIDGET_REGISTRY).filter(([k]) => !activeWidgets.includes(k)).map(([k, w]: [string, any]) => (
-                <button key={k} onClick={() => addWidget(k)} style={{
-                  padding: '12px 14px',
-                  background: 'rgba(60,255,158,0.04)',
-                  border: '1px solid var(--line)',
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  fontFamily: 'var(--sans)'
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(60,255,158,0.1)'; e.currentTarget.style.borderColor = 'var(--signal)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(60,255,158,0.04)'; e.currentTarget.style.borderColor = 'var(--line)'; }}
-                >
-                  <div style={{ fontSize: '14px', marginBottom: '4px' }}>{w.icon}</div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '1px', color: 'var(--text-bright)' }}>{w.name}</div>
-                </button>
+            <div className="vp-pop__body">
+              {available.length === 0 ? (
+                <div className="vp-empty"><LayoutGrid size={22} />{es ? "Todos los widgets están activos." : "All widgets are active."}</div>
+              ) : available.map(([k, w]) => (
+                <button key={k} className="vp-menu-item" onClick={() => addWidget(k)}><Plus size={16} />{w.name}</button>
               ))}
             </div>
-            {Object.entries(WIDGET_REGISTRY).filter(([k]) => !activeWidgets.includes(k)).length === 0 && (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px', letterSpacing: '2px' }}>TODOS LOS WIDGETS ACTIVOS</div>
-            )}
-            <button onClick={() => setCatalogState(false)} className="action-btn" style={{ marginTop: '16px', width: '100%', padding: '12px', color: 'var(--danger)' }}>
-               {t('close')}
-            </button>
+            <div className="vp-pop__foot"><button className="vp-btn vp-btn--block" onClick={() => setCatalogOpen(false)}>{t("close")}</button></div>
           </div>
         </div>
       )}
