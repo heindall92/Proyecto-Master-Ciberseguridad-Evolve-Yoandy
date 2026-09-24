@@ -86,6 +86,7 @@ services:
       - "cluster.name=wazuh-cluster"
       - "discovery.type=single-node"
       - "bootstrap.memory_lock=true"
+      - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
     user: "0"
     entrypoint: >
       bash -c "
@@ -98,11 +99,13 @@ services:
       chmod 755 /usr/share/wazuh-indexer/certs/ &&
       chmod 644 /usr/share/wazuh-indexer/certs/* &&
       sed -i 's|/etc/wazuh-indexer/certs/|/usr/share/wazuh-indexer/certs/|g' /usr/share/wazuh-indexer/opensearch.yml &&
+      (bash /valhalla/init-security.sh &) &&
       exec /entrypoint.sh opensearchwrapper
       "
     volumes:
       - wazuh-indexer-data:/var/lib/wazuh-indexer
       - ./config/wazuh_indexer_ssl_certs:/source_certs:ro
+      - ./config/wazuh_indexer/init-security.sh:/valhalla/init-security.sh:ro
     ulimits:
       memlock:
         soft: -1

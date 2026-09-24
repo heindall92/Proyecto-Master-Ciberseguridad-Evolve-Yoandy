@@ -428,6 +428,8 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
         raise HTTPException(401, "Credenciales inválidas")
     
     rate_limiter.record_successful_login(username)
+    # El AuditMiddleware lee request.state.user: así el login queda registrado a nombre del usuario.
+    request.state.user = user
     access_token, _, _ = create_access_token_with_meta(user.username)
     refresh_token, _, _ = create_refresh_token_with_meta(user.username)
     csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
@@ -529,13 +531,29 @@ async def update_user_ep(user_id: int, req: UserUpdate, db: AsyncSession = Depen
     u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if not u: raise HTTPException(404, "User not found")
     
-    if req.username: u.username = req.username
-    if req.email: u.email = req.email
-    if req.role and current.role == "admin": u.role = req.role
+    is_admin = current.role == "admin"
+
+    # Identidad y privilegios: solo un administrador puede cambiarlos.
+    if (req.username or req.role or req.security_rank) and not is_admin:
+        raise HTTPException(403, "Solo un administrador puede cambiar usuario, rol o rango")
+    if req.username: u.username = InputValidator.validate_username(req.username)
+    if req.role: u.role = req.role
     if req.security_rank: u.security_rank = req.security_rank
-    if req.avatar_url is not None: u.avatar_url = req.avatar_url
-    if req.password: u.password_hash = get_password_hash(req.password)
-    
+    if req.email: u.email = InputValidator.validate_email(req.email)
+
+    # El avatar solo puede quitarse ("") o apuntar a una imagen subida al propio servidor.
+    if req.avatar_url is not None:
+        if req.avatar_url and not req.avatar_url.startswith("/api/avatars/"):
+            raise HTTPException(400, "avatar_url no permitido")
+        u.avatar_url = req.avatar_url
+
+    if req.password:
+        InputValidator.validate_password(req.password)
+        # Cambio de la propia contraseña: exige la actual (evita secuestro con una sesión abierta).
+        if current.id == u.id and not (req.current_password and verify_password(req.current_password, u.password_hash)):
+            raise HTTPException(400, "La contraseña actual no es correcta")
+        u.password_hash = get_password_hash(req.password)
+
     await db.commit()
     return u
 
@@ -603,6 +621,21 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
 
 @app.get("/api/auth/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)): return current_user
+
+@app.get("/api/auth/me/activity")
+async def my_activity(limit: int = 20, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Actividad auditada del propio usuario (el log global /api/audit es solo para admin)."""
+    q = (
+        select(AuditLog)
+        .where(AuditLog.user_id == current.id)
+        .order_by(desc(AuditLog.timestamp))
+        .limit(max(1, min(limit, 100)))
+    )
+    rows = (await db.execute(q)).scalars().all()
+    return [
+        {"id": r.id, "method": r.action, "route": r.route, "ip": r.ip_address, "timestamp": r.timestamp.isoformat()}
+        for r in rows
+    ]
 
 # TICKETS (rutas fijas antes de /{ticket_id} para no capturar "count" como id)
 @app.get("/api/tickets/count/open")

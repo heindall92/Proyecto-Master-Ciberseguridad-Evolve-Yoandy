@@ -83,6 +83,8 @@ class UserUpdate(BaseModel):
     role: str | None = None
     security_rank: str | None = None
     password: str | None = None
+    # Obligatoria cuando un usuario cambia su propia contraseña.
+    current_password: str | None = None
     avatar_url: str | None = None
 
 class UserIn(UserBase):

@@ -9,8 +9,26 @@ export function getAudioContext() {
   return audioCtx;
 }
 
-// Resume AudioContext if suspended, then run callback
-function withCtx(fn: (ctx: AudioContext) => void) {
+// Preferencias de sonido por categoría (se guardan en este navegador, se editan en Perfil).
+export type SoundCategory = 'incidents' | 'chat' | 'mentions';
+const SOUND_PREFS_KEY = 'valhalla_sound_prefs';
+const DEFAULT_SOUND_PREFS: Record<SoundCategory, boolean> = { incidents: true, chat: true, mentions: true };
+
+export function getSoundPrefs(): Record<SoundCategory, boolean> {
+  try {
+    return { ...DEFAULT_SOUND_PREFS, ...JSON.parse(localStorage.getItem(SOUND_PREFS_KEY) || '{}') };
+  } catch {
+    return { ...DEFAULT_SOUND_PREFS };
+  }
+}
+
+export function setSoundPrefs(prefs: Record<SoundCategory, boolean>) {
+  try { localStorage.setItem(SOUND_PREFS_KEY, JSON.stringify(prefs)); } catch { /* almacenamiento no disponible */ }
+}
+
+// Resume AudioContext if suspended, then run callback (si la categoría no está silenciada)
+function withCtx(fn: (ctx: AudioContext) => void, category: SoundCategory) {
+  if (!getSoundPrefs()[category]) return;
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') {
     ctx.resume().then(() => fn(ctx)).catch(() => {});
@@ -36,7 +54,7 @@ export function playNotificationSound() {
       gain.gain.linearRampToValueAtTime(0, now + 0.25);
       osc.start(now); osc.stop(now + 0.25);
     } catch (e) { logger.log('Audio error:', e); }
-  });
+  }, 'incidents');
 }
 
 export function playChatSound() {
@@ -56,7 +74,7 @@ export function playChatSound() {
         osc.start(now + offset); osc.stop(now + offset + 0.13);
       });
     } catch (e) { logger.log('Audio error:', e); }
-  });
+  }, 'chat');
 }
 
 export function playMentionSound() {
@@ -76,7 +94,7 @@ export function playMentionSound() {
         osc.start(now + offset); osc.stop(now + offset + 0.1);
       });
     } catch (e) { logger.log('Audio error:', e); }
-  });
+  }, 'mentions');
 }
 
 export function playResolvedSound() {
@@ -95,5 +113,5 @@ export function playResolvedSound() {
       gain.gain.linearRampToValueAtTime(0, now + 0.4);
       osc.start(now); osc.stop(now + 0.4);
     } catch (e) { logger.log('Audio error:', e); }
-  });
+  }, 'incidents');
 }
