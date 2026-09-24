@@ -1,0 +1,220 @@
+/* ======================================================
+   VALHALLA SOC — Modo claro "glass" (se carga después de light-theme-overrides.css)
+   Referencia visual: ENS Compliance Studio (fondo neutro, cristal blanco,
+   líneas de 1px, acento solo en los detalles). Los botones cyberpunk del
+   sidebar conservan su forma; solo cambian de color.
+   ====================================================== */
+
+body[data-theme="light"] {
+  --bg-void: #f3f5f6;
+  --bg-panel: rgba(255, 255, 255, 0.82);
+  --bg-panel-2: #f8fafa;
+  --bg-panel-deep: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.64);
+  --text: #0f1b22;
+  --text-dim: #3a4a53;
+  --text-faint: #687880;
+  --text-bright: #0f1b22;
+  --line: #e3e8ea;
+  --line-strong: #d3dbde;
+  --line-faint: #eef2f3;
+  --danger: #c2362b;
+  --amber: #a86a0c;
+  --cyan: #0b6f94;
+  --on-forest: #ffffff;
+  --scanline-color: transparent;
+
+  --lg-glass: rgba(255, 255, 255, 0.72);
+  --lg-glass-strong: rgba(255, 255, 255, 0.86);
+  --lg-blur: blur(18px) saturate(1.55);
+  --lg-inset: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --lg-sh-1: 0 1px 2px rgba(15, 27, 34, 0.04), 0 1px 3px rgba(15, 27, 34, 0.05);
+  --lg-sh-2: 0 6px 24px -6px rgba(15, 27, 34, 0.12), 0 2px 6px rgba(15, 27, 34, 0.05);
+  --lg-accent-soft: color-mix(in srgb, var(--signal) 12%, #ffffff);
+  --lg-accent-line: color-mix(in srgb, var(--signal) 32%, #ffffff);
+}
+
+/* Acentos en claro: tonos sobrios y legibles (contraste AA sobre blanco) */
+body[data-theme="light"][data-scheme="forest"] {
+  --signal: #2d6a4f; --signal-dim: #1b4332; --signal-deep: #e3efe8; --signal-glow: rgba(45, 106, 79, 0.18);
+  --forest: #2d6a4f; --forest-mid: #1b4332; --forest-deep: #0d2818;
+}
+body[data-theme="light"][data-scheme="green"] {
+  --signal: #12955a; --signal-dim: #0d7446; --signal-deep: #e0f4ea; --signal-glow: rgba(18, 149, 90, 0.18);
+  --forest: #12955a; --forest-mid: #0d7446; --forest-deep: #0a5534;
+  --text: #0f1b22; --text-dim: #3a4a53; --text-faint: #687880; --text-bright: #0f1b22;
+  --line: #e3e8ea; --line-strong: #d3dbde; --line-faint: #eef2f3;
+}
+body[data-theme="light"][data-scheme="teal"] {
+  --signal: #0e7c7b; --signal-dim: #0b6463; --signal-deep: #e2f1f0; --signal-glow: rgba(14, 124, 123, 0.18);
+  --forest: #0e7c7b; --forest-mid: #0b6463; --forest-deep: #094f4e;
+}
+body[data-theme="light"][data-scheme="blue"] {
+  --signal: #1f5fbf; --signal-dim: #184c99; --signal-deep: #e4edfa; --signal-glow: rgba(31, 95, 191, 0.18);
+  --forest: #1f5fbf; --forest-mid: #184c99; --forest-deep: #123a75;
+}
+body[data-theme="light"][data-scheme="orange"] {
+  --signal: #c2560c; --signal-dim: #9a430a; --signal-deep: #fcebdf; --signal-glow: rgba(194, 86, 12, 0.18);
+  --forest: #c2560c; --forest-mid: #9a430a; --forest-deep: #733207;
+}
+body[data-theme="light"][data-scheme="red"] {
+  --signal: #c2362b; --signal-dim: #9c2a21; --signal-deep: #fbe6e3; --signal-glow: rgba(194, 54, 43, 0.18);
+  --forest: #c2362b; --forest-mid: #9c2a21; --forest-deep: #761f18;
+}
+body[data-theme="light"][data-scheme="cyan"] {
+  --signal: #0b7fab; --signal-dim: #086789; --signal-deep: #e1f1f8; --signal-glow: rgba(11, 127, 171, 0.18);
+  --forest: #0b7fab; --forest-mid: #086789; --forest-deep: #064f69;
+  --text: #0f1b22; --text-dim: #3a4a53; --text-faint: #687880; --text-bright: #0f1b22;
+  --line: #e3e8ea; --line-strong: #d3dbde; --line-faint: #eef2f3; --cyan: #0b7fab;
+}
+body[data-theme="light"][data-scheme="amber"] {
+  --signal: #b06a00; --signal-dim: #8c5400; --signal-deep: #fbf0db; --signal-glow: rgba(176, 106, 0, 0.18);
+  --forest: #b06a00; --forest-mid: #8c5400; --forest-deep: #6b4000;
+  --text: #0f1b22; --text-dim: #3a4a53; --text-faint: #687880; --text-bright: #0f1b22;
+  --line: #e3e8ea; --line-strong: #d3dbde; --line-faint: #eef2f3; --amber: #b06a00;
+}
+body[data-theme="light"][data-scheme="purple"] {
+  --signal: #6d3fc0; --signal-dim: #57309e; --signal-deep: #efe8fb; --signal-glow: rgba(109, 63, 192, 0.18);
+  --forest: #6d3fc0; --forest-mid: #57309e; --forest-deep: #43247c;
+  --text: #0f1b22; --text-dim: #3a4a53; --text-faint: #687880; --text-bright: #0f1b22;
+  --line: #e3e8ea; --line-strong: #d3dbde; --line-faint: #eef2f3;
+}
+
+/* ---------- Lienzo ---------- */
+body[data-theme="light"] .app {
+  background:
+    radial-gradient(60% 50% at 0% 0%, color-mix(in srgb, var(--signal) 7%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 100% 100%, color-mix(in srgb, var(--signal) 5%, transparent), transparent 70%),
+    var(--bg-void) !important;
+}
+
+/* ---------- Barra superior: cristal blanco ---------- */
+body[data-theme="light"] .topbar {
+  background: var(--lg-glass-strong) !important;
+  backdrop-filter: var(--lg-blur) !important;
+  -webkit-backdrop-filter: var(--lg-blur) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--lg-inset), var(--lg-sh-1) !important;
+  --tb-fg: var(--text);
+  --tb-fg-dim: var(--text-faint);
+  --tb-border: var(--line-strong);
+  --tb-bg: #ffffff;
+  --tb-bg-hover: var(--lg-accent-soft);
+  --tb-accent: var(--signal);
+}
+body[data-theme="light"] .topbar .topbar__sub { color: var(--text-faint) !important; }
+body[data-theme="light"] .topbar .topbar__logo { background: var(--lg-accent-soft) !important; box-shadow: none !important; border-color: var(--lg-accent-line) !important; }
+body[data-theme="light"] .topbar .topbar-stat__label { color: var(--text-faint) !important; }
+body[data-theme="light"] .topbar .topbar-stat__value,
+body[data-theme="light"] .topbar .topbar-stat__value--ok { color: var(--signal) !important; }
+body[data-theme="light"] .topbar .topbar-stat__value--warn { color: var(--danger) !important; }
+body[data-theme="light"] .topbar .topbar-stat__divider { background: var(--line-strong) !important; }
+body[data-theme="light"] .topbar .vp-seg button[aria-pressed="true"] { color: #ffffff; }
+body[data-theme="light"] .topbar .vp-iconbtn:hover { box-shadow: none; }
+body[data-theme="light"] .vp-kbd { background: #f3f5f6; }
+/* light-theme-overrides pinta todos los span de botones de la topbar en verde pálido (!important): se neutraliza */
+body[data-theme="light"] .topbar button span { color: inherit !important; }
+body[data-theme="light"] .topbar button span.vp-user__name { color: var(--text-bright) !important; }
+body[data-theme="light"] .topbar button span.vp-user__rank { color: var(--text-faint) !important; }
+body[data-theme="light"] .topbar button span.vp-avatar { color: #ffffff !important; }
+body[data-theme="light"] .topbar button span.vp-badge { color: #ffffff !important; }
+
+/* Viñeta oscura y scanlines del modo oscuro: fuera en claro */
+body[data-theme="light"]::after { background: none !important; }
+body[data-theme="light"]::before { background: none !important; }
+
+/* Botón Colapsar: discreto, sin bloque de color */
+body[data-theme="light"] .collapse-btn::before { background: #ffffff !important; border: 1px solid var(--line-strong) !important; box-shadow: none !important; }
+body[data-theme="light"] .collapse-btn .navbtn__main { color: var(--text-dim) !important; }
+body[data-theme="light"] .collapse-btn:hover::before,
+body[data-theme="light"] .collapse-btn--active::before { background: var(--lg-accent-soft) !important; }
+body[data-theme="light"] .collapse-btn .navbtn__icon { stroke: var(--signal) !important; }
+
+/* ---------- Menú lateral: cristal + botones cyberpunk en claro ---------- */
+body[data-theme="light"] .sidenav {
+  background: var(--lg-glass) !important;
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--lg-inset), var(--lg-sh-1);
+}
+body[data-theme="light"] .sidenav__label { color: var(--text-faint); }
+body[data-theme="light"] .navbtn { color: var(--text); }
+body[data-theme="light"] .navbtn::before {
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
+}
+body[data-theme="light"] .navbtn::after { border-left-color: var(--text-faint); opacity: 0.5; }
+body[data-theme="light"] .navbtn__icon-wrap {
+  border: 1px solid var(--lg-accent-line);
+  background: var(--lg-accent-soft);
+}
+body[data-theme="light"] .navbtn__icon { stroke: var(--signal); filter: none; }
+body[data-theme="light"] .navbtn__main { color: var(--text-bright); }
+body[data-theme="light"] .navbtn__sub { color: var(--text-faint); }
+body[data-theme="light"] .navbtn__badge { color: var(--text-faint); }
+body[data-theme="light"] .navbtn__badge.danger { color: var(--danger); text-shadow: none; }
+body[data-theme="light"] .navbtn:hover::before {
+  background: var(--lg-accent-soft);
+  box-shadow: none;
+}
+body[data-theme="light"] .navbtn.active::before {
+  background: color-mix(in srgb, var(--signal) 14%, #ffffff);
+  box-shadow: inset 3px 0 0 var(--signal);
+}
+body[data-theme="light"] .navbtn.active .navbtn__icon-wrap { background: var(--signal); border-color: var(--signal); }
+body[data-theme="light"] .navbtn.active .navbtn__icon { stroke: #ffffff; }
+body[data-theme="light"] .navbtn.active .navbtn__main { color: var(--signal-dim); }
+body[data-theme="light"] .navbtn.active::after { border-left-color: var(--signal); opacity: 1; }
+
+/* ---------- Paneles: cristal, línea fina, sombra suave ---------- */
+body[data-theme="light"] .panel,
+body[data-theme="light"] .view .panel {
+  background: var(--lg-glass-strong) !important;
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--lg-inset), var(--lg-sh-1) !important;
+}
+body[data-theme="light"] .panel__head { border-bottom: 1px solid var(--line) !important; background: transparent !important; }
+body[data-theme="light"] .panel__title { color: var(--text-bright) !important; }
+
+/* ---------- Formularios: 1px, radio 9px, anillo de foco suave ---------- */
+body[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+body[data-theme="light"] textarea,
+body[data-theme="light"] select {
+  background-color: #ffffff !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 9px;
+  color: var(--text-bright) !important;
+}
+body[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+body[data-theme="light"] textarea:hover,
+body[data-theme="light"] select:hover {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line-strong)) !important;
+}
+body[data-theme="light"] input:focus,
+body[data-theme="light"] textarea:focus,
+body[data-theme="light"] select:focus {
+  border-color: var(--signal) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 16%, transparent) !important;
+}
+
+/* ---------- Popovers y modales premium en claro ---------- */
+body[data-theme="light"] .vp-pop {
+  background: var(--lg-glass-strong);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border-color: var(--line);
+  box-shadow: var(--lg-inset), 0 24px 64px -12px rgba(15, 27, 34, 0.28);
+}
+body[data-theme="light"] .vp-pop::before { opacity: 0.5; }
+body[data-theme="light"] .vp-help { background: var(--bg-void); border-left-color: var(--line); box-shadow: -24px 0 64px -12px rgba(15, 27, 34, 0.28); }
+body[data-theme="light"] .vp-help__hero { background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--signal) 10%, transparent) 0%, transparent 55%), #ffffff; border-color: var(--line); }
+body[data-theme="light"] .vp-topic,
+body[data-theme="light"] .vp-faq-group,
+body[data-theme="light"] .vp-ref,
+body[data-theme="light"] .vp-shortcut { background: #ffffff; box-shadow: var(--lg-sh-1); }
+body[data-theme="light"] .vp-topic:hover { box-shadow: var(--lg-sh-2); }

@@ -13,8 +13,8 @@ interface UIState {
 
 const initialState: UIState = {
   view: "overview",
-  scheme: "green",
-  scanlines: true,
+  scheme: localStorage.getItem("valhalla_scheme") || "forest",
+  scanlines: localStorage.getItem("valhalla_scanlines") !== "false",
   tvMode: false,
   theme: (localStorage.getItem("valhalla_theme") as "dark" | "light") || "dark",
   lang: (localStorage.getItem("valhalla_lang") as "es" | "en") || "es",
@@ -31,9 +31,11 @@ const uiSlice = createSlice({
     },
     setScheme(state, action: PayloadAction<string>) {
       state.scheme = action.payload;
+      localStorage.setItem("valhalla_scheme", action.payload);
     },
     setScanlines(state, action: PayloadAction<boolean>) {
       state.scanlines = action.payload;
+      localStorage.setItem("valhalla_scanlines", String(action.payload));
     },
     setTvMode(state, action: PayloadAction<boolean>) {
       state.tvMode = action.payload;

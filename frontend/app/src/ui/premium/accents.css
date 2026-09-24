@@ -1,0 +1,50 @@
+/* ======================================================
+   VALHALLA SOC — Acentos adicionales (modo oscuro).
+   green / cyan / amber / purple viven en HUD.css; aquí se añaden
+   forest (base), teal, blue, orange y red con el mismo juego de variables.
+   ====================================================== */
+
+body[data-scheme="forest"] {
+  --signal: #52b788; --signal-dim: #2d6a4f; --signal-deep: #0f2a1e; --signal-glow: rgba(82, 183, 136, 0.35);
+  --text: #d8f3dc; --text-dim: #7fa892; --text-bright: #eefaf1;
+  --line: rgba(82, 183, 136, 0.16); --line-strong: rgba(82, 183, 136, 0.4); --line-faint: rgba(82, 183, 136, 0.07);
+  --scanline-color: rgba(82, 183, 136, 0.018);
+  --bg-panel: rgba(8, 20, 14, 0.85); --bg-panel-deep: rgba(4, 12, 8, 0.92);
+}
+body[data-scheme="teal"] {
+  --signal: #2ee6c8; --signal-dim: #1a9e8a; --signal-deep: #08302b; --signal-glow: rgba(46, 230, 200, 0.35);
+  --text: #d2fff7; --text-dim: #6aa39a; --text-bright: #ecfffb;
+  --line: rgba(46, 230, 200, 0.16); --line-strong: rgba(46, 230, 200, 0.4); --line-faint: rgba(46, 230, 200, 0.07);
+  --scanline-color: rgba(46, 230, 200, 0.018);
+  --bg-panel: rgba(4, 20, 18, 0.85); --bg-panel-deep: rgba(2, 12, 11, 0.92);
+}
+body[data-scheme="blue"] {
+  --signal: #5b9dff; --signal-dim: #2f62b3; --signal-deep: #0c1e3d; --signal-glow: rgba(91, 157, 255, 0.35);
+  --text: #dbe8ff; --text-dim: #7089b0; --text-bright: #eef4ff;
+  --line: rgba(91, 157, 255, 0.18); --line-strong: rgba(91, 157, 255, 0.42); --line-faint: rgba(91, 157, 255, 0.08);
+  --scanline-color: rgba(91, 157, 255, 0.018);
+  --bg-panel: rgba(6, 12, 26, 0.85); --bg-panel-deep: rgba(3, 7, 18, 0.94);
+}
+body[data-scheme="orange"] {
+  --signal: #ff8a3d; --signal-dim: #b35a1c; --signal-deep: #3a1c08; --signal-glow: rgba(255, 138, 61, 0.35);
+  --text: #ffe6d5; --text-dim: #a87a5c; --text-bright: #fff4ec;
+  --line: rgba(255, 138, 61, 0.18); --line-strong: rgba(255, 138, 61, 0.42); --line-faint: rgba(255, 138, 61, 0.08);
+  --scanline-color: rgba(255, 138, 61, 0.018);
+  --bg-panel: rgba(20, 10, 4, 0.85); --bg-panel-deep: rgba(14, 7, 3, 0.94);
+}
+body[data-scheme="red"] {
+  --signal: #ff5a6a; --signal-dim: #b3283a; --signal-deep: #3a0c14; --signal-glow: rgba(255, 90, 106, 0.35);
+  --text: #ffdfe3; --text-dim: #a8707a; --text-bright: #fff0f2;
+  --line: rgba(255, 90, 106, 0.18); --line-strong: rgba(255, 90, 106, 0.42); --line-faint: rgba(255, 90, 106, 0.08);
+  --scanline-color: rgba(255, 90, 106, 0.018);
+  --bg-panel: rgba(20, 6, 9, 0.85); --bg-panel-deep: rgba(14, 4, 6, 0.94);
+}
+
+/* Flecha de los <select> para los esquemas nuevos (gris neutro, válido en ambos temas) */
+body[data-scheme="forest"] select, body[data-scheme="teal"] select, body[data-scheme="blue"] select,
+body[data-scheme="orange"] select, body[data-scheme="red"] select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23879aa3%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 12px 12px !important;
+}
