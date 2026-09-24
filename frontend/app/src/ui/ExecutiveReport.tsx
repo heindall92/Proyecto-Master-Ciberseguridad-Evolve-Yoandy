@@ -295,6 +295,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   const [dateEnd, setDateEnd] = useState("");
   const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"api" | "fallback">("fallback");
 
   async function load() {
     setLoading(true);
@@ -365,6 +366,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
+      setDataSource(raw.source);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -420,14 +422,35 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFillColor(...navy);
     doc.rect(0, 0, W, 45, "F");
 
-    doc.setTextColor(...white);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Security Operations Center — Valhalla SOC", M, 30);
+    if (logo) {
+      try {
+        const imgFormat = logo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, M, 7, 16, 16);
+      } catch (e) {
+        console.warn('Logo no pudo agregarse al PDF:', e);
+      }
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(M + 18, 8, M + 18, 23);
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("INFORME EJECUTIVO DE SEGURIDAD", M + 21, 17);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Security Operations Center — Valhalla SOC", M + 21, 24);
+    } else {
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("INFORME EJECUTIVO DE SEGURIDAD", M, 20);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Security Operations Center — Valhalla SOC", M, 30);
+    }
 
+    doc.setTextColor(...white);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 25, { align: "right" });
@@ -885,16 +908,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const isoScore2 = reportData.iso27001?.overall ?? 73;
     const isoColor2: [number, number, number] = isoScore2 >= 80 ? green : isoScore2 >= 60 ? yellow : red;
-    doc.setFillColor(240, 243, 247);
-    doc.roundedRect(M, remY2, col, 14, 2, 2, "F");
     doc.setTextColor(...black);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Nivel de cumplimiento global estimado:", M + 4, remY2 + 9);
+    doc.text("Nivel de cumplimiento global estimado:", M + 4, remY2 + 5);
     doc.setTextColor(...isoColor2);
     doc.setFontSize(13);
-    doc.text(`${isoScore2}%`, M + 120, remY2 + 9);
-    remY2 += 18;
+    doc.text(`${isoScore2}%`, M + 120, remY2 + 5);
+    remY2 += 12;
 
     const ctrlExplained: Record<string, string> = {
       "A.5.7 Threat Intelligence": "Uso de información sobre amenazas externas para anticipar ataques",
@@ -1033,15 +1054,42 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.rect(0, 0, W, 297, "F");
     doc.setFillColor(...navy);
     doc.rect(0, 0, W, 52, "F");
+
+    if (logo) {
+      try {
+        const imgFormat = logo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(logo, imgFormat, M, 10, 18, 18);
+      } catch (e) {
+        console.warn('Logo no pudo agregarse al PDF:', e);
+      }
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(M + 20, 11, M + 20, 27);
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("INFORME TÉCNICO DE SEGURIDAD", M + 23, 20);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Security Operations Center — Valhalla SOC", M + 23, 28);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(7.5);
+      doc.text("Orientado a CISO y Responsables de Seguridad", M + 23, 35);
+    } else {
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("INFORME TÉCNICO DE SEGURIDAD", M, 18);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Security Operations Center — Valhalla SOC", M, 27);
+      doc.setFontSize(8);
+      doc.text("Orientado a CISO y Responsables de Seguridad", M, 35);
+    }
+
     doc.setTextColor(...white);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("INFORME TÉCNICO DE SEGURIDAD", M, 18);
-    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Security Operations Center — Valhalla SOC", M, 27);
     doc.setFontSize(8);
-    doc.text("Orientado a CISO y Responsables de Seguridad", M, 35);
     doc.text(`Ref: ${reportId}`, W - M, 18, { align: "right" });
     doc.text(`Fecha: ${reportData.report_metadata.generation_date}`, W - M, 26, { align: "right" });
     doc.text(`Período: ${period}`, W - M, 34, { align: "right" });
@@ -1429,6 +1477,18 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
           </Box>
         </Stack>
         <Stack direction="row" spacing={2}>
+          <Chip
+            label={dataSource === "api" ? "● DATOS REALES" : "○ SIMULACIÓN"}
+            size="small"
+            variant="outlined"
+            sx={{
+              color: dataSource === "api" ? 'var(--signal)' : 'var(--amber)',
+              borderColor: dataSource === "api" ? 'rgba(60,255,158,0.4)' : 'rgba(255,159,26,0.4)',
+              fontSize: '9px',
+              fontWeight: 'bold',
+              letterSpacing: '1px',
+            }}
+          />
           <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
             {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
           </Button>
