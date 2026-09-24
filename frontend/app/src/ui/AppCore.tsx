@@ -64,6 +64,19 @@ import CveIntelView from "./CveIntelView";
 import ExecutiveReport from "./ExecutiveReport";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
+import "./premium/premium.css";
+import "./premium/accents.css";
+import "./premium/light-glass.css";
+import CommandPalette, { PaletteCommand } from "./premium/CommandPalette";
+import HelpCenter from "./premium/HelpCenter";
+import QuickSettings from "./premium/QuickSettings";
+import {
+  Search, MessageSquare, Bell, BellOff, LifeBuoy, Palette, Sun, Moon, ChevronDown,
+  UserRound, SlidersHorizontal, LayoutGrid, Lock, Unlock, RefreshCw, Play, LogOut,
+  AlertTriangle, ShieldAlert, Info, ArrowRight, UserCheck, Minimize2,
+  LayoutDashboard, Layers, Monitor, Siren, Radar, Activity, ScrollText, Bug, Globe2,
+  KeyRound, BarChart3, FileText, ShieldCheck, BookOpen, Briefcase, FileBarChart, Users,
+} from "lucide-react";
 
 const darkTheme = createTheme({ palette: { mode: "dark" } });
 
@@ -165,6 +178,8 @@ export default function App() {
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
   const [showCinematic, setShowCinematic] = useState(true);
@@ -213,6 +228,26 @@ export default function App() {
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Atajos globales: Ctrl/Cmd+K buscador, "?" centro de ayuda, Esc sale del modo TV.
+  useEffect(() => {
+    if (!user) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      } else if (e.key === '?' && !typing) {
+        e.preventDefault();
+        setHelpOpen(true);
+      } else if (e.key === 'Escape' && tvMode) {
+        dispatch(setTvMode(false));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [user, tvMode, dispatch]);
 
   useEffect(() => {
     const ticketsNow = stats?.metrics?.tickets_open || 0;
@@ -602,7 +637,7 @@ export default function App() {
     const mentions = Array.from(chatInput.matchAll(/@(\w+)/g)).map(m => m[1]);
     const msg: ChatMessage = {
       id: Date.now().toString(), userId: user.id,
-      username: user.username, rank: user.rank || 'ANALISTA',
+      username: user.username, rank: user.security_rank || 'ANALISTA',
       text: chatInput.trim(), timestamp: new Date().toISOString(),
       chatId: activeChatId, mentions,
       ...(pendingAttachment ? { attachment: pendingAttachment } : {})
@@ -716,13 +751,54 @@ export default function App() {
       </span>
       <span className="navbtn__main">{label}</span>
       <span className="navbtn__sub">{sub}</span>
-      {badge && <span className={`navbtn__badge ${color || ''}`}>{badge}</span>}
+      {badge ? <span className={`navbtn__badge ${color || ''}`}>{badge}</span> : null}
     </button>
   );
 
   const incidentCount = stats?.metrics?.tickets_open || 0;
   const incidentText = incidentCount === 1 ? t('incidents_open_singular') : t('incidents_open_plural');
   const incidentHeaderLabel = incidentCount === 1 ? (lang === 'es' ? 'INCIDENTE' : 'INCIDENT') : t('incidents');
+
+  const es = lang === 'es';
+  const isAdmin = user?.role === 'admin';
+  const unreadNotifs = recentOpenTickets.length > 0 && !notifSeen;
+  const initials = (user.username || '?').slice(0, 2).toUpperCase();
+
+  // Módulos navegables desde el buscador (mismos permisos que el menú lateral).
+  const navCommands: Array<{ id: string; es: string; en: string; icon: PaletteCommand['icon']; admin?: boolean; kw?: string }> = [
+    { id: 'overview', es: 'Vista general', en: 'Overview', icon: LayoutDashboard, kw: 'dashboard panel' },
+    { id: 'siem', es: 'SIEM · Alertas Wazuh', en: 'SIEM · Wazuh alerts', icon: Layers, kw: 'alertas alerts wazuh' },
+    { id: 'assets', es: 'Activos', en: 'Assets', icon: Monitor, admin: true, kw: 'agentes endpoints agents' },
+    { id: 'incidents', es: 'Incidentes', en: 'Incidents', icon: Siren, kw: 'tickets' },
+    { id: 'monitors', es: 'Monitores', en: 'Monitors', icon: Radar, admin: true },
+    { id: 'health', es: 'Estado de integraciones', en: 'Integrations health', icon: Activity, admin: true, kw: 'status salud' },
+    { id: 'audit', es: 'Auditoría', en: 'Audit log', icon: ScrollText, admin: true, kw: 'log registro' },
+    { id: 'cowrie', es: 'Honeypots · Cowrie', en: 'Honeypots · Cowrie', icon: Bug, admin: true, kw: 'ssh telnet' },
+    { id: 'threat', es: 'Threat Intel', en: 'Threat Intel', icon: ShieldAlert, kw: 'virustotal otx ioc' },
+    { id: 'threatmap', es: 'Threat Map', en: 'Threat Map', icon: Globe2, kw: 'mapa geo' },
+    { id: 'lsamonitor', es: 'LSA Monitor', en: 'LSA Monitor', icon: KeyRound, admin: true, kw: 'credential guard' },
+    { id: 'bifrost', es: 'Bifröst · Métricas', en: 'Bifröst · Metrics', icon: BarChart3, admin: true, kw: 'bifrost hunting madurez' },
+    { id: 'heimdall', es: 'Heimdall · Informe Intel', en: 'Heimdall · Intel report', icon: FileText, admin: true },
+    { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', icon: ShieldCheck, kw: 'kev exploit vulnerabilidad' },
+    { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', icon: BookOpen, kw: 'playbooks procedimientos' },
+    { id: 'workspace', es: 'Workspace del analista', en: 'Analyst workspace', icon: Briefcase },
+    { id: 'executive-report', es: 'Informe ejecutivo', en: 'Executive report', icon: FileBarChart, admin: true, kw: 'pdf' },
+    { id: 'users', es: 'Usuarios', en: 'Users', icon: Users, admin: true },
+    { id: 'profile', es: 'Mi perfil', en: 'My profile', icon: UserRound, kw: 'contraseña password avatar' },
+    { id: 'settings', es: 'Ajustes globales', en: 'Global settings', icon: SlidersHorizontal, admin: true, kw: 'api keys ollama' },
+  ];
+  const paletteCommands: PaletteCommand[] = [
+    ...navCommands.filter((c) => !c.admin || isAdmin).map((c) => ({
+      id: `nav-${c.id}`, label: es ? c.es : c.en, group: es ? 'Ir a' : 'Go to', icon: c.icon, keywords: c.kw,
+      run: () => dispatch(setView(c.id)),
+    })),
+    { id: 'act-theme', label: theme === 'dark' ? (es ? 'Cambiar a modo claro' : 'Switch to light mode') : (es ? 'Cambiar a modo oscuro' : 'Switch to dark mode'), group: es ? 'Acciones' : 'Actions', icon: theme === 'dark' ? Sun : Moon, keywords: 'tema theme', run: toggleTheme },
+    { id: 'act-lang', label: es ? 'Switch to English' : 'Cambiar a español', group: es ? 'Acciones' : 'Actions', icon: Globe2, keywords: 'idioma language', run: toggleLang },
+    { id: 'act-appearance', label: es ? 'Apariencia y color de acento' : 'Appearance & accent colour', group: es ? 'Acciones' : 'Actions', icon: Palette, keywords: 'tema acento scanlines tv', run: () => setTweaksOpen(true) },
+    { id: 'act-chat', label: es ? 'Abrir chat interno' : 'Open internal chat', group: es ? 'Acciones' : 'Actions', icon: MessageSquare, keywords: 'ia chatbot', run: () => dispatch(setChatOpen(true)) },
+    { id: 'act-help', label: es ? 'Centro de ayuda' : 'Help center', group: es ? 'Acciones' : 'Actions', icon: LifeBuoy, hint: '?', keywords: 'soporte support faq', run: () => setHelpOpen(true) },
+    { id: 'act-logout', label: es ? 'Cerrar sesión' : 'Log out', group: es ? 'Acciones' : 'Actions', icon: LogOut, run: handleLogout },
+  ];
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -743,9 +819,9 @@ export default function App() {
             </div>
             <div className="glitch-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px', cursor: 'default' }}>
                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-                 <AlexanaWord word="VALHALLA" height="18px" />
-                 <AlexanaWord word="SOC" height="12px" color={theme === 'light' ? '#d8f3dc' : 'var(--signal)'} />
-                 <AlexanaWord word="PRO" height="12px" color={theme === 'light' ? 'rgba(240,247,244,0.65)' : 'rgba(255,255,255,0.5)'} />
+                 <AlexanaWord word="VALHALLA" height="18px" color={theme === 'light' ? 'var(--text-bright)' : '#fff'} />
+                 <AlexanaWord word="SOC" height="12px" color="var(--signal)" />
+                 <AlexanaWord word="PRO" height="12px" color={theme === 'light' ? 'var(--text-faint)' : 'rgba(255,255,255,0.5)'} />
                </div>
                <div className="topbar__sub" style={{ fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '2px', fontFamily: 'var(--mono)' }}>BLUE TEAM · WAZUH 4.9.5 · CLASSIFIED // EYES ONLY</div>
             </div>
@@ -768,188 +844,151 @@ export default function App() {
                 <span className={`topbar-stat__value${(stats?.metrics?.total_alerts_24h || 0) > 0 ? ' topbar-stat__value--warn' : ''}`}>{stats?.metrics?.total_alerts_24h || 0}</span>
               </div>
             </div>
-            <button
-              className="topbar-icon-btn"
-              onClick={() => {
-                if (!chatOpen) {
-                  dispatch(clearUnread(activeChatId));
-                }
-                dispatch(setChatOpen(!chatOpen));
-              }}
-              style={{
-                position: 'relative', display: 'flex', alignItems: 'center',
-                padding: '8px', cursor: 'pointer',
-                background: totalUnread > 0 ? 'rgba(255,62,62,0.08)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${totalUnread > 0 ? 'rgba(255,62,62,0.4)' : 'rgba(0,255,136,0.2)'}`,
-                borderRadius: '8px', marginRight: '4px', transition: 'all 0.2s'
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke={totalUnread > 0 ? '#FF3E3E' : chatOpen ? 'var(--signal)' : 'var(--signal)'}
-                strokeWidth="2"
-                style={{ filter: totalUnread > 0 ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}
+            <div className="vp-tb-cluster">
+              <button className="vp-search" onClick={() => setPaletteOpen(true)} aria-label={es ? 'Buscar (Ctrl K)' : 'Search (Ctrl K)'}>
+                <Search size={15} />
+                <span>{es ? 'Buscar módulo o acción…' : 'Search module or action…'}</span>
+                <span className="vp-kbd">Ctrl K</span>
+              </button>
+              <div className="vp-seg" role="group" aria-label={es ? 'Idioma' : 'Language'}>
+                <button aria-pressed={lang === 'es'} onClick={() => dispatch(setLang('es'))}>ES</button>
+                <button aria-pressed={lang === 'en'} onClick={() => dispatch(setLang('en'))}>EN</button>
+              </div>
+              <button className="vp-iconbtn" onClick={toggleTheme} title={theme === 'dark' ? (es ? 'Modo claro' : 'Light mode') : (es ? 'Modo oscuro' : 'Dark mode')} aria-label={es ? 'Cambiar tema' : 'Toggle theme'}>
+                {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              </button>
+              <button className="vp-iconbtn" onClick={() => setTweaksOpen(!tweaksOpen)} aria-expanded={tweaksOpen} title={es ? 'Apariencia y acentos' : 'Appearance & accents'} aria-label={es ? 'Apariencia' : 'Appearance'}>
+                <Palette size={17} />
+              </button>
+            </div>
+            <div className="vp-tb-sep" aria-hidden="true" />
+            <div className="vp-tb-cluster">
+              <button
+                className={`vp-iconbtn${totalUnread > 0 ? ' vp-iconbtn--alert' : ''}`}
+                onClick={() => {
+                  if (!chatOpen) dispatch(clearUnread(activeChatId));
+                  dispatch(setChatOpen(!chatOpen));
+                }}
+                aria-expanded={chatOpen}
+                title={es ? 'Chat interno' : 'Internal chat'}
+                aria-label={es ? 'Chat interno' : 'Internal chat'}
               >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              {totalUnread > 0 && (
-                <span style={{
-                  position: 'absolute', top: '-4px', right: '-4px',
-                  minWidth: '18px', height: '18px', padding: '0 4px',
-                  background: '#FF3E3E', color: '#fff',
-                  borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 0 10px rgba(255,62,62,0.5)',
-                  animation: 'pulse-red 2s infinite',
-                  zIndex: 10
-                }}>
-                  {totalUnread > 99 ? '99+' : totalUnread}
-                </span>
-              )}
-            </button>
-            <button className="topbar-icon-btn" onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }} style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '8px', marginRight: '8px', transition: 'all 0.2s' }}>
-              <style>{`
-                @keyframes pulse-red {
-                  0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); }
-                  70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 62, 62, 0); }
-                  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); }
-                }
-
-                .unread-dot {
-                  width: 8px;
-                  height: 8px;
-                  background-color: #ff3e3e;
-                  border-radius: 50%;
-                  box-shadow: 0 0 10px #ff3e3e;
-                  animation: pulse-red 1.5s infinite;
-                  display: inline-block;
-                  margin-left: 8px;
-                }
-              `}</style>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={recentOpenTickets.length > 0 && !notifSeen ? "#FF3E3E" : "var(--signal)"} strokeWidth="2" style={{ filter: recentOpenTickets.length > 0 && !notifSeen ? 'drop-shadow(0 0 5px #FF3E3E)' : 'none' }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              {recentOpenTickets.length > 0 && !notifSeen && (
-                <span style={{
-                  position: 'absolute', top: '-4px', right: '-4px',
-                  minWidth: '18px', height: '18px', padding: '0 4px',
-                  background: '#FF3E3E', color: '#fff',
-                  borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 0 10px rgba(255,62,62,0.5)',
-                  animation: 'pulse-red 2s infinite',
-                  zIndex: 10
-                }}>
-                  {incidentCount}
-                </span>
-              )}
-            </button>
-            <div style={{ width: '1px', height: '32px', background: 'var(--signal-dim)', margin: '0 4px' }}></div>
-            <button onClick={() => setUserMenuOpen(!userMenuOpen)} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: 'none', border: 'none', padding: '4px 8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--signal)' }}>{user.username.toUpperCase()}</span>
-                <span style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{user.rank?.toUpperCase() || 'ANALISTA'}</span>
+                <MessageSquare size={17} />
+                {totalUnread > 0 && <span className="vp-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>}
+              </button>
+              <button
+                className={`vp-iconbtn${unreadNotifs ? ' vp-iconbtn--alert' : ''}`}
+                onClick={() => { setNotifMenuOpen(!notifMenuOpen); dispatch(setNotifSeen(true)); }}
+                aria-expanded={notifMenuOpen}
+                title={t('notifications')}
+                aria-label={t('notifications')}
+              >
+                <Bell size={17} />
+                {unreadNotifs && <span className="vp-badge">{incidentCount}</span>}
+              </button>
+              <button className="vp-iconbtn" onClick={() => setHelpOpen(true)} aria-expanded={helpOpen} title={es ? 'Soporte y centro de ayuda (?)' : 'Support & help center (?)'} aria-label={es ? 'Soporte' : 'Support'}>
+                <LifeBuoy size={17} />
+              </button>
+            </div>
+            <div className="vp-tb-sep" aria-hidden="true" />
+            <button className="vp-user" onClick={() => setUserMenuOpen(!userMenuOpen)} aria-expanded={userMenuOpen} aria-haspopup="menu">
+              <div className="vp-user__text" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span className="vp-user__name">{user.username.toUpperCase()}</span>
+                <span className="vp-user__rank">{user.security_rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--signal), var(--signal-deep))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '1px solid var(--signal-dim)',
-                overflow: 'hidden',
-                position: 'relative'
-              }}>
-                {profilePic ? (
-                  <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ fontSize: '14px' }}></span>
-                )}
-              </div>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+              <span className="vp-avatar">
+                {profilePic ? <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="" /> : initials}
+              </span>
+              <ChevronDown size={14} color="var(--tb-fg-dim)" />
             </button>
           </div>
         </header>
         )}
 
         {userMenuOpen && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setUserMenuOpen(false)}>
-            <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 10, width: '230px' }} onClick={e => e.stopPropagation()}>
-              <div className="tactical-dropdown__header">
-                <div className="tactical-dropdown__header-name">{user.username.toUpperCase()}</div>
-                <div className="tactical-dropdown__header-rank">{user.rank?.toUpperCase() || 'ANALISTA'} · {user.role?.toUpperCase()}</div>
+          <div className="vp-backdrop" onClick={() => setUserMenuOpen(false)}>
+            <div className="vp-pop" style={{ width: 272 }} role="menu" onClick={e => e.stopPropagation()}>
+              <div className="vp-pop__head">
+                <span className="vp-avatar vp-avatar--lg">
+                  {profilePic ? <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="" /> : initials}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="vp-pop__title" style={{ letterSpacing: 1 }}>{user.username.toUpperCase()}</div>
+                  <div className="vp-pop__sub">{user.security_rank?.toUpperCase() || 'ANALISTA'} · {user.role?.toUpperCase()}</div>
+                </div>
               </div>
-              <div style={{ padding: '4px 0' }}>
-                <button onClick={() => { setShowCinematic(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)' }}>
-                  {lang === 'es' ? '▶ INTRO HYPERFRAME' : '▶ HYPERFRAME INTRO'}
-                </button>
-                <button onClick={() => window.location.reload()} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}>{t('sync')}</button>
-                <button onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{t('add_widget')}</button>
-                <button onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}>{isLocked ? t('unlock') : t('lock')}</button>
-                <button onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--text)' }}> {lang === 'es' ? 'TEMAS' : 'THEMES'}</button>
-                <button onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--cyan)' }}> {t('profile_settings')}</button>
-                {user?.role === 'admin' && (
-                  <button onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--amber)' }}> {lang === 'es' ? 'AJUSTES GLOBALES' : 'GLOBAL SETTINGS'}</button>
+              <div className="vp-pop__body">
+                <div className="vp-menu-label">{es ? 'Cuenta' : 'Account'}</div>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { dispatch(setView("profile")); setUserMenuOpen(false); }}><UserRound size={16} />{es ? 'Mi perfil' : 'My profile'}</button>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setTweaksOpen(true); setUserMenuOpen(false); }}><Palette size={16} />{es ? 'Apariencia' : 'Appearance'}</button>
+                {isAdmin && (
+                  <button role="menuitem" className="vp-menu-item" onClick={() => { dispatch(setView("settings")); setUserMenuOpen(false); }}><SlidersHorizontal size={16} />{es ? 'Ajustes globales' : 'Global settings'}</button>
                 )}
-                <div className="tactical-dropdown__divider" />
-                <button onClick={() => { toggleLang(); setUserMenuOpen(false); }} className="tactical-dropdown__item" style={{ color: 'var(--signal)', background: 'rgba(60,255,158,0.05)' }}>{t('language')}: {lang.toUpperCase()}</button>
-                <div className="tactical-dropdown__divider" />
-                <button onClick={handleLogout} className="tactical-dropdown__item" style={{ color: 'var(--danger)' }}>{t('exit')}</button>
+                <div className="vp-menu-label">{es ? 'Panel' : 'Dashboard'}</div>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setShowWidgetCatalog(true); setUserMenuOpen(false); }}><LayoutGrid size={16} />{t('add_widget')}</button>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setIsLocked(!isLocked); setUserMenuOpen(false); }}>{isLocked ? <Unlock size={16} /> : <Lock size={16} />}{isLocked ? t('unlock') : t('lock')}</button>
+                <button role="menuitem" className="vp-menu-item" onClick={() => window.location.reload()}><RefreshCw size={16} />{t('sync')}</button>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setShowCinematic(true); setUserMenuOpen(false); }}><Play size={16} />{es ? 'Intro Hyperframe' : 'Hyperframe intro'}</button>
+                <div className="vp-menu-sep" />
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setHelpOpen(true); setUserMenuOpen(false); }}><LifeBuoy size={16} />{es ? 'Centro de ayuda' : 'Help center'}<span className="vp-menu-item__hint">?</span></button>
+                <button role="menuitem" className="vp-menu-item vp-menu-item--danger" onClick={handleLogout}><LogOut size={16} />{t('exit')}</button>
               </div>
             </div>
           </div>
         )}
 
         {notifMenuOpen && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 2147483647, background: 'rgba(0,0,0,0.1)' }} onClick={() => setNotifMenuOpen(false)}>
-            <div className="tactical-dropdown" style={{ position: 'absolute', top: 54, right: 60, width: '320px', maxHeight: '450px', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-              <div className="notif-panel__head" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                <span>{t('notifications')}</span>
-                <span>{incidentCount} {incidentText}</span>
-              </div>
-              <div style={{ padding: '4px 0' }}>
-                <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '10px', color: 'var(--text-dim)' }}>
-                  <a href="/MANUAL.md" target="_blank" style={{ color: 'var(--signal)', textDecoration: 'none' }}>
-                    {lang === 'es' ? '¿Primera vez? Ver manual de acceso' : 'First time? View access manual'}
-                  </a>
+          <div className="vp-backdrop" onClick={() => setNotifMenuOpen(false)}>
+            <div className="vp-pop" style={{ width: 360, right: 110 }} role="dialog" aria-label={t('notifications')} onClick={e => e.stopPropagation()}>
+              <div className="vp-pop__head">
+                <Bell size={16} color="var(--signal)" />
+                <div>
+                  <div className="vp-pop__title">{t('notifications')}</div>
+                  <div className="vp-pop__sub">{incidentCount} {incidentText}</div>
                 </div>
-                {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => (
-                  <div key={tk.id} className="notif-ticket-card" style={{ padding: '10px 12px', position: 'relative' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '9px', color: tk.severity === 'critical' ? 'var(--danger)' : tk.severity === 'high' ? 'var(--amber)' : 'var(--cyan)', fontWeight: 'bold' }}>
-                        {tk.severity.toUpperCase()}
-                      </span>
-                      <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>ID: {tk.id}</span>
+                {recentOpenTickets.length > 0 && <span className="vp-chip vp-chip--danger" style={{ marginLeft: 'auto' }}>{recentOpenTickets.length} {es ? 'nuevos' : 'new'}</span>}
+              </div>
+              <div className="vp-pop__body">
+                {recentOpenTickets.length > 0 ? recentOpenTickets.map(tk => {
+                  const sev = tk.severity === 'critical' ? 'var(--danger)' : tk.severity === 'high' ? 'var(--amber)' : 'var(--cyan)';
+                  const SevIcon = tk.severity === 'critical' ? ShieldAlert : tk.severity === 'high' ? AlertTriangle : Info;
+                  return (
+                    <div key={tk.id} className="vp-notif" style={{ ['--sev' as string]: sev }}>
+                      <span className="vp-notif__icon"><SevIcon size={16} /></span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="vp-notif__meta">
+                          <span style={{ color: sev, fontWeight: 700 }}>{tk.severity.toUpperCase()}</span>
+                          <span>#{tk.id}</span>
+                        </div>
+                        <div className="vp-notif__title">{tk.title}</div>
+                        <div className="vp-notif__actions">
+                          <button className="vp-btn vp-btn--primary" onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}><ArrowRight size={12} />{t('ir_to_workspace')}</button>
+                          <button className="vp-btn" onClick={() => handleAssignToMe(tk.id)}><UserCheck size={12} />{t('assign_to_me')}</button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="notif-title" style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', lineHeight: 1.2 }}>{tk.title}</div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        className="notif-btn-forest"
-                        onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}
-                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
-                      >
-                        {t('ir_to_workspace')}
-                      </button>
-                      <button
-                        className="notif-btn-outline"
-                        onClick={() => handleAssignToMe(tk.id)}
-                        style={{ padding: '4px 8px', fontSize: '9px', borderRadius: '4px', cursor: 'pointer' }}
-                      >
-                        {t('assign_to_me')}
-                      </button>
-                    </div>
+                  );
+                }) : (
+                  <div className="vp-empty">
+                    <BellOff size={26} />
+                    <strong>{t('no_recent_incidents')}</strong>
+                    {es ? 'Las alertas convertidas en incidente aparecerán aquí.' : 'Alerts turned into incidents will show up here.'}
                   </div>
-                )) : (
-                  <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '11px' }}>{t('no_recent_incidents')}</div>
-                )}
-                {incidentCount > 0 && (
-                  <button className="notif-footer-btn" onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }} style={{ width: '100%', padding: '12px', border: 'none', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {lang === 'es' ? 'VER TODOS LOS TICKETS' : 'VIEW ALL TICKETS'} ({incidentCount})
-                  </button>
                 )}
               </div>
+              {incidentCount > 0 && (
+                <div className="vp-pop__foot">
+                  <button className="vp-btn vp-btn--block" onClick={() => { dispatch(setView("workspace")); setNotifMenuOpen(false); }}>
+                    {es ? 'Ver todos los tickets' : 'View all tickets'} ({incidentCount})
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {!tvMode && (
         <aside className={`sidenav ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {!sidebarCollapsed && <div className="sidenav__label">{t('modules')}</div>}
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
@@ -969,17 +1008,6 @@ export default function App() {
           {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
 
-          {!sidebarCollapsed && (
-            <>
-              <div className="sidenav__label" style={{ marginTop: 'auto' }}>{t('session')}</div>
-              <div style={{ padding: '8px 14px', fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1.2px', lineHeight: '1.6' }}>
-                ROOT@VALHALLA:~#<br/>
-                SID: 0x7A4F · L3<br/>
-                {t('operator')}: {user.username.toUpperCase()}
-              </div>
-            </>
-          )}
-
           {/* Collapse Button */}
           <button
             className={`navbtn collapse-btn${sidebarCollapsed ? ' collapse-btn--active' : ''}`}
@@ -988,7 +1016,7 @@ export default function App() {
               setSidebarCollapsed(newVal);
               localStorage.setItem('valhalla_sidebar_collapsed', String(newVal));
             }}
-            style={{ marginTop: sidebarCollapsed ? 'auto' : '15px' }}
+            style={{ marginTop: 'auto' }}
           >
             <span className="navbtn__icon-wrap" style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>
               <svg className="navbtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
@@ -1042,28 +1070,37 @@ export default function App() {
           </div>
         </main>
 
-        {/* Tweaks Panel */}
         {tweaksOpen && (
-        <div className="tweaks-panel">
-           <h4 className="tweaks-panel__title">// TEMAS</h4>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <label style={{ fontSize: '9px', letterSpacing: '2px', color: 'var(--text-faint)', fontFamily: 'var(--mono)' }}>ESQUEMA CROMÁTICO</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                 {['green', 'cyan', 'amber', 'purple'].map(s => (
-                   <button key={s} onClick={() => dispatch(setScheme(s))} className={`action-btn ${scheme === s ? 'active' : ''}`}>
-                     {s.toUpperCase()}
-                   </button>
-                 ))}
-              </div>
-              <button onClick={toggleTheme} className="action-btn">
-                {theme === 'dark' ? ' MODO CLARO' : ' MODO OSCURO'}
-              </button>
-              <button onClick={() => dispatch(setScanlines(!scanlines))} className="action-btn">SCANLINES: {scanlines ? 'ON' : 'OFF'}</button>
-              <button onClick={() => dispatch(setTvMode(!tvMode))} className={`action-btn ${tvMode ? 'active' : ''}`}>{t('tv_mode')}</button>
-              <button onClick={() => setTweaksOpen(false)} className="action-btn" style={{ color: 'var(--danger)' }}> CERRAR</button>
-           </div>
-        </div>
+          <QuickSettings
+            lang={lang}
+            theme={theme}
+            scheme={scheme}
+            scanlines={scanlines}
+            tvMode={tvMode}
+            isAdmin={isAdmin}
+            onScheme={(s) => dispatch(setScheme(s))}
+            onTheme={(v) => dispatch(setTheme(v))}
+            onLang={(v) => dispatch(setLang(v))}
+            onScanlines={(v) => dispatch(setScanlines(v))}
+            onTvMode={(v) => { dispatch(setTvMode(v)); if (v) setTweaksOpen(false); }}
+            onOpenGlobalSettings={() => dispatch(setView("settings"))}
+            onClose={() => setTweaksOpen(false)}
+          />
         )}
+        {tvMode && (
+          <button className="vp-btn" style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 50, background: 'var(--vp-surface)' }} onClick={() => dispatch(setTvMode(false))}>
+            <Minimize2 size={13} />{es ? 'Salir del modo TV (Esc)' : 'Exit TV mode (Esc)'}
+          </button>
+        )}
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} lang={lang} />
+        <HelpCenter
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          lang={lang}
+          isAdmin={isAdmin}
+          onNavigate={(v) => dispatch(setView(v))}
+          onOpenChat={() => dispatch(setChatOpen(true))}
+        />
 
         {/* Chat Panel — Enterprise */}
         <AnimatePresence>
@@ -1215,7 +1252,7 @@ export default function App() {
                       .slice(0, 6)
                       .map(u => (
                         <button key={u.id} className="mention-item" onClick={() => insertMention(u.username)}>
-                          @{u.username.toUpperCase()} <span style={{ opacity: 0.5, fontSize: '9px' }}>{u.rank}</span>
+                          @{u.username.toUpperCase()} <span style={{ opacity: 0.5, fontSize: '9px' }}>{u.security_rank}</span>
                         </button>
                       ))
                     }
