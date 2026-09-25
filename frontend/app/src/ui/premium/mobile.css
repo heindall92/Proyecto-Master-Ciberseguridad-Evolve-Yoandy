@@ -1,0 +1,103 @@
+/* ==========================================================================
+   Vista móvil (< 900 px) — estructura tomada de Rosetta (barra inferior
+   flotante + hoja "Más"), con la identidad de Valhalla (chaflán y trazo de acento).
+   En escritorio no se aplica nada de este archivo.
+   ========================================================================== */
+
+.mnav, .msheet-backdrop { display: none; }
+
+@media (max-width: 900px) {
+  /* Sin menú lateral: el contenido ocupa todo el ancho */
+  .app, .app.sidebar-collapsed { grid-template-columns: 1fr; padding: 6px; gap: 6px; }
+  .app .sidenav { display: none !important; }
+  .app > .main { grid-column: 1 / -1 !important; }
+  .main-content { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ---------- Barra inferior ---------- */
+  .mnav {
+    --cut: 12px;
+    --edge-c: color-mix(in srgb, var(--signal) 45%, var(--line-strong, rgba(127,127,127,.35)));
+    display: flex; gap: 2px; position: fixed; z-index: 60;
+    left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    height: 64px; padding: 6px;
+    background: color-mix(in srgb, var(--bg-panel, #10181b) 82%, transparent);
+    backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    border: 1px solid var(--edge-c);
+    box-shadow: 0 18px 40px -18px rgba(0,0,0,.55);
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  }
+  /* trazo de acento en los dos chaflanes (mismo sistema que edges.css) */
+  .mnav::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(to bottom right, transparent 50%, var(--edge-c) 50%, var(--edge-c) calc(50% + 1px), transparent calc(50% + 1px)) top left / var(--cut) var(--cut) no-repeat,
+      linear-gradient(to bottom right, transparent calc(50% - 1px), var(--edge-c) calc(50% - 1px), var(--edge-c) 50%, transparent 50%) bottom right / var(--cut) var(--cut) no-repeat;
+  }
+  .mnav__btn {
+    position: relative; flex: 1; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: transparent; color: var(--text-dim); cursor: pointer;
+    font: 700 9.5px var(--mono); letter-spacing: .2px; text-transform: uppercase;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    transition: background .15s, color .15s;
+  }
+  .mnav__btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mnav__btn:hover { color: var(--text-bright); }
+  .mnav__btn[aria-current="page"], .mnav__btn[aria-expanded="true"] {
+    color: var(--signal);
+    background: color-mix(in srgb, var(--signal) 14%, transparent);
+    box-shadow: inset 0 -2px 0 var(--signal);
+  }
+  .mnav__btn:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+  .mnav__badge {
+    position: absolute; top: 4px; right: calc(50% - 22px);
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+    font: 700 9px/16px var(--mono); text-align: center; color: #fff; background: #ef4f5f;
+  }
+
+  /* ---------- Hoja "Más" ---------- */
+  .msheet-backdrop {
+    display: flex; align-items: flex-end; position: fixed; inset: 0; z-index: 70;
+    background: rgba(0,0,0,.45); backdrop-filter: blur(3px);
+    animation: msheet-fade .18s ease-out;
+  }
+  .msheet {
+    --cut: 16px;
+    width: 100%; max-height: 78vh; overflow-y: auto;
+    margin: 0 8px calc(84px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 12px 16px;
+    background: var(--bg-panel-deep, var(--bg-panel));
+    border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent);
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+    animation: msheet-rise .26s cubic-bezier(.2,.8,.2,1);
+  }
+  .msheet__head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 10px;
+    font: 700 11px var(--mono); letter-spacing: 1.5px; text-transform: uppercase; color: var(--signal); }
+  .msheet__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .msheet__item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px;
+    border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 3%, transparent);
+    color: var(--text); cursor: pointer; font: 600 10.5px var(--sans); text-align: center; line-height: 1.2;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  }
+  .msheet__item[aria-current="page"] { border-color: var(--signal); background: color-mix(in srgb, var(--signal) 14%, transparent); color: var(--signal); }
+  .msheet__icon { width: 38px; height: 38px; display: grid; place-items: center; color: var(--signal);
+    border: 1px solid color-mix(in srgb, var(--signal) 35%, transparent); background: color-mix(in srgb, var(--signal) 8%, transparent); border-radius: 4px; }
+  .msheet__item[aria-current="page"] .msheet__icon { background: var(--signal); color: #fff; }
+
+  /* Los avisos y el chat quedan por encima de la barra */
+  .chat-panel {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 8px !important; right: 8px !important; width: auto !important;
+    height: min(68vh, 480px) !important;
+  }
+  .chat-sidebar { width: 104px !important; min-width: 0 !important; }
+}
+
+@media (max-width: 420px) {
+  .msheet__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@keyframes msheet-fade { from { opacity: 0; } }
+@keyframes msheet-rise { from { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .msheet, .msheet-backdrop { animation: none; } }

@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
@@ -72,6 +73,7 @@ import QuickSettings from "./premium/QuickSettings";
 import { Toaster, toast } from "./premium/widgets";
 import "./premium/dashboard.css";
 import "./premium/edges.css";
+import "./premium/mobile.css";
 import {
   Search, MessageSquare, Bell, BellOff, CircleHelp, Palette, Sun, Moon, ChevronDown,
   UserRound, SlidersHorizontal, LayoutGrid, Lock, Unlock, RefreshCw, Play, LogOut,
@@ -211,15 +213,16 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('valhalla_sidebar_collapsed') === 'true';
   });
-  // En pantallas estrechas el menú se muestra solo con iconos (si no, deja sin espacio al contenido)
-  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 760px)').matches);
+  // Móvil (< 900 px): sin menú lateral; navegación con barra inferior y hoja "Más" (estructura de Rosetta)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 900px)').matches);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 760px)');
-    const on = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    const mq = window.matchMedia('(max-width: 900px)');
+    const on = (e: MediaQueryListEvent) => { setIsMobile(e.matches); if (!e.matches) setMoreOpen(false); };
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
   }, []);
-  const navCollapsed = sidebarCollapsed || isNarrow;
+  const navCollapsed = sidebarCollapsed;
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -810,6 +813,29 @@ export default function App() {
     </button>
   );
 
+  const isAdminRole = user?.role === 'admin';
+  const NAV_ITEMS: Array<{ id: string; es: string; en: string; show: boolean }> = [
+    { id: 'overview', es: 'Vista general', en: 'Overview', show: true },
+    { id: 'siem', es: 'SIEM', en: 'SIEM', show: true },
+    { id: 'workspace', es: 'Workspace', en: 'Workspace', show: true },
+    { id: 'reports', es: 'Informes', en: 'Reports', show: user?.role !== 'viewer' },
+    { id: 'assets', es: 'Activos', en: 'Assets', show: isAdminRole },
+    { id: 'monitors', es: 'Monitores', en: 'Monitors', show: isAdminRole },
+    { id: 'health', es: 'Estado', en: 'Health', show: isAdminRole },
+    { id: 'audit', es: 'Auditoría', en: 'Audit', show: isAdminRole },
+    { id: 'cowrie', es: 'Honeypots', en: 'Honeypots', show: isAdminRole },
+    { id: 'threat', es: 'Threat Intel', en: 'Threat Intel', show: true },
+    { id: 'threatmap', es: 'Threat Map', en: 'Threat Map', show: true },
+    { id: 'lsamonitor', es: 'LSA Monitor', en: 'LSA Monitor', show: isAdminRole },
+    { id: 'bifrost', es: 'Bifröst', en: 'Bifröst', show: isAdminRole },
+    { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', show: true },
+    { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', show: true },
+    { id: 'users', es: 'Usuarios', en: 'Users', show: isAdminRole },
+  ];
+  const MOBILE_LABEL: Record<string, [string, string]> = { overview: ['Inicio', 'Home'], workspace: ['Casos', 'Cases'] };
+  const TAB_IDS = ['overview', 'siem', 'workspace', user?.role !== 'viewer' ? 'reports' : 'threat'];
+  const goTo = (id: string) => { dispatch(setView(id)); setMoreOpen(false); };
+
   const incidentCount = stats?.metrics?.tickets_open || 0;
   const incidentText = incidentCount === 1 ? t('incidents_open_singular') : t('incidents_open_plural');
   const incidentHeaderLabel = incidentCount === 1 ? (lang === 'es' ? 'INCIDENTE' : 'INCIDENT') : t('incidents');
@@ -1055,7 +1081,7 @@ export default function App() {
           <NavBtn id="cveintel" label="CVE Intel" sub={lang === 'es' ? 'KEV · Difusión IA' : 'KEV · AI outreach'} icon="i-vuln" />
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
-          {user?.role !== 'viewer' && <NavBtn id="reports" label={lang === 'es' ? 'Informes' : 'Reports'} sub={lang === 'es' ? 'SOC · Ejecutivo · Intel' : 'SOC · Executive · Intel'} icon="i-metrics" />}
+          {user?.role !== 'viewer' && <NavBtn id="reports" label={lang === 'es' ? 'Informes' : 'Reports'} sub={lang === 'es' ? 'SOC · Ejecutivo · GRC' : 'SOC · Executive · GRC'} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
 
           {/* Collapse Button */}
@@ -1075,6 +1101,49 @@ export default function App() {
           </button>
         </aside>
 
+        )}
+
+        {isMobile && !tvMode && (
+          <nav className="mnav" aria-label={es ? 'Navegación principal' : 'Main navigation'}>
+            {TAB_IDS.map(id => {
+              const item = NAV_ITEMS.find(n => n.id === id)!;
+              const Icon = NAV_ICONS[id];
+              const badge = id === 'workspace' ? incidentCount : 0;
+              return (
+                <button key={id} type="button" className="mnav__btn" aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id)}>
+                  <Icon size={19} aria-hidden="true" />
+                  <span>{MOBILE_LABEL[id]?.[es ? 0 : 1] ?? (es ? item.es : item.en)}</span>
+                  {badge > 0 && <b className="mnav__badge">{badge > 99 ? '99+' : badge}</b>}
+                </button>
+              );
+            })}
+            <button type="button" className="mnav__btn" aria-expanded={moreOpen} aria-current={!TAB_IDS.includes(view) && view !== 'profile' && view !== 'settings' ? 'page' : undefined} onClick={() => setMoreOpen(o => !o)}>
+              <LayoutGrid size={19} aria-hidden="true" />
+              <span>{es ? 'Más' : 'More'}</span>
+            </button>
+          </nav>
+        )}
+        {isMobile && moreOpen && createPortal(
+          <div className="msheet-backdrop" onClick={() => setMoreOpen(false)}>
+            <div className="msheet" role="dialog" aria-modal="true" aria-label={es ? 'Todas las secciones' : 'All sections'} onClick={e => e.stopPropagation()}>
+              <div className="msheet__head">
+                <span>{es ? 'Secciones' : 'Sections'}</span>
+                <button type="button" className="vp-iconbtn" onClick={() => setMoreOpen(false)} aria-label={es ? 'Cerrar' : 'Close'}><X size={16} /></button>
+              </div>
+              <div className="msheet__grid">
+                {NAV_ITEMS.filter(n => n.show).map(n => {
+                  const Icon = NAV_ICONS[n.id];
+                  return (
+                    <button key={n.id} type="button" className="msheet__item" aria-current={view === n.id ? 'page' : undefined} onClick={() => goTo(n.id)}>
+                      <span className="msheet__icon"><Icon size={20} aria-hidden="true" /></span>
+                      <span>{es ? n.es : n.en}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>,
+          document.body
         )}
 
         <main className="main" style={{ gridColumn: tvMode ? '1 / -1' : '2 / -1', gridRow: tvMode ? '1 / -1' : 'auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
