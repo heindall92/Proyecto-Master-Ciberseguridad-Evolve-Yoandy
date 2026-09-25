@@ -583,18 +583,6 @@ export function runHuntQuery(id: string, hours = 720) {
   );
 }
 
-// HEIMDALL — Informe de Inteligencia (datos reales; separado del informe ejecutivo)
-export function getHeimdallReport() {
-  return http<any>("/api/reports/heimdall");
-}
-
-// HEIMDALL en PDF profesional (Typst)
-export async function downloadHeimdallPdf(): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/api/reports/heimdall/pdf`, { credentials: "include" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.blob();
-}
-
 // CVE Intel (Fase 5) — feed CISA KEV + post IA (borrador)
 export interface CveItem {
   id: string;

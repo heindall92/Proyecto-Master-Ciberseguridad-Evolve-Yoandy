@@ -405,3 +405,8 @@ body input.vp-bare-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]
 @media (prefers-reduced-motion: reduce) {
   .vp-topic, .vp-iconbtn, .vp-switch::after { transition: none; }
 }
+
+/* Móvil: solo el logo V (el logotipo en texto desbordaba la barra) */
+@media (max-width: 560px) {
+  .topbar .topbar__brand .glitch-hover { display: none !important; } /* lleva display:flex en línea */
+}

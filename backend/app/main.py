@@ -63,6 +63,7 @@ from app.ollama_client import analyze_alert, generate_executive_summary, chat_as
 from app import cve_feed
 from app import virustotal_client as vt
 from app import report_builder as rb
+from app import grc_builder
 from app import abuseipdb_client as abuse
 from app.rag import build_knowledge, MITRE_TECHNIQUES
 from app import hunting
@@ -1440,6 +1441,27 @@ async def list_audit(
     return (await db.execute(q)).scalars().all()
 
 # REPORTS
+@app.get("/api/reports/grc")
+async def grc_report(
+    start: datetime | None = None,
+    end: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    """Informe GRC: matriz de riesgo, madurez NIST CSF, cobertura ATT&CK, cumplimiento y plan de tratamiento."""
+    if current.role not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede ver el informe GRC")
+    end = end or datetime.now(timezone.utc)
+    start = start or (end - timedelta(days=30))
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    if end <= start:
+        raise HTTPException(422, "El fin del periodo debe ser posterior al inicio")
+    return await grc_builder.build_grc(db, start, end, author=current.username)
+
+
 @app.get("/api/reports/executive")
 async def executive_report(
     start: datetime | None = None,
@@ -2074,16 +2096,19 @@ async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) ->
             except Exception as e:
                 logger.debug("AI chat metrics context unavailable: %s", e)
 
-    if any(word in q for word in ("heimdall", "informe", "intel report", "reporte")):
+    if any(word in q for word in ("grc", "riesgo", "riesgos", "cumplimiento", "informe", "reporte", "cobertura")):
         if user.role.lower() in ("admin", "analyst", "analista"):
             try:
-                report = await _build_heimdall_data(db, user.username)
+                end = datetime.now(timezone.utc)
+                grc = await grc_builder.build_grc(db, end - timedelta(days=7), end, author=user.username)
+                k = grc["kpis"]
+                top = "; ".join(f"{s['id']} {s['title']} ({s['level']})" for s in grc["scenarios"][:3])
                 context.append(
-                    f"Heimdall: tickets={report.get('incident_management')} iso={report.get('iso27001', {}).get('overall')} "
-                    f"attack_coverage={report.get('attack_coverage_pct')} metrics={report.get('wazuh_metrics')}"
+                    f"Informe GRC 7d: riesgo={k['residual_risk']} cumplimiento={k['compliance_pct']}% "
+                    f"cobertura_attack={k['attack_coverage_pct']}% acciones_abiertas={k['open_actions']} riesgos_principales: {top}"
                 )
             except Exception as e:
-                logger.debug("AI chat Heimdall context unavailable: %s", e)
+                logger.debug("AI chat GRC context unavailable: %s", e)
 
     if any(word in q for word in ("cve", "cves", "vulnerabilidad", "vulnerabilidades", "kev", "exploit")):
         try:
@@ -2820,113 +2845,6 @@ async def hunting_run(query_id: str, hours: int = 168, current: User = Depends(g
     if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista puede ejecutar threat hunting")
     return await hunting.run_query(query_id, hours=hours)
-
-
-# ─────────────────────────────────────────────
-# HEIMDALL — Informe de Inteligencia (datos 100% REALES, separado del exec report)
-# Reúne las métricas/cálculos que construí: resolución real, activos reales,
-# cumplimiento ISO calculado y cobertura ATT&CK. NO toca /api/reports/executive.
-# ─────────────────────────────────────────────
-async def _build_heimdall_data(db: AsyncSession, username: str) -> dict[str, Any]:
-    try:
-        stats = await osc.get_dashboard_stats(24)
-    except Exception:
-        stats = {}
-
-    total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
-    closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status.in_(["closed", "resolved"])))).scalar() or 0
-
-    # Tiempo medio de resolución REAL
-    resolved_rows = (await db.execute(
-        select(Ticket.created_at, Ticket.updated_at).where(Ticket.status.in_(["closed", "resolved"]))
-    )).all()
-    _mins = [(u - c).total_seconds() / 60 for c, u in resolved_rows if c and u and u >= c]
-    avg_resolution_min = round(sum(_mins) / len(_mins)) if _mins else 0
-
-    # Activos/atacantes REALES
-    try:
-        _top = await osc.get_top_attackers(limit=5, hours=24)
-    except Exception:
-        _top = []
-    top_affected_assets = [
-        {"name": a.get("attack_type") or "Actividad de ataque", "ip": a.get("ip", "unknown"), "alerts": a.get("count", 0)}
-        for a in _top
-    ]
-
-    # Cumplimiento ISO 27001 CALCULADO
-    ioc_count = (await db.execute(select(func.count(IOC.id)))).scalar() or 0
-    audit_count = (await db.execute(select(func.count(AuditLog.id)))).scalar() or 0
-    runbook_count = (await db.execute(select(func.count(Runbook.id)).where(Runbook.is_active == True))).scalar() or 0
-    try:
-        _agents = await wazuh.get_agents()
-        agents_active = sum(1 for a in (_agents or []) if a.get("status") == "active")
-    except Exception:
-        agents_active = 0
-    iso_controls = [
-        {"control": "A.5.7 Threat Intelligence", "status": "covered" if ioc_count > 0 else "partial", "note": f"{ioc_count} IOCs gestionados"},
-        {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"},
-        {"control": "A.8.15 Logging", "status": "covered" if audit_count > 0 else "partial", "note": f"{audit_count} eventos de auditoría"},
-        {"control": "A.5.26 Response to incidents", "status": "covered" if total_tickets > 0 else "partial", "note": f"{total_tickets} incidentes gestionados"},
-        {"control": "A.5.27 Learning from incidents", "status": "covered" if runbook_count > 0 else "partial", "note": f"{runbook_count} runbooks activos"},
-        {"control": "A.8.7 Protection against malware", "status": "covered" if agents_active > 0 else "partial", "note": f"{agents_active} agentes activos"},
-    ]
-    iso_overall = round(100 * sum(1 for c in iso_controls if c["status"] == "covered") / len(iso_controls))
-
-    # Cobertura MITRE ATT&CK
-    try:
-        cov = await osc.get_mitre_coverage(168)
-    except Exception:
-        cov = []
-    seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
-    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
-    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
-
-    return {
-        "report": "HEIMDALL",
-        "subtitle": "Informe de Inteligencia — Datos en tiempo real",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "analyst": (username or "SISTEMA").upper(),
-        "incident_management": {
-            "total_tickets": total_tickets,
-            "closed_tickets": closed_tickets,
-            "avg_resolution_time_min": avg_resolution_min,
-        },
-        "top_affected_assets": top_affected_assets,
-        "iso27001": {"overall": iso_overall, "controls": iso_controls},
-        "attack_coverage_pct": coverage_pct,
-        "techniques_seen": sorted(seen_base & defined_base),
-        "wazuh_metrics": {
-            "total_alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
-            "critical_alerts": stats.get("critical_alerts", 0),
-        },
-    }
-
-
-@app.get("/api/reports/heimdall")
-async def heimdall_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role.lower() not in ("admin", "analyst", "analista"):
-        raise HTTPException(403, "Solo admin o analista puede ver el informe HEIMDALL")
-    return await _build_heimdall_data(db, current.username)
-
-
-@app.get("/api/reports/heimdall/pdf")
-async def heimdall_report_pdf(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    """Informe HEIMDALL en PDF profesional (Typst). Datos dinámicos escapados (anti-inyección)."""
-    if current.role.lower() not in ("admin", "analyst", "analista"):
-        raise HTTPException(403, "Solo admin o analista puede generar el PDF HEIMDALL")
-    from app.report_pdf import render_heimdall_typ, compile_pdf
-
-    data = await _build_heimdall_data(db, current.username)
-    try:
-        pdf = compile_pdf(render_heimdall_typ(data))
-    except Exception as e:
-        logger.error("Error compilando PDF HEIMDALL: %s", e)
-        raise HTTPException(500, f"No se pudo generar el PDF: {e}")
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=heimdall-intel-report.pdf"},
-    )
 
 
 # ─────────────────────────────────────────────
