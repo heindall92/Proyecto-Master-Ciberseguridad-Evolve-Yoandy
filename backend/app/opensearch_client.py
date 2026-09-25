@@ -73,6 +73,20 @@ def _client() -> httpx.AsyncClient:
     )
 
 
+def _alerts_since(since: str) -> dict[str, Any]:
+    """Alertas desde `since`, excluyendo los comentarios de la integración de IA
+    (regla 100200, grupo ai_analysis): acompañan a una alerta, no son alertas nuevas."""
+    return {
+        "bool": {
+            "filter": [{"range": {"@timestamp": {"gte": since}}}],
+            "must_not": [{"term": {"rule.groups": "ai_analysis"}}],
+        }
+    }
+
+
+_NO_IP = {"", "n/a", "unknown", "desconocida", "-", "none"}
+
+
 async def _search(body: dict[str, Any]) -> dict[str, Any]:
     try:
         async with _client() as c:
@@ -95,7 +109,7 @@ async def get_top_attackers(limit: int = 20, hours: int = 24) -> list[dict]:
     # Wazuh guarda la IP origen en data.srcip y Cowrie en data.src_ip: se agregan ambos.
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "by_srcip": {"terms": {"field": "data.srcip", "size": limit}, "aggs": sub_aggs},
             "by_src_ip": {"terms": {"field": "data.src_ip", "size": limit}, "aggs": sub_aggs},
@@ -106,6 +120,8 @@ async def get_top_attackers(limit: int = 20, hours: int = 24) -> list[dict]:
     merged: dict[str, dict] = {}
     for name in ("by_srcip", "by_src_ip"):
         for b in aggs.get(name, {}).get("buckets", []):
+            if str(b["key"]).strip().lower() in _NO_IP:
+                continue
             top_desc = b.get("attack_type", {}).get("buckets", [])
             last = b.get("last_seen", {}).get("value_as_string", "")
             entry = merged.setdefault(b["key"], {"ip": b["key"], "count": 0, "last_seen": "", "attack_type": "Generic Attack"})
@@ -123,7 +139,7 @@ async def get_alert_levels(hours: int = 24) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "levels": {
                 "terms": {"field": "rule.level", "size": 20, "order": {"_key": "asc"}}
@@ -141,7 +157,7 @@ async def get_event_types(hours: int = 24) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "groups": {
                 "terms": {"field": "rule.groups", "size": 30},
@@ -294,7 +310,7 @@ async def get_alert_volume(hours: int = 24, interval: str = "1h") -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "volume": {
                 "date_histogram": {
@@ -317,7 +333,7 @@ async def get_dashboard_stats(hours: int = 24) -> dict:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "total": {"value_count": {"field": "@timestamp"}},
             "critical": {"filter": {"range": {"rule.level": {"gte": 12}}}},
@@ -344,7 +360,7 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
     body = {
         "size": limit,
         "sort": [{"@timestamp": {"order": "desc"}}],
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "_source": [
             "@timestamp", "rule.id", "rule.description", "rule.level",
             "rule.groups", "rule.mitre.technique", "rule.mitre.tactic",
@@ -479,7 +495,7 @@ async def get_mitre_stats(hours: int = 24) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     body = {
         "size": 0,
-        "query": {"range": {"@timestamp": {"gte": since}}},
+        "query": _alerts_since(since),
         "aggs": {
             "tactics": {
                 "terms": {"field": "rule.mitre.tactic.keyword", "size": 10}

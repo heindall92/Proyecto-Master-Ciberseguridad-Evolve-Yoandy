@@ -1053,7 +1053,11 @@ async def update_settings(payload: list[SystemSettingIn], db: AsyncSession = Dep
 # AGENTS & WAZUH
 @app.get("/api/agents")
 async def list_agents(_=Depends(get_current_user)):
-    return await wazuh.get_agents()
+    try:
+        return await wazuh.get_agents()
+    except Exception as e:
+        logger.warning(f"Wazuh API /agents no disponible: {e}")
+        raise HTTPException(502, "No se pudo consultar la API de Wazuh (agentes)")
 
 @app.get("/api/agents/{agent_id}/packages")
 async def agent_packages(agent_id: str, _=Depends(get_current_user)):

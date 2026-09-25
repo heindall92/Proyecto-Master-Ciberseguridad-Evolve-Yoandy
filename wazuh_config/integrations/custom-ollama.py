@@ -24,6 +24,12 @@ def log_debug(message):
         pass
 
 
+def source_ip(alert):
+    """IP origen: Wazuh usa data.srcip y Cowrie data.src_ip. Devuelve None si no hay."""
+    data = alert.get("data", {}) or {}
+    return data.get("srcip") or data.get("src_ip") or alert.get("srcip") or None
+
+
 def send_to_wazuh(ai_analysis, original_alert):
     """
     Escribe el análisis como un log JSON que Wazuh leerá automáticamente
@@ -34,9 +40,11 @@ def send_to_wazuh(ai_analysis, original_alert):
         "timestamp": datetime.now().isoformat(),
         "original_rule_id": original_alert.get("rule", {}).get("id", "0"),
         "original_description": original_alert.get("rule", {}).get("description", "N/A"),
-        "srcip": original_alert.get("data", {}).get("srcip") or original_alert.get("srcip", "N/A"),
         "ai_verdict": ai_analysis
     }
+    ip = source_ip(original_alert)
+    if ip:
+        wazuh_event["srcip"] = ip
     
     try:
         with open(OLLAMA_LOG_PATH, "a") as f:
@@ -49,7 +57,7 @@ def send_to_wazuh(ai_analysis, original_alert):
 def query_ollama(alert):
     """Consulta a la IA de Ollama local con contexto expandido"""
     desc = alert.get("rule", {}).get("description", "Unknown")
-    ip = alert.get("data", {}).get("srcip") or alert.get("srcip", "Unknown")
+    ip = source_ip(alert) or "desconocida"
     full_log = alert.get("full_log", "")
     data = alert.get("data", {})
     
@@ -82,16 +90,14 @@ def query_ollama(alert):
             timeout=15
         )
         if response.status_code == 200:
-            return response.json().get('response', 'Análisis no disponible.')
-        else:
-            log_debug(f"Error HTTP Ollama: {response.status_code}")
-            return f"Error consultando Ollama: {response.text}"
+            return (response.json().get("response") or "").strip() or None
+        log_debug(f"Error HTTP Ollama {response.status_code}: {response.text[:300]}")
     except requests.exceptions.ConnectionError:
         log_debug(f"No se pudo conectar a Ollama en {OLLAMA_HOST}")
-        return "El servidor local de IA (Ollama) no responde. Asegúrese de que está corriendo."
     except Exception as e:
         log_debug(f"Excepcion en Ollama: {e}")
-        return str(e)
+    # Los fallos NO se convierten en eventos de Wazuh (antes generaban miles de alertas de error)
+    return None
 
 
 def main():
@@ -109,16 +115,20 @@ def main():
         sys.exit(1)
 
     rule_level = alert.get("rule", {}).get("level", 0)
-    
+    groups = alert.get("rule", {}).get("groups", []) or []
+
+    # Nunca analizar las alertas que genera la propia IA: evitaba un bucle de retroalimentación
+    if "ai_analysis" in groups or alert.get("data", {}).get("integration") == "ollama_ai":
+        log_debug("Ignorando alerta generada por la integración de IA.")
+        return
+
     # Solo analizar alertas medias/altas para no saturar la IA
     if rule_level >= 5:
         desc = alert.get("rule", {}).get("description", "Unknown")
-        ip = alert.get("data", {}).get("srcip") or alert.get("srcip", "Unknown")
-        
-        log_debug(f"Analizando alerta nivel {rule_level}: {desc} (IP: {ip})")
-        
+        log_debug(f"Analizando alerta nivel {rule_level}: {desc} (IP: {source_ip(alert) or '-'})")
         analysis = query_ollama(alert)
-        send_to_wazuh(analysis, alert)
+        if analysis:
+            send_to_wazuh(analysis, alert)
     else:
         log_debug(f"Ignorando alerta nivel {rule_level} (por debajo del umbral de IA).")
 
