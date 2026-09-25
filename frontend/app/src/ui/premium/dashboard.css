@@ -205,3 +205,15 @@ body[data-theme="light"] .vx-sev--info { --sev: #0b6f94; }
 
 .vx-spin { animation: vx-spin 0.9s linear infinite; }
 @keyframes vx-spin { to { transform: rotate(360deg); } }
+
+/* La tabla se adapta al ancho de su tarjeta (no al de la ventana) */
+.vx-card { container-type: inline-size; }
+@container (max-width: 820px) {
+  .vx-table__head, .vx-table__row { grid-template-columns: 78px 72px 118px minmax(0, 1fr) 150px; }
+  .vx-table__head > :nth-child(4), .vx-table__row > :nth-child(4) { display: none; }
+}
+@container (max-width: 560px) {
+  .vx-table__head, .vx-table__row { grid-template-columns: 74px minmax(0, 1fr) 132px; }
+  .vx-table__head > :nth-child(2), .vx-table__row > :nth-child(2),
+  .vx-table__head > :nth-child(3), .vx-table__row > :nth-child(3) { display: none; }
+}
