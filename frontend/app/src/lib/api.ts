@@ -275,16 +275,35 @@ export function getAgentPackages(agentId: string) {
   return http<any[]>(`/api/agents/${agentId}/packages`);
 }
 
-export function getAgentPorts(agentId: string) {
-  return http<any[]>(`/api/agents/${agentId}/ports`);
-}
 
 export function getAgentVulnerabilities(agentId: string) {
   return http<any[]>(`/api/agents/${agentId}/vulnerabilities`);
 }
 
-export function scanAgent(agentId: string) {
-  return http<any>(`/api/agents/${agentId}/scan`, { method: "POST" });
+// Inventario real (syscollector) y vulnerabilidades del índice de estados de Wazuh 4.8+
+export interface AgentInventory {
+  os: { name?: string; version?: string; codename?: string; platform?: string };
+  kernel: string; hostname: string; architecture: string;
+  hardware: { cpu?: { name?: string; cores?: number; mhz?: number }; ram?: { total?: number; free?: number; usage?: number } };
+  counts: { packages: number; processes: number };
+  ports: Array<{ port: number; ip: string; protocol: string; process: string; pid: number }>;
+  scan_time: string;
+}
+export interface AgentVuln {
+  cve: string; severity: string; score: number | null; description: string; reference: string;
+  detected_at: string; published_at: string; package: string; version: string; under_evaluation: boolean;
+}
+export function getAgentInventory(agentId: string) {
+  return http<AgentInventory>(`/api/agents/${agentId}/inventory`);
+}
+export function getVulnSummary() {
+  return http<Record<string, Record<string, number>>>("/api/agents/vulnerability-summary");
+}
+export function getLsaEndpoints() {
+  return http<Array<{ hostname: string; runasppl_enabled: boolean; lsa_protected: boolean; risk_score: number; last_check?: string }>>("/api/lsa/endpoints");
+}
+export function getLsaAlerts(hours = 24) {
+  return http<Array<{ id: number; timestamp: string; type: string; source_ip: string; hostname: string; severity: string; blocked: boolean; target_process: string; source_process: string }>>(`/api/lsa/alerts?hours=${hours}`);
 }
 // Tickets (Incident Management)
 export type TicketOut = {

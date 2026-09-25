@@ -1225,23 +1225,48 @@ async def list_agents(_=Depends(get_current_user)):
         logger.warning(f"Wazuh API /agents no disponible: {e}")
         raise HTTPException(502, "No se pudo consultar la API de Wazuh (agentes)")
 
-@app.get("/api/agents/{agent_id}/packages")
-async def agent_packages(agent_id: str, _=Depends(get_current_user)):
-    return await wazuh.get_agent_packages(agent_id)
+_AGENT_ID = Path(..., pattern=r"^\d{3,5}$")  # evita inyectar rutas en la URL de la API de Wazuh
 
-@app.get("/api/agents/{agent_id}/ports")
-async def agent_ports(agent_id: str, _=Depends(get_current_user)):
-    return await wazuh.get_agent_ports(agent_id)
+
+@app.get("/api/agents/vulnerability-summary")
+async def agents_vuln_summary(_=Depends(get_current_user)):
+    """Vulnerabilidades por agente y severidad (índice wazuh-states-vulnerabilities-*)."""
+    return await osc.get_vulnerability_summary()
+
+
+@app.get("/api/agents/{agent_id}/inventory")
+async def agent_inventory(agent_id: str = _AGENT_ID, _=Depends(get_current_user)):
+    """Inventario real del agente (syscollector): sistema, hardware, puertos a la escucha y recuentos."""
+    os_i, hw, ports, pkgs, procs = await asyncio.gather(
+        wazuh.get_syscollector(agent_id, "os", 1), wazuh.get_syscollector(agent_id, "hardware", 1),
+        wazuh.get_syscollector(agent_id, "ports", 200), wazuh.get_syscollector(agent_id, "packages", 1),
+        wazuh.get_syscollector(agent_id, "processes", 1),
+    )
+    counts = {}
+    for kind in ("packages", "processes"):
+        r = await wazuh.request("GET", f"/syscollector/{agent_id}/{kind}", params={"limit": 1})
+        counts[kind] = r.json().get("data", {}).get("total_affected_items", 0) if r.status_code == 200 else 0
+    listening = [p for p in ports if (p.get("state") in (None, "", "listening"))]
+    return {
+        "os": (os_i[0] if os_i else {}).get("os", {}), "kernel": (os_i[0] if os_i else {}).get("release", ""),
+        "hostname": (os_i[0] if os_i else {}).get("hostname", ""), "architecture": (os_i[0] if os_i else {}).get("architecture", ""),
+        "hardware": hw[0] if hw else {}, "counts": counts,
+        "ports": [{"port": (p.get("local") or {}).get("port"), "ip": (p.get("local") or {}).get("ip"), "protocol": p.get("protocol", ""),
+                   "process": p.get("process", ""), "pid": p.get("pid")} for p in listening][:60],
+        "scan_time": ((os_i[0] if os_i else {}).get("scan") or {}).get("time", ""),
+    }
+
+
+@app.get("/api/agents/{agent_id}/packages")
+async def agent_packages(agent_id: str = _AGENT_ID, _=Depends(get_current_user)):
+    return await wazuh.get_syscollector(agent_id, "packages", 500)
+
 
 @app.get("/api/agents/{agent_id}/vulnerabilities")
-async def agent_vulnerabilities(agent_id: str, _=Depends(get_current_user)):
-    return await wazuh.get_agent_vulnerabilities(agent_id)
+async def agent_vulnerabilities(agent_id: str = _AGENT_ID, _=Depends(get_current_user)):
+    """Antes llamaba a /vulnerability/{id}, retirado en Wazuh 4.8 (siempre vacío)."""
+    return await osc.get_agent_vulnerabilities(agent_id)
 
-@app.post("/api/agents/{agent_id}/scan")
-async def agent_scan(agent_id: str, _=Depends(get_current_user)):
-    res = await wazuh.request_vulnerability_scan(agent_id)
-    if "error" in str(res): raise HTTPException(400, f"Error al solicitar escaneo: {res}")
-    return res
 
 @app.get("/api/wazuh/recent-alerts")
 async def recent_alerts(limit: int = 50, hours: int = 24, _=Depends(get_current_user)):

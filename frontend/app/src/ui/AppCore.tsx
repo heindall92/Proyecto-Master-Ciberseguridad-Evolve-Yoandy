@@ -56,7 +56,6 @@ import IntelHub from "./intel/IntelHub";
 import CowrieView from "./CowrieView";
 import AnalystWorkspace from "./AnalystWorkspace";
 import RunbooksView from "./RunbooksView";
-import LSAMonitorView from "./LSAMonitorView";
 import SocMaturityView from "./SocMaturityView";
 import ReportsCenter from "./ReportsCenter";
 import ProfileView from "./ProfileView";
@@ -804,7 +803,7 @@ export default function App() {
 
   // Threat Intel, CVE Intel y Threat Map viven ahora en "Inteligencia" (sus rutas antiguas siguen funcionando)
   const INTEL_VIEWS = ['intel', 'threat', 'cveintel', 'threatmap'];
-  const navView = INTEL_VIEWS.includes(view) ? 'intel' : view;
+  const navView = INTEL_VIEWS.includes(view) ? 'intel' : view === 'lsamonitor' ? 'assets' : view;
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
     <button className={`navbtn ${navView === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__edge" aria-hidden="true" />
@@ -829,7 +828,6 @@ export default function App() {
     { id: 'audit', es: 'Auditoría', en: 'Audit', show: isAdminRole },
     { id: 'cowrie', es: 'Honeypots', en: 'Honeypots', show: isAdminRole },
     { id: 'intel', es: 'Inteligencia', en: 'Intelligence', show: true },
-    { id: 'lsamonitor', es: 'LSA Monitor', en: 'LSA Monitor', show: isAdminRole },
     { id: 'bifrost', es: 'Bifröst', en: 'Bifröst', show: isAdminRole },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', show: true },
     { id: 'users', es: 'Usuarios', en: 'Users', show: isAdminRole },
@@ -1077,7 +1075,6 @@ export default function App() {
           {user?.role === 'admin' && <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />}
           <NavBtn id="intel" label={lang === 'es' ? 'Inteligencia' : 'Intelligence'} sub={lang === 'es' ? 'IOCs · CVE · Mapa' : 'IOCs · CVE · Map'} icon="i-threat" />
-          {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
           {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
@@ -1158,7 +1155,7 @@ export default function App() {
                 style={{ height: '100%' }}
               >
                 {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
-                {view === 'assets' && <AssetsView lang={lang} />}
+                {(view === 'assets' || view === 'lsamonitor') && <AssetsView lang={lang} initialTab={view === 'lsamonitor' ? 'lsa' : 'hosts'} />}
                 {view === 'users' && <UsersView lang={lang} />}
                 {view === 'audit' && <AuditLogView lang={lang} />}
                 {view === 'settings' && <SystemSettingsView lang={lang} />}
@@ -1168,7 +1165,6 @@ export default function App() {
                 {INTEL_VIEWS.includes(view) && <IntelHub lang={lang} initialIp={intelIp} initialTab={view === 'cveintel' ? 'vulns' : view === 'threatmap' ? 'map' : 'iocs'} />}
                 {view === 'cowrie' && <CowrieView lang={lang} />}
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
-                {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
                 {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
                 {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}

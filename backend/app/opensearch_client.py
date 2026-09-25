@@ -616,3 +616,51 @@ async def get_attack_path(ip: str, hours: int = 24) -> list[dict]:
             "type": "alert" if "cowrie" not in src.get("rule", {}).get("groups", []) else "honeypot"
         })
     return path
+
+
+# ── Vulnerabilidades (Wazuh 4.8+: índice de estados) ─────────────────────────
+VULN_INDEX = "wazuh-states-vulnerabilities-*"
+
+
+async def _vuln_search(body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        async with _client() as c:
+            r = await c.post(f"/{VULN_INDEX}/_search", json=body)
+            if r.status_code == 404:
+                return {}
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        logger.warning("Vulnerability index query failed: %s", e)
+        return {}
+
+
+async def get_agent_vulnerabilities(agent_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    resp = await _vuln_search({
+        "size": limit,
+        "query": {"term": {"agent.id": agent_id}},
+        "sort": [{"vulnerability.score.base": {"order": "desc", "unmapped_type": "float"}}],
+    })
+    out = []
+    for h in resp.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        v, p = s.get("vulnerability", {}), s.get("package", {})
+        out.append({
+            "cve": v.get("id", ""), "severity": (v.get("severity") or "").lower(),
+            "score": (v.get("score") or {}).get("base"), "description": (v.get("description") or "")[:400],
+            "reference": (v.get("reference") or "").split(",")[0].strip(), "detected_at": v.get("detected_at", ""),
+            "published_at": v.get("published_at", ""), "package": p.get("name", ""), "version": p.get("version", ""),
+            "under_evaluation": bool(v.get("under_evaluation")),
+        })
+    return out
+
+
+async def get_vulnerability_summary() -> dict[str, dict[str, int]]:
+    """Recuento por agente y severidad (para la tabla de activos)."""
+    resp = await _vuln_search({"size": 0, "aggs": {"agents": {"terms": {"field": "agent.id", "size": 500},
+                               "aggs": {"sev": {"terms": {"field": "vulnerability.severity", "size": 10}}}}}})
+    out: dict[str, dict[str, int]] = {}
+    for b in resp.get("aggregations", {}).get("agents", {}).get("buckets", []):
+        out[b["key"]] = {s["key"].lower(): s["doc_count"] for s in b.get("sev", {}).get("buckets", [])}
+        out[b["key"]]["total"] = b["doc_count"]
+    return out

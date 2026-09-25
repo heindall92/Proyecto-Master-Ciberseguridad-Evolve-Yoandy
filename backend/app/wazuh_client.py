@@ -123,13 +123,14 @@ class WazuhClient:
         r = await self.request("GET", f"/syscollector/{agent_id}/ports?limit=100")
         return r.json().get("data", {}).get("affected_items", [])
 
-    async def get_agent_vulnerabilities(self, agent_id: str):
-        r = await self.request("GET", f"/vulnerability/{agent_id}?limit=100")
-        return r.json().get("data", {}).get("affected_items", [])
+    async def get_syscollector(self, agent_id: str, kind: str, limit: int = 100) -> list[dict]:
+        """Inventario del agente (os, hardware, ports, packages, processes, netiface)."""
+        # os y hardware no admiten paginación: con "limit" devuelven error
+        params = None if kind in ("os", "hardware") else {"limit": limit}
+        r = await self.request("GET", f"/syscollector/{agent_id}/{kind}", params=params)
+        return r.json().get("data", {}).get("affected_items", []) if r.status_code == 200 else []
 
-    async def request_vulnerability_scan(self, agent_id: str):
-        # Wazuh v4 API uses this to trigger a scan request
-        r = await self.request("PUT", f"/vulnerability/{agent_id}/scan")
-        return r.json()
+    # Nota: GET /vulnerability/{id} y PUT /vulnerability/{id}/scan se retiraron en Wazuh 4.8.
+    # Las vulnerabilidades están en el índice wazuh-states-vulnerabilities-* (ver opensearch_client).
 
 wazuh = WazuhClient()
