@@ -249,12 +249,282 @@ DEFAULT_RUNBOOKS: list[dict] = [
 ]
 
 
+# ─── Ampliación a 20 runbooks (25/09/2026) ─────────────────────────────────
+EXTRA_RUNBOOKS: list[dict] = [
+    {
+        "name": "Movimiento Lateral (RDP/SMB/SSH interno)",
+        "category": "intrusion",
+        "description": "Un equipo comprometido se conecta a otros de la red interna con credenciales válidas (MITRE TA0008).",
+        "severity_applicable": "critical",
+        "identification_steps": [
+            {"text": "Buscar inicios de sesión de red y RDP inusuales en Windows (tipos 3 y 10).", "command": "Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4624} | Where-Object { $_.Properties[8].Value -in 3,10 }"},
+            {"text": "En Linux, revisar accesos SSH entre servidores internos.", "command": "last -a | head -50; journalctl -u ssh --since '24 hours ago' | grep Accepted"},
+            {"text": "Trazar el camino: origen, cuentas usadas y equipos alcanzados en el SIEM de Valhalla."},
+        ],
+        "containment_steps": [
+            {"text": "Aislar de la red los equipos origen y destino (Wazuh active response o switch)."},
+            {"text": "Deshabilitar y rotar las cuentas usadas en los saltos."},
+            {"text": "Bloquear el tráfico este-oeste afectado (SMB 445, RDP 3389, SSH 22) entre segmentos."},
+        ],
+        "eradication_steps": [
+            {"text": "Buscar persistencia en cada equipo alcanzado: servicios, tareas programadas, claves Run, authorized_keys.", "command": "crontab -l; ls -la ~/.ssh/authorized_keys; systemctl list-timers"},
+            {"text": "Eliminar herramientas del atacante (PsExec, Impacket, túneles) y restablecer contraseñas de administradores locales."},
+        ],
+        "recovery_steps": [
+            {"text": "Reincorporar los equipos por fases vigilando nuevas alertas en el SIEM durante 72 h."},
+            {"text": "Confirmar que las cuentas afectadas solo acceden desde sus equipos habituales."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Revisar segmentación de red y el uso de cuentas de administrador compartidas (LAPS)."},
+            {"text": "Añadir regla de correlación para inicios de sesión de un mismo usuario en muchos equipos en poco tiempo."},
+        ],
+    },
+    {
+        "name": "Web Shell en Servidor Web",
+        "category": "malware",
+        "description": "Script malicioso subido a un servidor web que permite ejecutar comandos a distancia (MITRE T1505.003).",
+        "severity_applicable": "critical",
+        "identification_steps": [
+            {"text": "Buscar ficheros web creados o modificados recientemente.", "command": "find /var/www -type f -newermt '-3 days' \\( -name '*.php' -o -name '*.jsp' -o -name '*.aspx' \\)"},
+            {"text": "Revisar el log de acceso: peticiones POST a ficheros raros y respuestas 200 desde IPs externas.", "command": "grep POST /var/log/nginx/access.log | awk '{print $1,$7}' | sort | uniq -c | sort -rn | head"},
+            {"text": "Comprobar alertas FIM (integridad de ficheros) de Wazuh sobre el directorio web."},
+        ],
+        "containment_steps": [
+            {"text": "Retirar el servidor del balanceador o ponerlo en mantenimiento."},
+            {"text": "Bloquear las IPs que usaron la web shell.", "command": "POST /api/firewall/block"},
+            {"text": "Guardar copia del fichero malicioso y su hash SHA-256 como evidencia en el incidente."},
+        ],
+        "eradication_steps": [
+            {"text": "Eliminar la web shell y restaurar el código desde el repositorio o una copia limpia."},
+            {"text": "Corregir la vulnerabilidad de subida o de ejecución que permitió colocarla."},
+        ],
+        "recovery_steps": [
+            {"text": "Rotar credenciales de base de datos y secretos que la aplicación tuviera en configuración."},
+            {"text": "Reactivar el servicio con FIM de Wazuh vigilando el directorio web."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Denegar la escritura en el directorio web y la ejecución en carpetas de subida."},
+            {"text": "Añadir el hash y las IPs a los IOCs de Inteligencia."},
+        ],
+    },
+    {
+        "name": "Escalada de Privilegios en Linux",
+        "category": "intrusion",
+        "description": "Un usuario sin privilegios obtiene root mediante sudo mal configurado, binarios SUID o una vulnerabilidad del kernel (MITRE TA0004).",
+        "severity_applicable": "high",
+        "identification_steps": [
+            {"text": "Revisar el uso de sudo y los cambios a root.", "command": "journalctl _COMM=sudo --since '24 hours ago'; grep -i 'session opened for user root' /var/log/auth.log"},
+            {"text": "Buscar binarios SUID nuevos o inesperados.", "command": "find / -perm -4000 -type f -newermt '-7 days' 2>/dev/null"},
+            {"text": "Comprobar la versión del kernel frente a CVE explotadas (Inteligencia > Vulnerabilidades).", "command": "uname -r"},
+        ],
+        "containment_steps": [
+            {"text": "Bloquear la cuenta implicada y cerrar sus sesiones.", "command": "usermod -L <usuario>; pkill -KILL -u <usuario>"},
+            {"text": "Aislar el servidor si hay indicios de acceso root."},
+        ],
+        "eradication_steps": [
+            {"text": "Retirar el bit SUID a binarios no necesarios y corregir /etc/sudoers con visudo."},
+            {"text": "Aplicar el parche del kernel o del paquete vulnerable y reiniciar."},
+        ],
+        "recovery_steps": [
+            {"text": "Reinstalar desde imagen limpia si root estuvo comprometido y no se puede garantizar la integridad."},
+            {"text": "Vigilar con Wazuh (rootcheck y SCA) las siguientes 72 h."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Revisar la política de sudo con mínimo privilegio y la frecuencia de parcheo."},
+        ],
+    },
+    {
+        "name": "Compromiso de Correo Corporativo (BEC)",
+        "category": "phishing",
+        "description": "Un atacante accede a un buzón y lo usa para fraude: cambios de cuenta bancaria, facturas falsas o nuevos phishing internos.",
+        "severity_applicable": "high",
+        "identification_steps": [
+            {"text": "Revisar inicios de sesión del buzón desde países o IPs inusuales y MFA rechazados."},
+            {"text": "Buscar reglas de reenvío o de borrado creadas por el atacante en el buzón."},
+            {"text": "Identificar correos enviados por la cuenta a proveedores y clientes en las últimas 72 h."},
+        ],
+        "containment_steps": [
+            {"text": "Cerrar todas las sesiones, restablecer la contraseña y exigir MFA."},
+            {"text": "Eliminar reglas de reenvío maliciosas y aplicaciones OAuth no autorizadas."},
+            {"text": "Avisar por teléfono (no por correo) a finanzas y a los destinatarios afectados."},
+        ],
+        "eradication_steps": [
+            {"text": "Retirar de todos los buzones los correos maliciosos enviados desde la cuenta."},
+            {"text": "Añadir remitentes y dominios de phishing como IOC y bloquearlos en la pasarela de correo."},
+        ],
+        "recovery_steps": [
+            {"text": "Validar con el banco cualquier transferencia pendiente y solicitar su retención si procede."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Valorar notificación a la AEPD (RGPD, 72 h) si hubo acceso a datos personales."},
+            {"text": "Reforzar formación sobre fraude del CEO y verificación de cambios de cuenta bancaria."},
+        ],
+    },
+    {
+        "name": "Criptominería en Servidores",
+        "category": "malware",
+        "description": "Uso ilegítimo de CPU/GPU para minar criptomonedas, habitual tras explotar servicios expuestos (MITRE T1496).",
+        "severity_applicable": "medium",
+        "identification_steps": [
+            {"text": "Detectar procesos con CPU sostenida alta y nombres extraños.", "command": "ps -eo pid,user,%cpu,cmd --sort=-%cpu | head -15"},
+            {"text": "Buscar conexiones a pools de minería (puertos 3333, 4444, 5555, 14444).", "command": "ss -tunap | grep -E ':(3333|4444|5555|14444)'"},
+            {"text": "Revisar el inventario del equipo en Activos (procesos y puertos) y sus alertas en el SIEM."},
+        ],
+        "containment_steps": [
+            {"text": "Terminar el proceso y bloquear las IPs y dominios del pool.", "command": "kill -9 <pid>"},
+            {"text": "Aislar el equipo si el minero se relanza (persistencia activa)."},
+        ],
+        "eradication_steps": [
+            {"text": "Eliminar la persistencia: cron, systemd, ~/.bashrc y claves SSH añadidas.", "command": "crontab -l; ls /etc/systemd/system; cat ~/.ssh/authorized_keys"},
+            {"text": "Parchear el servicio explotado (buscar su CVE en Inteligencia > Vulnerabilidades)."},
+        ],
+        "recovery_steps": [
+            {"text": "Rotar credenciales del servidor y vigilar el consumo de CPU durante una semana."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Añadir alerta por consumo de CPU sostenido y conexiones a puertos de minería."},
+        ],
+    },
+    {
+        "name": "Explotación de Vulnerabilidad Crítica (KEV)",
+        "category": "other",
+        "description": "Una CVE del catálogo CISA KEV (explotada activamente) afecta a un activo propio.",
+        "severity_applicable": "critical",
+        "identification_steps": [
+            {"text": "Confirmar qué activos tienen la versión vulnerable (Activos > vulnerabilidades por equipo)."},
+            {"text": "Revisar la prioridad, el CVSS y si hay exploit público en Inteligencia > Vulnerabilidades."},
+            {"text": "Buscar indicios de explotación en el SIEM desde la fecha de publicación de la CVE."},
+        ],
+        "containment_steps": [
+            {"text": "Aplicar la mitigación temporal del fabricante (desactivar módulo, WAF, restringir acceso)."},
+            {"text": "Restringir la exposición a internet del servicio hasta parchear."},
+        ],
+        "eradication_steps": [
+            {"text": "Aplicar el parche o actualizar a la versión corregida antes de la fecha límite de CISA."},
+            {"text": "Si hubo explotación, tratarlo como intrusión y seguir ese runbook."},
+        ],
+        "recovery_steps": [
+            {"text": "Verificar que Wazuh deja de marcar la vulnerabilidad en el siguiente inventario."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Medir el tiempo desde la publicación hasta el parche y ajustar la política de parcheo."},
+        ],
+    },
+    {
+        "name": "Almacenamiento en la Nube Expuesto",
+        "category": "data_breach",
+        "description": "Un bucket o recurso compartido en la nube queda público y expone datos por una configuración incorrecta.",
+        "severity_applicable": "high",
+        "identification_steps": [
+            {"text": "Identificar el recurso, qué datos contiene y desde cuándo es público."},
+            {"text": "Revisar los registros de acceso del proveedor para saber si alguien descargó datos."},
+        ],
+        "containment_steps": [
+            {"text": "Retirar el acceso público y revocar enlaces compartidos y claves de acceso asociadas."},
+            {"text": "Conservar los registros de acceso como evidencia antes de que caduquen."},
+        ],
+        "eradication_steps": [
+            {"text": "Corregir la política de acceso y activar el bloqueo de acceso público a nivel de cuenta."},
+        ],
+        "recovery_steps": [
+            {"text": "Rotar cualquier secreto que estuviera almacenado en el recurso."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Valorar la notificación a la AEPD en 72 h y a los afectados (RGPD arts. 33 y 34)."},
+            {"text": "Añadir revisión periódica de configuración de la nube (CSPM) al plan de controles."},
+        ],
+    },
+    {
+        "name": "Abuso de Cuenta Privilegiada",
+        "category": "insider_threat",
+        "description": "Un administrador o cuenta de servicio con privilegios se usa fuera de su función o en horario inusual.",
+        "severity_applicable": "high",
+        "identification_steps": [
+            {"text": "Revisar la actividad de la cuenta en Sistema > Auditoría (acciones y resultado).", "command": "GET /api/audit?user=<usuario>"},
+            {"text": "Comparar con su patrón habitual: horario, IP de origen y tipo de acciones."},
+            {"text": "Buscar cambios de permisos, creación de usuarios o borrado de registros."},
+        ],
+        "containment_steps": [
+            {"text": "Suspender o degradar la cuenta mientras se investiga (con aprobación de dirección)."},
+            {"text": "Preservar los registros de auditoría como evidencia con su huella SHA-256."},
+        ],
+        "eradication_steps": [
+            {"text": "Revertir los cambios no autorizados y revisar las cuentas creadas por el usuario."},
+        ],
+        "recovery_steps": [
+            {"text": "Reasignar las tareas críticas y rotar las credenciales compartidas que conociera."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Aplicar doble aprobación para acciones críticas y revisión trimestral de privilegios."},
+            {"text": "Coordinar con RR. HH. y el área legal antes de cualquier comunicación."},
+        ],
+    },
+    {
+        "name": "Canal C2 y Tunelización DNS",
+        "category": "malware",
+        "description": "Un equipo infectado se comunica con el servidor de mando del atacante, a veces escondiendo datos en consultas DNS (MITRE T1071, T1071.004).",
+        "severity_applicable": "critical",
+        "identification_steps": [
+            {"text": "Buscar conexiones periódicas (beaconing) a la misma IP o dominio: Bifröst > hunting 'Reincidentes'."},
+            {"text": "Detectar consultas DNS con subdominios muy largos o aleatorios hacia un mismo dominio."},
+            {"text": "Analizar el dominio o la IP en Inteligencia (VirusTotal, AbuseIPDB)."},
+        ],
+        "containment_steps": [
+            {"text": "Bloquear el dominio en el DNS interno y la IP en el firewall.", "command": "POST /api/firewall/block"},
+            {"text": "Aislar el equipo infectado sin apagarlo (conservar la memoria para el análisis)."},
+        ],
+        "eradication_steps": [
+            {"text": "Identificar y eliminar el implante y su persistencia; reinstalar si no hay garantías."},
+        ],
+        "recovery_steps": [
+            {"text": "Vigilar nuevas consultas al mismo dominio desde otros equipos durante una semana."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Forzar el uso del DNS corporativo y registrar las consultas para poder cazarlas."},
+        ],
+    },
+    {
+        "name": "Compromiso de la Cadena de Suministro",
+        "category": "other",
+        "description": "Una dependencia, paquete o actualización de un proveedor llega con código malicioso (MITRE T1195).",
+        "severity_applicable": "critical",
+        "identification_steps": [
+            {"text": "Identificar el paquete o versión afectada y en qué sistemas está instalado (Activos > paquetes)."},
+            {"text": "Revisar el aviso del proveedor y los IOCs publicados (hashes, dominios)."},
+            {"text": "Buscar esos IOCs en el SIEM desde la fecha de instalación."},
+        ],
+        "containment_steps": [
+            {"text": "Congelar la versión afectada en los repositorios internos y bloquear sus dominios."},
+            {"text": "Aislar los sistemas donde se detecten los IOCs."},
+        ],
+        "eradication_steps": [
+            {"text": "Desinstalar o fijar una versión limpia y verificada por firma o hash."},
+            {"text": "Rotar los secretos a los que tuvo acceso el componente (tokens de CI/CD, claves)."},
+        ],
+        "recovery_steps": [
+            {"text": "Reconstruir los artefactos desde fuentes verificadas y redesplegar."},
+        ],
+        "post_mortem_steps": [
+            {"text": "Mantener un inventario de dependencias (SBOM) y auditoría automática (pip-audit, npm audit)."},
+        ],
+    },
+]
+
+DEFAULT_RUNBOOKS = DEFAULT_RUNBOOKS + EXTRA_RUNBOOKS
+
+
 async def seed_runbooks_if_empty(db) -> int:
+    """Añade los runbooks por defecto que falten (por nombre).
+
+    Antes solo sembraba con la tabla vacía, así que los nuevos nunca llegaban a una
+    instalación existente. Los archivados (is_active=False) existen y no se reactivan.
+    """
     from sqlalchemy import select
 
-    existing = (await db.execute(select(Runbook))).scalars().first()
-    if existing:
-        return 0
+    existing = {n for (n,) in (await db.execute(select(Runbook.name))).all()}
+    added = 0
     for rb in DEFAULT_RUNBOOKS:
-        db.add(Runbook(**rb, is_active=True))
-    return len(DEFAULT_RUNBOOKS)
+        if rb["name"] not in existing:
+            db.add(Runbook(**rb, is_active=True))
+            added += 1
+    return added
