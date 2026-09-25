@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+import base64
+import binascii
 import re
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict, AliasChoices
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict, AliasChoices
 
 def _sanitize_html(v: str | None) -> str | None:
     if v is None: return v
@@ -500,19 +502,76 @@ class PlaybookActionIn(BaseModel):
     runbook_id: int | None = None
 
 
+# Adjuntos del chat: tipos permitidos y tamaño máximo (el contenido viaja como data: URL en base64)
+CHAT_ATTACHMENT_TYPES = {
+    "image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "text/csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+CHAT_ATTACHMENT_MAX_BYTES = 2 * 1024 * 1024
+_CTRL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+class ChatAttachment(BaseModel):
+    """Adjunto validado: antes era un dict libre y `data` acababa en href/src/window.open (XSS con javascript:)."""
+    name: str = Field(..., min_length=1, max_length=120)
+    type: str
+    size: int = Field(..., ge=0, le=CHAT_ATTACHMENT_MAX_BYTES)
+    data: str = Field(..., max_length=CHAT_ATTACHMENT_MAX_BYTES * 4 // 3 + 200)
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        v = _CTRL_CHARS.sub("", re.sub(r"[\\/<>:\"|?*]", "_", v)).strip()
+        if not v:
+            raise ValueError("Nombre de archivo no válido")
+        return v
+
+    @field_validator("type")
+    @classmethod
+    def allowed_type(cls, v: str) -> str:
+        if v not in CHAT_ATTACHMENT_TYPES:
+            raise ValueError("Tipo de archivo no permitido en el chat")
+        return v
+
+    @model_validator(mode="after")
+    def check_data(self):
+        prefix = f"data:{self.type};base64,"
+        if not self.data.startswith(prefix):
+            raise ValueError("El adjunto debe ser un data: URL en base64 del mismo tipo declarado")
+        try:
+            raw = base64.b64decode(self.data[len(prefix):], validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("Contenido base64 no válido")
+        if len(raw) > CHAT_ATTACHMENT_MAX_BYTES:
+            raise ValueError("Adjunto demasiado grande (máx. 2 MB)")
+        self.size = len(raw)
+        return self
+
+
 class ChatMessageIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    id: str | None = None
-    text: str = Field(..., min_length=1, max_length=8000)
-    chat_id: str = Field(default="global", alias="chatId", max_length=128)
-    mentions: list[str] = Field(default_factory=list, max_length=50)
-    attachment: dict[str, Any] | None = None
+    id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    text: str = Field(default="", max_length=4000)
+    chat_id: str = Field(default="global", alias="chatId", pattern=r"^(global|dm:\d{1,10}-\d{1,10})$")
+    mentions: list[str] = Field(default_factory=list, max_length=20)
+    attachment: ChatAttachment | None = None
 
     @field_validator("text")
     @classmethod
     def sanitize_text(cls, v: str) -> str:
-        return _sanitize_html(v) or ""
+        return _CTRL_CHARS.sub("", _sanitize_html(v) or "")
+
+    @field_validator("mentions")
+    @classmethod
+    def clean_mentions(cls, v: list[str]) -> list[str]:
+        return list(dict.fromkeys(m for m in v if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", m)))
+
+    @model_validator(mode="after")
+    def not_empty(self):
+        if not self.text and not self.attachment:
+            raise ValueError("El mensaje está vacío")
+        return self
 
 
 class ChatMessageOut(BaseModel):

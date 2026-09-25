@@ -1,0 +1,136 @@
+/* ==========================================================================
+   Trazo de acento en las formas achaflanadas (sin cambiar ninguna forma)
+   --------------------------------------------------------------------------
+   clip-path recorta también el borde: los chaflanes y muescas quedaban sin
+   línea (se veía el blanco del fondo). Dos técnicas:
+   1) Formas complejas (menú, botones de acción, login): un anillo del acento
+      (forma exterior menos la interior, regla evenodd) y el relleno con la forma
+      interior; así funciona también con rellenos translúcidos (modo oscuro).
+   2) Chaflanes simples de 45° (chat, desplegables, popovers): líneas diagonales
+      del acento dibujadas justo por dentro del corte en un ::after.
+   ========================================================================== */
+
+:root {
+  --edge-w: 1px;
+  --edge-k: 0.42px; /* desplazamiento de un vértice de 45° para un trazo de 1 px (tan 22,5°) */
+}
+
+/* ---------- Diagonales de 45° (técnica 2) ---------- */
+/* Cada capa dibuja la línea del corte dentro del cuadrado c×c de su esquina, pegada al lado interior. */
+.chat-panel, .tweaks-panel, .tactical-dropdown, .dash-filter-btn, .chat-ai-typing, .vp-pop, .vp-topic, .vx-kpi, .chat-panel__input {
+  --edge-tr: linear-gradient(to top right, transparent calc(50% - var(--edge-w)), var(--edge-c) calc(50% - var(--edge-w)), var(--edge-c) 50%, transparent 50%);
+  --edge-bl: linear-gradient(to top right, transparent 50%, var(--edge-c) 50%, var(--edge-c) calc(50% + var(--edge-w)), transparent calc(50% + var(--edge-w)));
+  --edge-tl: linear-gradient(to bottom right, transparent 50%, var(--edge-c) 50%, var(--edge-c) calc(50% + var(--edge-w)), transparent calc(50% + var(--edge-w)));
+  --edge-br: linear-gradient(to bottom right, transparent calc(50% - var(--edge-w)), var(--edge-c) calc(50% - var(--edge-w)), var(--edge-c) 50%, transparent 50%);
+}
+
+/* ---------- Menú lateral (técnica 1) ---------- */
+.navbtn { isolation: isolate; --edge-c: color-mix(in srgb, var(--signal) 55%, var(--line-strong, rgba(127,127,127,.35))); }
+.navbtn:hover { --edge-c: color-mix(in srgb, var(--signal) 65%, transparent); }
+.navbtn.active { --edge-c: var(--signal); }
+
+.navbtn__edge {
+  position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--edge-c);
+  transition: background .2s ease;
+  clip-path: polygon(evenodd, 6px 0%, 60% 0%, 70% 20%, 100% 20%, 100% calc(100% - 12px), calc(100% - 14px) 100%, 12px 100%, 0% calc(100% - 12px), 0% 6px, 6px 0%, calc(6px + var(--edge-k)) 1px, calc(60% - .25px) 1px, calc(70% - .25px) calc(20% + 1px), calc(100% - 1px) calc(20% + 1px), calc(100% - 1px) calc(100% - 12px - var(--edge-k)), calc(100% - 14px - var(--edge-k)) calc(100% - 1px), calc(12px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 12px - var(--edge-k)), 1px calc(6px + var(--edge-k)), calc(6px + var(--edge-k)) 1px, 6px 0%);
+}
+body .navbtn::before, body[data-theme] .navbtn::before {
+  border: 0 !important;
+  clip-path: polygon(
+    calc(6px + var(--edge-k)) 1px, calc(60% - .25px) 1px, calc(70% - .25px) calc(20% + 1px), calc(100% - 1px) calc(20% + 1px),
+    calc(100% - 1px) calc(100% - 12px - var(--edge-k)), calc(100% - 14px - var(--edge-k)) calc(100% - 1px),
+    calc(12px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 12px - var(--edge-k)), 1px calc(6px + var(--edge-k))
+  ) !important;
+}
+.app.sidebar-collapsed .navbtn__edge {
+  clip-path: polygon(evenodd, 6px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 6px, 6px 0%, calc(6px + var(--edge-k)) 1px, calc(100% - 1px) 1px, calc(100% - 1px) calc(100% - 8px - var(--edge-k)), calc(100% - 8px - var(--edge-k)) calc(100% - 1px), calc(8px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 8px - var(--edge-k)), 1px calc(6px + var(--edge-k)), calc(6px + var(--edge-k)) 1px, 6px 0%);
+}
+body .app.sidebar-collapsed .navbtn::before, body[data-theme] .app.sidebar-collapsed .navbtn::before {
+  clip-path: polygon(
+    calc(6px + var(--edge-k)) 1px, calc(100% - 1px) 1px, calc(100% - 1px) calc(100% - 8px - var(--edge-k)),
+    calc(100% - 8px - var(--edge-k)) calc(100% - 1px), calc(8px + var(--edge-k)) calc(100% - 1px),
+    1px calc(100% - 8px - var(--edge-k)), 1px calc(6px + var(--edge-k))
+  ) !important;
+}
+
+/* ---------- Botones de acción (técnica 1, el trazo va en ::after) ---------- */
+.action-btn { --edge-c: color-mix(in srgb, var(--signal) 45%, transparent); }
+.action-btn:hover { --edge-c: var(--signal); }
+.action-btn::after {
+  content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--edge-c); transition: background .2s ease;
+  clip-path: polygon(evenodd, 4px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 4px, 4px 0%, calc(4px + var(--edge-k)) 1px, calc(100% - 8px - var(--edge-k)) 1px, calc(100% - 1px) calc(8px + var(--edge-k)), calc(100% - 1px) calc(100% - 4px - var(--edge-k)), calc(100% - 4px - var(--edge-k)) calc(100% - 1px), calc(8px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 8px - var(--edge-k)), 1px calc(4px + var(--edge-k)), calc(4px + var(--edge-k)) 1px, 4px 0%);
+}
+body .action-btn::before, body[data-theme] .action-btn::before {
+  border: 0 !important;
+  clip-path: polygon(
+    calc(4px + var(--edge-k)) 1px, calc(100% - 8px - var(--edge-k)) 1px, calc(100% - 1px) calc(8px + var(--edge-k)),
+    calc(100% - 1px) calc(100% - 4px - var(--edge-k)), calc(100% - 4px - var(--edge-k)) calc(100% - 1px),
+    calc(8px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 8px - var(--edge-k)), 1px calc(4px + var(--edge-k))
+  ) !important;
+}
+
+/* ---------- Botón de login (técnica 1) ---------- */
+.login-btn { isolation: isolate; --edge-c: color-mix(in srgb, var(--signal) 60%, transparent); }
+.login-btn:hover { --edge-c: var(--signal); }
+.login-btn::after {
+  content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: var(--edge-c);
+  clip-path: polygon(evenodd, 10px 0%, 65% 0%, 72% 25%, 100% 25%, 100% calc(100% - 10px), calc(100% - 15px) 100%, 15px 100%, 0% calc(100% - 15px), 0% 10px, 10px 0%, calc(10px + var(--edge-k)) 1px, calc(65% - .3px) 1px, calc(72% - .3px) calc(25% + 1px), calc(100% - 1px) calc(25% + 1px), calc(100% - 1px) calc(100% - 10px - var(--edge-k)), calc(100% - 15px - var(--edge-k)) calc(100% - 1px), calc(15px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 15px - var(--edge-k)), 1px calc(10px + var(--edge-k)), calc(10px + var(--edge-k)) 1px, 10px 0%);
+}
+body .login-btn::before, body[data-theme] .login-btn::before {
+  border: 0 !important;
+  clip-path: polygon(
+    calc(10px + var(--edge-k)) 1px, calc(65% - .3px) 1px, calc(72% - .3px) calc(25% + 1px), calc(100% - 1px) calc(25% + 1px),
+    calc(100% - 1px) calc(100% - 10px - var(--edge-k)), calc(100% - 15px - var(--edge-k)) calc(100% - 1px),
+    calc(15px + var(--edge-k)) calc(100% - 1px), 1px calc(100% - 15px - var(--edge-k)), 1px calc(10px + var(--edge-k))
+  ) !important;
+}
+
+/* ---------- Chaflanes simples (técnica 2) ---------- */
+.chat-panel, .tweaks-panel, .tactical-dropdown, .dash-filter-btn, .chat-ai-typing, .vp-pop, .vp-topic {
+  --edge-c: color-mix(in srgb, var(--signal) 70%, transparent);
+}
+.dash-filter-btn, .vp-topic { --edge-c: color-mix(in srgb, var(--signal) 35%, var(--line-strong, rgba(127,127,127,.35))); }
+.dash-filter-btn:hover, .dash-filter-btn.active, .vp-topic:hover { --edge-c: var(--signal); }
+
+.chat-panel::after, .tweaks-panel::after, .tactical-dropdown::after, .dash-filter-btn::after,
+.chat-ai-typing::after, .vp-pop::after, .vp-topic::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 5;
+  background-repeat: no-repeat;
+}
+/* los contenedores deben ser el origen del ::after */
+.dash-filter-btn, .chat-ai-typing, .vp-topic { position: relative; }
+
+.chat-panel::after        { background-image: var(--edge-tr), var(--edge-bl); background-size: 20px 20px; background-position: top right, bottom left; }
+.tweaks-panel::after      { background-image: var(--edge-tr), var(--edge-bl); background-size: 16px 16px; background-position: top right, bottom left; }
+.tactical-dropdown::after { background-image: var(--edge-tr), var(--edge-bl); background-size: 12px 12px; background-position: top right, bottom left; }
+.vp-pop::after            { background-image: var(--edge-tr), var(--edge-bl); background-size: var(--vp-cut) var(--vp-cut); background-position: top right, bottom left; }
+.vp-topic::after          { background-image: var(--edge-tr); background-size: 12px 12px; background-position: top right; }
+.dash-filter-btn::after   { background-image: var(--edge-tl), var(--edge-br); background-size: 5px 5px; background-position: top left, bottom right; }
+.chat-ai-typing::after    { background-image: var(--edge-tl), var(--edge-br); background-size: 7px 7px; background-position: top left, bottom right; }
+
+/* KPI del dashboard: ya usa ::after para el brillo; se añade la diagonal como capa extra */
+.vx-kpi { --edge-c: color-mix(in srgb, var(--tone, var(--signal)) 55%, transparent); }
+.vx-kpi::after {
+  background:
+    var(--edge-tr) top right / 10px 10px no-repeat,
+    radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--tone) 12%, transparent), transparent 60%);
+}
+
+/* Input del chat (un input no admite pseudo-elementos): diagonales en su propio fondo */
+.chat-panel__input {
+  --edge-c: var(--line-strong, rgba(127,127,127,.4));
+  background-image: var(--edge-tl), var(--edge-br) !important;
+  background-size: 4px 4px !important;
+  background-position: top left, bottom right !important;
+  background-repeat: no-repeat !important;
+}
+.chat-panel__input:focus { --edge-c: var(--signal); }
+
+/* ---------- Presencia en el chat (usuarios conectados) ---------- */
+.presence-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; vertical-align: 1px;
+  background: color-mix(in srgb, var(--text-faint, #888) 60%, transparent); }
+.presence-dot.is-on { background: #3fb37f; box-shadow: 0 0 0 2px color-mix(in srgb, #3fb37f 25%, transparent); }
+.chat-panel__online { margin-left: 10px; font: 600 9px var(--mono); letter-spacing: 1px; text-transform: uppercase; opacity: .85; }

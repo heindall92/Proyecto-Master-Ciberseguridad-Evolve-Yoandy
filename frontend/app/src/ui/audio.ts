@@ -26,6 +26,22 @@ export function setSoundPrefs(prefs: Record<SoundCategory, boolean>) {
   try { localStorage.setItem(SOUND_PREFS_KEY, JSON.stringify(prefs)); } catch { /* almacenamiento no disponible */ }
 }
 
+/**
+ * Los navegadores no dejan sonar audio hasta que el usuario interactúa con la página.
+ * Antes el AudioContext se creaba al llegar el primer aviso (sin gesto) y quedaba
+ * suspendido para siempre: los avisos del chat no sonaban. Se desbloquea con el primer
+ * clic o tecla.
+ */
+export function unlockAudioOnFirstGesture() {
+  const unlock = () => {
+    try { void getAudioContext().resume(); } catch { /* sin Web Audio */ }
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('keydown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
+}
+
 // Resume AudioContext if suspended, then run callback (si la categoría no está silenciada)
 function withCtx(fn: (ctx: AudioContext) => void, category: SoundCategory) {
   if (!getSoundPrefs()[category]) return;
