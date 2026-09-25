@@ -209,7 +209,10 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [showWidgetCatalog, setShowWidgetCatalog] = useState(false);
-  const [showCinematic, setShowCinematic] = useState(true);
+  // La intro se ve una vez por sesión: antes se guardaba la marca pero no se leía y se repetía en cada recarga
+  const [showCinematic, setShowCinematic] = useState(() => {
+    try { return sessionStorage.getItem('valhalla_intro_played') !== 'true'; } catch { return true; }
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('valhalla_sidebar_collapsed') === 'true';
   });
