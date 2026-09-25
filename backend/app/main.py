@@ -1035,13 +1035,24 @@ async def list_incidents(db: AsyncSession = Depends(get_db), current: User = Dep
 async def get_settings(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     rows = (await db.execute(select(SystemSetting))).scalars().all()
-    return [SystemSettingOut(key=r.key, value="********" if r.is_sensitive else r.value, is_sensitive=r.is_sensitive, updated_at=r.updated_at) for r in rows]
+    out = [SystemSettingOut(key=r.key, value="********" if r.is_sensitive else r.value, is_sensitive=r.is_sensitive, updated_at=r.updated_at) for r in rows]
+    # Valores efectivos del .env para lo que no se ha personalizado (antes la UI mostraba valores inventados)
+    effective = {
+        "ollama_url": settings.ollama_base_url,
+        "ollama_model": settings.ollama_model,
+        "ollama_temperature": str(settings.ollama_temperature),
+        "max_upload_mb": str(settings.max_upload_size_mb),
+    }
+    stored = {r.key for r in rows}
+    out += [SystemSettingOut(key=k, value=v, is_sensitive=False, source="env") for k, v in effective.items() if k not in stored]
+    return out
 
 @app.put("/api/settings")
 async def update_settings(payload: list[SystemSettingIn], db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     for s in payload:
-        if s.is_sensitive and s.value == "********": continue
+        # Clave enmascarada o vacía: no sobrescribir el secreto guardado
+        if s.is_sensitive and (s.value == "********" or not s.value.strip()): continue
         existing = (await db.execute(select(SystemSetting).where(SystemSetting.key == s.key))).scalar_one_or_none()
         val = encrypt_secret(s.value) if s.is_sensitive else s.value
         if existing:

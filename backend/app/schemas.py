@@ -391,9 +391,10 @@ class SystemSettingIn(BaseModel):
 
 class SystemSettingOut(BaseModel):
     key: str
-    value: str # Will be decrypted before sending
+    value: str  # los sensibles se devuelven enmascarados
     is_sensitive: bool
-    updated_at: datetime
+    updated_at: datetime | None = None
+    source: str = "db"  # "db" (guardado en Ajustes) o "env" (valor por defecto del .env)
 
 class MonitorOut(BaseModel):
     id: int
