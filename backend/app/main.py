@@ -22,7 +22,8 @@ from sqlalchemy import select, desc, func, delete, or_, text, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi.util import get_remote_address  # noqa: F401
+from app.client_info import real_ip, network_of, device_of
 from slowapi.errors import RateLimitExceeded
 
 from app.db import get_db, engine, SessionLocal
@@ -100,7 +101,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                             username=user.username if user else "anonymous",
                             action=request.method,
                             route=request.url.path,
-                            ip_address=request.client.host if request.client else None,
+                            ip_address=real_ip(request.client.host if request.client else None, request.headers) or None,
                             status_code=response.status_code,  # nunca se guarda el cuerpo (contraseñas, claves)
                         ))
                         await db.commit()
@@ -111,7 +112,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
 # --- APP INIT ---
 
-limiter = Limiter(key_func=get_remote_address)
+def _limiter_key(request: Request) -> str:
+    # Por IP real: con la del proxy todos los usuarios compartían el mismo cupo (p. ej. 5 logins/min)
+    return real_ip(request.client.host if request.client else None, request.headers) or "unknown"
+
+
+limiter = Limiter(key_func=_limiter_key)
 _docs_url = None if settings.env.lower() == "production" else "/docs"
 _openapi_url = None if settings.env.lower() == "production" else "/openapi.json"
 app = FastAPI(title="Valhalla SOC API", version="2.0.0", docs_url=_docs_url, openapi_url=_openapi_url)
@@ -530,18 +536,30 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, user: User):
         await websocket.accept()
-        self.active_connections[websocket] = {"id": user.id, "username": user.username, "role": user.role}
+        ip = real_ip(websocket.client.host if websocket.client else None, websocket.headers)
+        self.active_connections[websocket] = {
+            "id": user.id, "username": user.username, "role": user.role,
+            "ip": ip, "network": network_of(ip), "device": device_of(websocket.headers.get("user-agent", "")),
+            "since": datetime.now(timezone.utc).isoformat(),
+        }
         await self.broadcast_presence()
 
     async def disconnect(self, websocket: WebSocket):
         if self.active_connections.pop(websocket, None) is not None:
             await self.broadcast_presence()
 
-    def online(self) -> list[dict[str, Any]]:
+    def online(self, with_ip_for: "User | None" = None) -> list[dict[str, Any]]:
+        """Usuarios conectados con sus sesiones (dispositivo, red, desde cuándo).
+
+        La IP solo se incluye para el administrador y para las sesiones del propio usuario.
+        """
         seen: dict[int, dict[str, Any]] = {}
         for info in self.active_connections.values():
-            u = seen.setdefault(info["id"], {**info, "sessions": 0})
+            u = seen.setdefault(info["id"], {"id": info["id"], "username": info["username"], "role": info["role"], "sessions": 0, "detail": []})
             u["sessions"] += 1
+            show_ip = with_ip_for is not None and (with_ip_for.role == "admin" or with_ip_for.id == info["id"])
+            u["detail"].append({"device": info["device"], "network": info["network"], "since": info["since"],
+                                **({"ip": info["ip"]} if show_ip else {})})
         return sorted(seen.values(), key=lambda u: u["username"].lower())
 
     async def _send(self, message: Any, allowed=lambda info: True):
@@ -619,8 +637,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/presence")
 async def presence(current: User = Depends(get_current_user)):
-    """Usuarios conectados ahora mismo (para trabajar varios analistas a la vez)."""
-    return manager.online()
+    """Usuarios conectados ahora mismo: quién, desde qué dispositivo y por qué red (IP solo admin / propio)."""
+    return manager.online(with_ip_for=current)
 
 # --- ENDPOINTS ---
 
@@ -631,8 +649,8 @@ async def health(): return {"status": "ok", "version": "2.0.0"}
 @app.post("/api/auth/login", response_model=Token)
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    client_ip = request.client.host if request.client else "unknown"
-    
+    client_ip = real_ip(request.client.host if request.client else None, request.headers) or "unknown"
+
     # Validate and sanitize
     username = InputValidator.validate_username(req.username)
     InputValidator.validate_password(req.password)
@@ -706,10 +724,7 @@ async def logout(
 
 @app.get("/api/auth/me/session")
 async def my_session(request: Request, current: User = Depends(get_current_user)):
-    client_ip = request.client.host if request.client else "unknown"
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = real_ip(request.client.host if request.client else None, request.headers) or "unknown"
     return {
         "username": current.username,
         "ip": client_ip,

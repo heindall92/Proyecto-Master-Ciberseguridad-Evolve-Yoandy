@@ -96,7 +96,8 @@ async def rate_limit_middleware(request: Request, call_next):
 
     Never raise HTTPException here — Starlette BaseHTTPMiddleware turns it into 500.
     """
-    ip = request.client.host if request.client else "unknown"
+    from app.client_info import real_ip
+    ip = real_ip(request.client.host if request.client else None, request.headers) or "unknown"
 
     skip_paths = {"/health", "/docs", "/openapi.json", "/api/auth/login", "/api/auth/logout"}
     if request.url.path in skip_paths:
@@ -284,12 +285,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
-        
-        # Get forwarded header if behind proxy
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            client_ip = forwarded.split(",")[0].strip()
+        # IP real: X-Forwarded-For solo si viene del proxy (antes se aceptaba de cualquiera y era falsificable)
+        from app.client_info import real_ip
+        client_ip = real_ip(request.client.host if request.client else None, request.headers) or "unknown"
         
         # --- CSRF Protection (Double-Submit Cookie Pattern) ---
         import secrets

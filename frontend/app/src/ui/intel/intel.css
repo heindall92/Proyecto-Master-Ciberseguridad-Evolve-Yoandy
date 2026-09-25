@@ -407,3 +407,20 @@ body[data-theme="light"] .us-role--admin { --r: #b3261e; } body[data-theme="ligh
   .us-row { grid-template-columns: 34px minmax(0, 1fr) auto; } .us-row > :nth-child(3) { display: none; }
   .us .wk-head .in-bar { justify-content: flex-start; } .us-roles { grid-template-columns: 1fr; }
 }
+
+/* ---------- Sesiones: quién, dispositivo y red ---------- */
+.us-block { display: contents; }
+.us-sessions { list-style: none; margin: 0; padding: 4px 14px 10px 62px; display: flex; flex-direction: column; gap: 5px; border-top: 1px dashed var(--line); }
+.us-sessions li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: 500 11.5px var(--sans); color: var(--text-dim); }
+.us-sessions li svg { color: var(--signal); }
+.us-sessions b { color: var(--text-bright); font-weight: 700; }
+.us-sessions code { font: 500 11px var(--mono); color: var(--text); }
+.us-net, .pf-net { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font: 700 10px var(--mono); color: var(--text-dim); border: 1px solid var(--line); }
+.us-net.is-vpn, .pf-net.is-vpn { color: #4f8ff7; border-color: color-mix(in srgb, #4f8ff7 50%, transparent); background: color-mix(in srgb, #4f8ff7 10%, transparent); }
+.us-net.is-inet { color: #d9a62c; border-color: color-mix(in srgb, #d9a62c 50%, transparent); }
+body[data-theme="light"] .us-net.is-vpn, body[data-theme="light"] .pf-net.is-vpn { color: #1d5fd1; }
+.pf-sessions { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pf-sessions li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; color: var(--text); }
+.pf-sessions li svg { color: var(--signal); }
+.pf-sessions code { font: 500 11px var(--mono); }
+@container intel (max-width: 640px) { .us-sessions { padding-left: 14px; } }

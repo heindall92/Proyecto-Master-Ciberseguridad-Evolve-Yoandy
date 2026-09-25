@@ -15,12 +15,14 @@ export default defineConfig({
       '/api': {
         target: 'http://backend:8000',
         changeOrigin: true,
+        xfwd: true, // reenvía la IP real del cliente (X-Forwarded-For) al backend
         rewrite: (path) => path
       },
       '/ws': {
         target: 'ws://backend:8000',
         ws: true,
-        changeOrigin: true
+        changeOrigin: true,
+        xfwd: true
       }
     }
   },
