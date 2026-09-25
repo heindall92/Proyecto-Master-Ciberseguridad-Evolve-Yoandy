@@ -259,8 +259,10 @@ export default function CinematicIntro({ onComplete }: Props) {
         };
     }, [onComplete]);
 
-    const bigSz = Math.floor(windowSize.w * .062);
-    const midSz = Math.floor(windowSize.w * .034);
+    // En móvil (vertical) el 6,2 % del ancho dejaba el título diminuto: se agranda proporcionalmente
+    const narrow = windowSize.w < 700;
+    const bigSz = Math.floor(windowSize.w * (narrow ? .085 : .062));
+    const midSz = Math.floor(windowSize.w * (narrow ? .052 : .034));
 
     return (
         <div className="cinematic-stage" ref={containerRef}>
