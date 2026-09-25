@@ -90,7 +90,7 @@ body[data-theme="light"] .in-st--whitelist { --st: #1f7a4d; }
 .in-bar { min-width: 0; }
 .in-bar > * { flex-shrink: 0; }
 .in-bar .wk-search { flex: 0 1 300px; min-width: 160px; max-width: 300px; }
-.in-bar .in-progress { flex: 1 1 auto; min-width: 0; justify-content: flex-end; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.in-bar .in-progress { flex: 1 1 auto; min-width: 0; justify-content: flex-start; padding-left: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .in-notice { white-space: nowrap; }
 .in-progress { display: inline-flex; align-items: center; gap: 6px; font: 500 11px var(--mono); color: var(--text-faint); }
 .in-list { border: 1px solid var(--line); border-radius: 14px; background: var(--vp-surface); overflow: hidden; }
