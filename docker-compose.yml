@@ -342,8 +342,13 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
+    # API sin autenticación: solo accesible desde la propia máquina (el backend usa la red interna)
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
+    environment:
+      - OLLAMA_KEEP_ALIVE=10m          # descarga el modelo de RAM tras 10 min sin uso
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=1
     volumes:
       - ollama:/root/.ollama
     healthcheck:
@@ -351,6 +356,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # Tope de memoria: si el modelo se excede, cae este contenedor y no el sistema
+    deploy:
+      resources:
+        limits:
+          memory: 3584M
+    networks:
+      - valhalla-net
+
+  # Descarga el modelo configurado en el primer arranque (idempotente: si ya existe no hace nada)
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct}
+    entrypoint: ["/bin/sh", "-c", "ollama show \"$$MODEL\" >/dev/null 2>&1 && echo \"modelo $$MODEL ya presente\" || ollama pull \"$$MODEL\""]
     networks:
       - valhalla-net
 

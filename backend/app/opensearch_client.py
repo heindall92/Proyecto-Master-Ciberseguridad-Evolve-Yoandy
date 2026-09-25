@@ -363,8 +363,8 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
         "query": _alerts_since(since),
         "_source": [
             "@timestamp", "rule.id", "rule.description", "rule.level",
-            "rule.groups", "rule.mitre.technique", "rule.mitre.tactic",
-            "agent.name", "agent.id", "data.srcip", "data.src_ip", "full_log"
+            "rule.groups", "rule.mitre.technique", "rule.mitre.tactic", "rule.mitre.id",
+            "agent.name", "agent.id", "data", "full_log", "location", "decoder.name"
         ]
     }
     resp = await _search(body)
@@ -394,6 +394,12 @@ async def get_recent_alerts(limit: int = 100, hours: int = 24) -> list[dict]:
             "groups": rule.get("groups", []),
             "mitre_technique": rule.get("mitre", {}).get("technique", []),
             "mitre_tactic": rule.get("mitre", {}).get("tactic", []),
+            "mitre_id": rule.get("mitre", {}).get("id", []),
+            "full_log": (src.get("full_log") or "")[:4000],
+            "location": src.get("location", ""),
+            "decoder": (src.get("decoder") or {}).get("name", ""),
+            # Campos decodificados (evento original) para el visor forense del SIEM
+            "data": data,
             "agent_name": agent.get("name", "unknown"),
             "agent_id": agent.get("id", ""),
             # Wazuh usa data.srcip; Cowrie data.src_ip

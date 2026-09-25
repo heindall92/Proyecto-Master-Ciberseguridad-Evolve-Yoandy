@@ -38,6 +38,9 @@
     <field name="eventid">cowrie.login.failed</field>
     <description>Cowrie: Failed SSH login attempt — user: $(username) from $(src_ip)</description>
     <group>authentication_failed,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
   </rule>
 
   <!-- Brute force: 5+ failed logins from same IP in 120 seconds -->
@@ -192,7 +195,7 @@
   <rule id="100199" level="3">
     <if_sid>100100</if_sid>
     <field name="eventid">cowrie.session.closed</field>
-    <description>Cowrie: Session closed — duration: $(duration)s</description>
+    <description>Cowrie: Session closed ($(src_ip), $(duration_ms) ms)</description>
     <group>session,</group>
   </rule>
 
