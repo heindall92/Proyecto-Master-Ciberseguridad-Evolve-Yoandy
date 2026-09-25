@@ -15,7 +15,7 @@ body[data-theme="dark"][data-scheme] {
   --bg-glass: rgba(18, 26, 30, 0.55);
   --text: #dfe7ea;
   --text-dim: #8b9ca4;
-  --text-faint: #5f6f77;
+  --text-faint: #7e8e96; /* 4,6:1 sobre paneles (antes #5f6f77, 3:1) */
   --text-bright: #f3f7f8;
   --line: #212d33;
   --line-strong: #2d3b42;

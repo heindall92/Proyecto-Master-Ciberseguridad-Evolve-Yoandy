@@ -94,7 +94,7 @@ export default function IntegrationsHealthView({ lang }: { lang: 'en' | 'es' }) 
                                 <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>{item.name}</div>
                                 <div style={{
                                     fontSize: '9px', padding: '2px 6px', borderRadius: '2px',
-                                    background: getStatusColor(st), color: st === 'info' ? '#fff' : '#000', fontWeight: 'bold',
+                                    background: st === 'info' ? 'transparent' : getStatusColor(st), color: st === 'info' ? 'var(--text-dim)' : '#000', border: st === 'info' ? '1px solid var(--text-dim)' : undefined, fontWeight: 'bold',
                                 }}>
                                     {getStatusLabel(item.data?.status)}
                                 </div>

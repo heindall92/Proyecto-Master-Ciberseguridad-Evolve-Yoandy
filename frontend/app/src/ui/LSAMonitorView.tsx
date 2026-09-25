@@ -195,7 +195,7 @@ export default function LSAMonitorView() {
           </div>
           <div style={{ flex: 1, overflow: "auto" }}>
             {alerts.length === 0 ? (
-              <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", opacity: 0.5 }}>Sin detecciones</div>
+              <div style={{ padding: "20px", textAlign: "center", color: "var(--text-faint)" }}>Sin detecciones</div>
             ) : (
               alerts.map(alert => (
                 <div key={alert.id} style={{

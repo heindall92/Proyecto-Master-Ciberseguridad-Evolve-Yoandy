@@ -67,7 +67,7 @@ export default function AssetsView({ lang = "es" }: { lang?: "es" | "en" }) {
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="panel__title">{t('inventory')} · EDR ENDPOINTS</span>
-          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>ACTIVOS: {agents.length}</span>
+          <span style={{ fontSize: '10px', color: 'inherit', opacity: 0.85 }}>ACTIVOS: {agents.length}</span>
         </div>
         <div className="panel__body" style={{ padding: 0, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>

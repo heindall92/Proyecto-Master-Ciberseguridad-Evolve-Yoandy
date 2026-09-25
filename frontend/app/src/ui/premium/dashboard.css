@@ -153,8 +153,8 @@ body[data-theme="light"] .vx-seg button[aria-pressed="true"] { color: #fff; }
 .vx-sev--low { --sev: #3fb37f; }
 .vx-sev--info { --sev: #4aa8d8; }
 body[data-theme="light"] .vx-sev--critical { --sev: #c2362b; }
-body[data-theme="light"] .vx-sev--high { --sev: #c2560c; }
-body[data-theme="light"] .vx-sev--medium { --sev: #a86a0c; }
+body[data-theme="light"] .vx-sev--high { --sev: #b04e0a; }
+body[data-theme="light"] .vx-sev--medium { --sev: #8a5a00; }
 body[data-theme="light"] .vx-sev--low { --sev: #1d8049; }
 body[data-theme="light"] .vx-sev--info { --sev: #0b6f94; }
 
