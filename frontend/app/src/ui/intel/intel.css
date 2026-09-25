@@ -153,7 +153,8 @@ a.in-repo:hover { color: var(--signal); }
   .in-row { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
   .in-cvss small { display: none; } /* el color ya indica la gravedad */
   .in-keys { grid-template-columns: 1fr; }
-  .in-hubtabs { width: 100%; }
+  .in-hubtabs { width: 100%; display: flex; }
+  .in-hubtabs button { flex: 1; justify-content: center; } /* pestañas centradas y repartidas en móvil */
 }
 .in-wlist li.in-empty { display: block; border-top: 0; }
 

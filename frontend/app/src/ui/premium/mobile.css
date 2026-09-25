@@ -120,3 +120,10 @@
   .vp-backdrop > .vp-pop { left: 8px !important; right: 8px !important; width: auto !important; top: 64px !important;
     max-height: calc(100dvh - 160px - env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Pestañas de sección (Centro de informes, Inteligencia…) repartidas y centradas en móvil */
+@media (max-width: 640px) {
+  .rc-head { flex-direction: column; align-items: stretch; }
+  .rc-head .vx-seg, .in-hubtabs { display: flex; width: 100%; }
+  .rc-head .vx-seg button, .in-hubtabs button { flex: 1; justify-content: center; text-align: center; }
+}
