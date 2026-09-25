@@ -46,7 +46,6 @@ import AssetsView from "./AssetsView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
 import { translations } from "./translations";
-import IncidentsView from "./IncidentsView";
 import AuditLogView from "./AuditLogView";
 import SystemSettingsView from "./SystemSettingsView";
 import IntegrationsHealthView from "./IntegrationsHealthView";
@@ -780,7 +779,6 @@ export default function App() {
     { id: 'overview', es: 'Vista general', en: 'Overview', icon: LayoutDashboard, kw: 'dashboard panel' },
     { id: 'siem', es: 'SIEM · Alertas Wazuh', en: 'SIEM · Wazuh alerts', icon: Layers, kw: 'alertas alerts wazuh' },
     { id: 'assets', es: 'Activos', en: 'Assets', icon: Monitor, admin: true, kw: 'agentes endpoints agents' },
-    { id: 'incidents', es: 'Incidentes', en: 'Incidents', icon: Siren, kw: 'tickets' },
     { id: 'monitors', es: 'Monitores', en: 'Monitors', icon: Radar, admin: true },
     { id: 'health', es: 'Estado de integraciones', en: 'Integrations health', icon: Activity, admin: true, kw: 'status salud' },
     { id: 'audit', es: 'Auditoría', en: 'Audit log', icon: ScrollText, admin: true, kw: 'log registro' },
@@ -792,7 +790,7 @@ export default function App() {
     { id: 'heimdall', es: 'Heimdall · Informe Intel', en: 'Heimdall · Intel report', icon: FileText, admin: true },
     { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', icon: ShieldCheck, kw: 'kev exploit vulnerabilidad' },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', icon: BookOpen, kw: 'playbooks procedimientos' },
-    { id: 'workspace', es: 'Workspace del analista', en: 'Analyst workspace', icon: Briefcase },
+    { id: 'workspace', es: 'Workspace de incidentes', en: 'Incident workspace', icon: Briefcase, kw: 'incidentes incidents tickets tabla kanban' },
     { id: 'executive-report', es: 'Informe ejecutivo', en: 'Executive report', icon: FileBarChart, admin: true, kw: 'pdf' },
     { id: 'users', es: 'Usuarios', en: 'Users', icon: Users, admin: true },
     { id: 'profile', es: 'Mi perfil', en: 'My profile', icon: UserRound, kw: 'contraseña password avatar' },
@@ -1002,7 +1000,6 @@ export default function App() {
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
-          <NavBtn id="incidents" label={lang === 'es' ? 'Incidentes' : 'Incidents'} sub="Prioridad Alta" icon="i-incident" />
           {user?.role === 'admin' && <NavBtn id="monitors" label={lang === 'es' ? 'Monitores' : 'Monitors'} sub="Config SIEM" icon="i-threat" />}
           {user?.role === 'admin' && <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />}
@@ -1051,7 +1048,6 @@ export default function App() {
                 {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
                 {view === 'assets' && <AssetsView lang={lang} />}
                 {view === 'users' && <UsersView lang={lang} />}
-                {view === 'incidents' && <IncidentsView />}
                 {view === 'audit' && <AuditLogView lang={lang} />}
                 {view === 'settings' && <SystemSettingsView lang={lang} />}
                 {view === 'health' && <IntegrationsHealthView lang={lang} />}
@@ -1065,7 +1061,8 @@ export default function App() {
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
                 {view === 'heimdall' && <HeimdallReportView lang={lang} />}
                 {view === 'cveintel' && <CveIntelView lang={lang} />}
-                {view === 'workspace' && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} />}
+                {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
+                {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}
                 {view === 'executive-report' && <ExecutiveReport lang={lang} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
                 {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
