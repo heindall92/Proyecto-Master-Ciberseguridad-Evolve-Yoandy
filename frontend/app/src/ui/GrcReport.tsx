@@ -3,7 +3,7 @@ import {
   CalendarRange, ClipboardList, Crosshair, FileJson, Gauge, Grid3x3, Info, Landmark, ListChecks,
   Printer, RefreshCw, Search, ShieldCheck, Radar,
 } from "lucide-react";
-import { fetchGrcReport, type GrcReport as GrcData, type GrcTechnique } from "../lib/reportApi";
+import { fetchGrcReport, type GrcReport as GrcData, type GrcTechnique, type GrcFramework } from "../lib/reportApi";
 import { AnimatedNumber } from "./premium/widgets";
 import "./premium/executive.css";
 import "./premium/grc.css";
@@ -19,6 +19,8 @@ const PRIO_LABEL: Record<string, string> = { critical: "Crítica", high: "Alta",
 const IMPACT_LABEL = ["", "Mínimo", "Menor", "Moderado", "Mayor", "Grave"];
 const PROB_LABEL = ["", "Rara", "Improbable", "Posible", "Probable", "Casi segura"];
 type MitreView = "observed" | "coverage" | "intel";
+const FW_ORDER: GrcFramework[] = ["ens", "iso27001", "nis2", "iso42001"];
+const FW_SHORT: Record<GrcFramework, string> = { ens: "ENS", iso27001: "ISO 27001", nis2: "NIS2", iso42001: "ISO 42001" };
 
 const isoDay = (offset: number) => { const d = new Date(); d.setDate(d.getDate() - offset); return d.toISOString().slice(0, 10); };
 const fmtDay = (s: string) => { const [y, m, d] = s.slice(0, 10).split("-"); return `${d}/${m}/${y}`; };
@@ -275,16 +277,40 @@ export default function GrcReport() {
       </section>
 
       <section className="ex-panel">
-        <header className="ex-panel__head"><ListChecks size={15} /><h3>Cumplimiento ISO/IEC 27001 · ENS</h3><span className="ex-panel__aside">{data.controls.length} controles evaluados con evidencias</span></header>
+        <header className="ex-panel__head"><ListChecks size={15} /><h3>Cumplimiento multinorma</h3><span className="ex-panel__aside">ENS · ISO 27001 · NIS2 · ISO 42001 (mapa Rosetta)</span></header>
+        <div className="grc-fw">
+          {FW_ORDER.map(fw => {
+            const f = data.multinorma.frameworks[fw];
+            return (
+              <div key={fw} className={`grc-fw__card grc-fw--${fw}`} title={f.name}>
+                <span className="grc-fw__name">{FW_SHORT[fw]}</span>
+                <b>{f.covered}<small>/{f.total}</small></b>
+                <span className="grc-fw__bar"><i style={{ width: `${(f.covered * 100) / f.total}%` }} /><i className="is-partial" style={{ width: `${(f.partial * 100) / f.total}%` }} /></span>
+                <em>requisitos con evidencia{f.partial ? ` · ${f.partial} parciales` : ""}</em>
+              </div>
+            );
+          })}
+        </div>
         <ul className="ex-controls">
           {data.controls.map(c => (
             <li key={c.iso}>
               <span className="ex-mono ex-controls__code">{c.iso}<small>{c.ens}</small></span>
-              <div><strong>{c.control}</strong><p>{c.evidence}</p></div>
+              <div>
+                <strong>{c.control}</strong><p>{c.evidence}</p>
+                {c.crosswalk.length > 0 && (
+                  <div className="grc-xw">
+                    {FW_ORDER.map(fw => {
+                      const reqs = Array.from(new Map(c.crosswalk.flatMap(x => x.maps[fw]).map(r => [r.id, r])).values());
+                      return reqs.map(r => <span key={fw + r.id} className={`grc-rq grc-fw--${fw}`} title={`${FW_SHORT[fw]} ${r.code}: ${r.t}`}>{r.code}</span>);
+                    })}
+                  </div>
+                )}
+              </div>
               <span className={`ex-pill ex-ctl-${c.status}`}>{CTRL_LABEL[c.status] ?? c.status}</span>
             </li>
           ))}
         </ul>
+        <p className="grc-source">{data.multinorma.source}. Aportar evidencia a un requisito no equivale a cumplir la norma completa.</p>
       </section>
 
       <section className="ex-panel">

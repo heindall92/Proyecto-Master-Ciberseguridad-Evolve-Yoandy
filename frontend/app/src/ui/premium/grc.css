@@ -79,3 +79,26 @@
 }
 .grc-table .ex-pill { white-space: nowrap; }
 .grc-sw.grc-t--none { border-color: var(--line); }
+
+/* ---------- Multinorma (colores por norma, como en Rosetta) ---------- */
+.grc-fw--ens { --fw: #e2803a; }
+.grc-fw--iso27001 { --fw: #4f8ff7; }
+.grc-fw--nis2 { --fw: #9b6cf0; }
+.grc-fw--iso42001 { --fw: #2fb892; }
+.grc-fw { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.grc-fw__card { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--fw) 35%, var(--line)); background: color-mix(in srgb, var(--fw) 7%, transparent); }
+.grc-fw__name { display: inline-flex; align-items: center; gap: 6px; font: 700 10px var(--mono); letter-spacing: .8px; color: var(--text-dim); }
+.grc-fw__name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fw); }
+.grc-fw__card b { font: 700 22px/1.1 var(--sans); color: var(--text-bright); }
+.grc-fw__card b small { font-size: 12px; color: var(--text-faint); }
+.grc-fw__card em { font: 500 10.5px var(--sans); font-style: normal; color: var(--text-faint); }
+.grc-fw__bar { display: flex; height: 5px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.grc-fw__bar i { display: block; height: 100%; background: var(--fw); }
+.grc-fw__bar i.is-partial { background: color-mix(in srgb, var(--fw) 40%, transparent); }
+.grc-xw { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.grc-rq { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 7px; border-radius: 6px; font: 600 10px var(--mono);
+  color: var(--text); background: color-mix(in srgb, var(--fw) 13%, transparent); border: 1px solid color-mix(in srgb, var(--fw) 32%, transparent); cursor: default; }
+.grc-rq::before { content: ""; width: 5px; height: 5px; border-radius: 2px; background: var(--fw); }
+.grc-source { margin: 10px 0 0; font: 500 11px var(--sans); color: var(--text-faint); }
+@container ex (max-width: 760px) { .grc-fw { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

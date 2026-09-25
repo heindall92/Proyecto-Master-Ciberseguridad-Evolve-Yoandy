@@ -158,6 +158,8 @@ export type GrcScenario = {
   id: string; title: string; probability: number; impact: number; score: number;
   level: "bajo" | "medio" | "alto" | "crítico"; justification: string; treatment: string; owner: string;
 };
+export type GrcFramework = "ens" | "iso27001" | "nis2" | "iso42001";
+export type GrcCrosswalk = { id: string; t: string; obj: string; maps: Record<GrcFramework, Array<{ id: string; code: string; t: string; w: number }>> };
 export type GrcReport = {
   meta: { period_start: string; period_end: string; generated_at: string; author: string };
   risk: { score: number; level: string };
@@ -173,7 +175,8 @@ export type GrcReport = {
     observed: Array<{ id: string; name: string; count: number; tactics: string[] }>;
     observed_gap: Array<{ id: string; name: string; count: number }>;
   };
-  controls: ExecutiveDetail["controls"];
+  controls: Array<ExecutiveDetail["controls"][number] & { crosswalk: GrcCrosswalk[] }>;
+  multinorma: { source: string; frameworks: Record<GrcFramework, { name: string; total: number; covered: number; partial: number }> };
   plan: Array<{ action: string; reason: string; priority: string; deadline_days: number; owner: string; status: string }>;
   limitations: string[];
   method: Record<string, string>;
