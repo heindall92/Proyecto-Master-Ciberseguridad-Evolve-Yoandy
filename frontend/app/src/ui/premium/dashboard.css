@@ -217,3 +217,12 @@ body[data-theme="light"] .vx-sev--info { --sev: #0b6f94; }
   .vx-overview .vx-table__head > :nth-child(2), .vx-overview .vx-table__row > :nth-child(2),
   .vx-overview .vx-table__head > :nth-child(3), .vx-overview .vx-table__row > :nth-child(3) { display: none; }
 }
+
+/* Móvil: botones de la tabla y de la cabecera solo con icono (conservan su title) */
+@container (max-width: 440px) {
+  .vx-overview .vx-table__head, .vx-overview .vx-table__row { grid-template-columns: 62px minmax(0, 1fr) 70px; gap: 0 8px; padding: 0 10px; }
+  .vx-overview .vx-actions { gap: 4px; }
+  .vx-overview .vx-actions .vx-mini-btn, .vx-overview .vx-card__tools .vx-mini-btn, .vx-overview .vx-actions .vx-hold, .vx-overview .vx-actions .vx-hold span { font-size: 0; gap: 0; padding: 0 7px; letter-spacing: 0; }
+  .vx-overview .vx-card__meta { display: none; }
+  .vx-overview .vx-card__tools { gap: 4px; }
+}
