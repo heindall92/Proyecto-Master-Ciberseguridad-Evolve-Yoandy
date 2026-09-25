@@ -217,3 +217,19 @@ class RevokedToken(Base):
     jti: Mapped[str] = mapped_column(String(64), primary_key=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Report(Base):
+    """Informe generado en el Centro de informes (datos congelados + huella SHA-256)."""
+    __tablename__ = "reports"
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    report_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="soc")
+    tlp: Mapped[str] = mapped_column(String(16), nullable=False, default="AMBER")
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

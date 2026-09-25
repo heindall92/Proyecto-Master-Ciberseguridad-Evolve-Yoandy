@@ -737,3 +737,38 @@ export interface MyActivityEntry {
 export function getMyActivity(limit = 20) {
   return http<MyActivityEntry[]>(`/api/auth/me/activity?limit=${limit}`);
 }
+
+// ── Centro de informes ─────────────────────────────────────────────────────
+export type ReportTLP = "CLEAR" | "GREEN" | "AMBER" | "RED";
+
+export interface ReportSummary {
+  report_id: string;
+  kind: string;
+  tlp: ReportTLP;
+  period_start: string;
+  period_end: string;
+  created_by: string | null;
+  created_at: string;
+  sha256: string;
+  risk_level: string | null;
+  risk_score: number | null;
+}
+
+/** Contenido del informe tal y como lo construye backend/app/report_builder.py */
+export type ReportData = Record<string, any>;
+
+export function listReports() {
+  return http<ReportSummary[]>("/api/reports");
+}
+
+export function generateReport(body: { start: string; end: string; tlp: ReportTLP; include_ai_summary: boolean }) {
+  return http<ReportSummary & { data: ReportData }>("/api/reports/generate", { method: "POST", body: JSON.stringify({ ...body, kind: "soc" }) });
+}
+
+export function getReport(reportId: string) {
+  return http<ReportSummary & { data: ReportData }>(`/api/reports/${encodeURIComponent(reportId)}`);
+}
+
+export function verifyReport(reportId: string) {
+  return http<{ ok: boolean; stored: string; current: string }>(`/api/reports/${encodeURIComponent(reportId)}/verify`);
+}

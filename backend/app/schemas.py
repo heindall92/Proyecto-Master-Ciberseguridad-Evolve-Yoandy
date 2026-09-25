@@ -538,3 +538,12 @@ class AiSettingsUpdate(BaseModel):
 
 class VtKeyIn(BaseModel):
     api_key: str = Field(..., min_length=32, max_length=256)
+
+
+class ReportGenerateIn(BaseModel):
+    """Petición de informe al Centro de informes."""
+    start: datetime
+    end: datetime
+    tlp: Literal["CLEAR", "GREEN", "AMBER", "RED"] = "AMBER"
+    kind: Literal["soc", "executive", "technical"] = "soc"
+    include_ai_summary: bool = True

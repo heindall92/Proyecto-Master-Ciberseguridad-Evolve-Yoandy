@@ -11,7 +11,7 @@ import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect, Query
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFile, File, WebSocket, WebSocketDisconnect, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import json
@@ -61,6 +61,7 @@ from app.wazuh_client import wazuh
 from app.ollama_client import analyze_alert, generate_executive_summary, chat_assistant, draft_social_post
 from app import cve_feed
 from app import virustotal_client as vt
+from app import report_builder as rb
 from app import abuseipdb_client as abuse
 from app.rag import build_knowledge, MITRE_TECHNIQUES
 from app import hunting
@@ -1370,89 +1371,120 @@ async def list_audit(
 
 # REPORTS
 @app.get("/api/reports/executive")
-async def executive_report(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    """Genera el informe ejecutivo completo con datos reales e IA."""
-    if current.role not in ("admin", "analyst"):
+async def executive_report(
+    start: datetime | None = None,
+    end: datetime | None = None,
+    ai: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    """Datos del PDF ejecutivo/técnico (plantilla de Julieta) para el periodo indicado.
+
+    Usa el mismo generador que el Centro de informes (report_builder), así que todas
+    las cifras son reales. Antes: siempre 24 h, activos 'SRV-SAP-PROD' escritos a mano,
+    MTTR fijo de 15 min, ISO 27001 fijo al 75 % y recomendaciones fijas.
+    """
+    if current.role not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista puede ver el informe ejecutivo")
-    try:
-        # 1. Obtener estadisticas de OpenSearch
-        stats = await osc.get_dashboard_stats(24)
-        mitre = await osc.get_mitre_stats(24)
-        hp = await osc.get_honeypot_stats(24)
-        
-        # 2. Obtener estadisticas de Tickets desde DB
-        total_tickets = (await db.execute(select(func.count(Ticket.id)))).scalar() or 0
-        closed_tickets = (await db.execute(select(func.count(Ticket.id)).where(Ticket.status == "closed"))).scalar() or 0
+    end = end or datetime.now(timezone.utc)
+    start = start or (end - timedelta(days=30))
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    if end <= start:
+        raise HTTPException(422, "El fin del periodo debe ser posterior al inicio")
 
-        # 3. Generar resumen ejecutivo con IA (Ollama)
-        ai_summary = await generate_executive_summary(stats)
+    d = await rb.build_report(db, start, end, author=current.username, tlp="AMBER", kind="executive")
+    a, h, inc = d["alerts"], d["honeypot"], d["incidents"]
+    sev = a.get("by_severity", {})
 
-        # 4. Estructurar respuesta para el frontend (ValhallaReportJSON)
-        report = {
-            "source": "api",
-            "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "executiveSummary": ai_summary,
-            "riskScore": max(0, 100 - (stats.get("critical_alerts", 0) * 10 + stats.get("high_alerts", 0) * 5)),
-            "metrics": stats,
-            "topThreats": [
-                {"attackType": m["tactic"], "count": m["count"], "severity": "high" if m["count"] > 10 else "medium"}
-                for m in mitre
+    # La IA local (~3 tokens/s en la VM) es opcional: por defecto resumen cuantitativo instantáneo
+    summary = _AI_UNAVAILABLE if not ai else await generate_executive_summary({
+        "periodo": f"{start:%Y-%m-%d} a {end:%Y-%m-%d}", "alertas": a.get("total"), "por_severidad": sev,
+        "incidentes": inc["total"], "mttr_min": inc["mttr_minutes"], "riesgo": d["risk"],
+        "fuerza_bruta": h.get("bruteforce_detections"), "intrusiones": h.get("intrusions_after_bruteforce"),
+    })
+    if summary.startswith(_AI_UNAVAILABLE):
+        summary = (f"Periodo {start:%d/%m/%Y}-{end:%d/%m/%Y}: {a.get('total', 0)} alertas "
+                   f"({sev.get('critical', 0)} críticas, {sev.get('high', 0)} altas), {inc['total']} incidentes. "
+                   f"Riesgo {d['risk']['level']} ({d['risk']['score']}/100).")
+
+    # ISO 27001: porcentaje de controles cubiertos (parcial = medio punto)
+    ctrls = d["controls"]
+    iso_overall = round(sum(1 if c["status"] == "covered" else 0.5 if c["status"] == "partial" else 0 for c in ctrls) * 100 / len(ctrls)) if ctrls else 0
+    level_for = lambda n: "Critical" if n >= 50 else "High" if n >= 10 else "Medium"  # noqa: E731
+    return {
+        "source": "api",
+        "generatedAt": d["meta"]["generated_at"],
+        "executiveSummary": summary,
+        "riskScore": d["risk"]["score"],
+        "metrics": {"by_severity": sev, "total_alerts": a.get("total", 0)},
+        "topThreats": [
+            {"attackType": t["tactic"], "count": t["count"], "severity": "high" if t["count"] > 10 else "medium"}
+            for t in a.get("mitre_tactics", [])
+        ],
+        "iso27001": {
+            "overall": iso_overall,
+            "controls": [
+                {"control": f"{c['iso']} {c['control']}", "status": {"missing": "gap"}.get(c["status"], c["status"]), "note": c["evidence"]}
+                for c in ctrls
             ],
-            "iso27001": {
-                "overall": 75,
-                "controls": [
-                    {"control": "A.5.7 Threat Intelligence", "status": "covered", "note": "Analisis de IA activo"},
-                    {"control": "A.8.16 Monitoring Activities", "status": "covered", "note": "Wazuh + OpenSearch online"}
-                ]
-            },
-            "recommendations": [
-                "Implementar MFA en todos los accesos externos.",
-                "Realizar escaneo de vulnerabilidades semanal.",
-                "Revisar logs de auditoria de base de datos."
-            ],
-            "report_metadata": {
-                "report_id": f"VHL-{datetime.now().year}-RT{datetime.now().strftime('%m%d')}",
-                "generation_date": datetime.now().strftime("%Y-%m-%d"),
-                "analyst_name": current.username.upper() if current else "SISTEMA",
-                "company_name": "VALHALLA SOC ENTERPRISE",
-                "period": datetime.now().strftime("%B %Y").upper()
-            },
-            "executive_summary": {
-                "status": "Operativo" if stats.get("critical_alerts", 0) < 5 else "Alerta",
-                "health_score": max(0, 100 - (stats.get("critical_alerts", 0) * 10 + stats.get("high_alerts", 0) * 5)),
-                "key_finding": ai_summary
-            },
-            "wazuh_metrics": {
-                "total_alerts": stats.get("total_alerts", 0),
-                "critical_alerts": stats.get("critical_alerts", 0),
-                "top_affected_assets": [
-                    {"name": "SRV-SAP-PROD", "ip": "10.0.1.5", "alerts": 1245},
-                    {"name": "GW-FIREWALL-01", "ip": "10.0.1.1", "alerts": 840}
-                ]
-            },
-            "mitre_coverage": [
-                {"tactic": m["tactic"], "count": m["count"], "level": "High" if m["count"] > 10 else "Medium", "icon": "🛡️"}
-                for m in mitre
-            ],
-            "honeypot_intel": {
-                "unique_attackers": hp.get("unique_attackers", 0),
-                "top_passwords_captured": hp.get("top_passwords", []),
-                "malware_samples_collected": 0 
-            },
-            "incident_management": {
-                "total_tickets": total_tickets,
-                "closed_tickets": closed_tickets,
-                "avg_resolution_time_min": 15
-            },
-            "remediation_steps": [
-                {"task": "Actualizar parches de seguridad en activos criticos."},
-                {"task": "Bloquear IPs con multiples fallos de autenticacion."}
-            ]
-        }
-        return report
-    except Exception as e:
-        logger.error(f"Error generando informe ejecutivo: {e}")
-        raise HTTPException(500, f"Error interno: {str(e)}")
+        },
+        "recommendations": [f"[{r['priority'].upper()}] {r['text']}" for r in d["recommendations"]],
+        "geo_intel": [
+            {"country": c["country"], "code": "", "pct": round(c["count"] * 100 / max(1, sum(x["count"] for x in a.get("countries", [])))), "desc": ""}
+            for c in a.get("countries", [])[:5]
+        ],
+        "report_metadata": {
+            "report_id": f"VHL-{end:%Y%m%d}-EXEC",
+            "generation_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "analyst_name": current.username.upper(),
+            "company_name": "VALHALLA SOC",
+            "period": f"{start:%d/%m/%Y} - {end:%d/%m/%Y}",
+        },
+        "executive_summary": {
+            "status": "Alerta" if d["risk"]["score"] >= 50 else "Operativo",
+            "health_score": 100 - d["risk"]["score"],
+            "key_finding": summary,
+        },
+        "wazuh_metrics": {
+            "total_alerts": a.get("total", 0),
+            "critical_alerts": sev.get("critical", 0),
+            "top_affected_assets": [{"name": g["name"], "ip": g["ip"], "alerts": g["count"]} for g in a.get("top_agents", [])],
+        },
+        "mitre_coverage": [
+            {"tactic": t["tactic"], "count": t["count"], "level": level_for(t["count"]), "icon": ""}
+            for t in a.get("mitre_tactics", [])
+        ],
+        "honeypot_intel": {
+            "unique_attackers": len(a.get("top_attackers", [])),
+            "top_passwords_captured": [p["value"] for p in h.get("top_passwords", [])[:5]],
+            "malware_samples_collected": len(h.get("downloads", [])),
+        },
+        "incident_management": {
+            "total_tickets": inc["total"],
+            "closed_tickets": inc["resolved"],
+            "avg_resolution_time_min": inc["mttr_minutes"] or 0,
+        },
+        "remediation_steps": [{"task": r["text"]} for r in d["recommendations"][:6]],
+        # Detalle completo del generador para la vista en pantalla (mismas cifras que el Informe SOC)
+        "detail": {
+            "risk": d["risk"],
+            "alerts": {k: a.get(k) for k in ("available", "total", "by_severity", "per_day", "agents_reporting",
+                                             "top_agents", "top_rules", "top_attackers", "countries", "mitre_tactics")},
+            "honeypot": {k: h.get(k) for k in ("available", "events", "sessions", "login_failed", "login_success",
+                                               "bruteforce_detections", "intrusions_after_bruteforce",
+                                               "top_usernames", "top_passwords", "top_commands")},
+            "incidents": {k: v for k, v in inc.items() if k != "items"},
+            "blocked_ips_total": d["response"].get("blocked_ips_total", 0),
+            "controls": ctrls,
+            "recommendations": d["recommendations"],
+            "limitations": d["limitations"],
+            "ai_summary": ai and not summary.startswith("Periodo "),
+        },
+    }
+
 
 # FORENSICS
 @app.get("/api/forensics/attack-path/{ip}")
@@ -2138,6 +2170,8 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
         broadcast_data = ChatMessageOut.model_validate(m).model_dump(by_alias=True, mode="json")
         await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
         await manager.broadcast(json.dumps(broadcast_data))
+
+_AI_UNAVAILABLE = "El sistema de IA no esta disponible"  # prefijo del texto de error de ollama_client
 
 # WEBHOOKS
 @app.post("/api/webhook/wazuh")
@@ -2835,3 +2869,95 @@ async def cve_social_post(request: Request, req: SocialPostIn | None = None, cur
         selected = sorted(cves, key=lambda c: c.get("published", ""), reverse=True)[:5]
     post = await draft_social_post(selected)
     return {"post": post, "cves_used": [{"id": c["id"], "severity": c.get("severity")} for c in selected], "auto_published": False}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CENTRO DE INFORMES — informes por periodo con datos reales, historial y huella
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REPORT_ID_RE = r"^VHL-\d{8}-\d{3,}$"
+
+
+def _require_report_role(user: User) -> None:
+    if user.role not in ("admin", "analyst", "analista"):
+        raise HTTPException(403, "Solo admin o analista puede gestionar informes")
+
+
+def _report_summary(r: Report) -> dict[str, Any]:
+    risk = (r.data or {}).get("risk", {})
+    return {
+        "report_id": r.report_id, "kind": r.kind, "tlp": r.tlp,
+        "period_start": r.period_start.isoformat(), "period_end": r.period_end.isoformat(),
+        "created_by": r.created_by_username, "created_at": r.created_at.isoformat(),
+        "sha256": r.sha256, "risk_level": risk.get("level"), "risk_score": risk.get("score"),
+    }
+
+
+@app.get("/api/reports")
+async def list_reports(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    _require_report_role(current)
+    rows = (await db.execute(select(Report).order_by(desc(Report.created_at)).limit(100))).scalars().all()
+    return [_report_summary(r) for r in rows]
+
+
+@app.post("/api/reports/generate")
+async def generate_report(req: ReportGenerateIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    _require_report_role(current)
+    start = req.start if req.start.tzinfo else req.start.replace(tzinfo=timezone.utc)
+    end = req.end if req.end.tzinfo else req.end.replace(tzinfo=timezone.utc)
+    if end <= start:
+        raise HTTPException(422, "El fin del periodo debe ser posterior al inicio")
+    if end - start > timedelta(days=366):
+        raise HTTPException(422, "El periodo no puede superar un año")
+
+    data = await rb.build_report(db, start, end, author=current.username, tlp=req.tlp, kind=req.kind)
+
+    data["ai_summary"] = None
+    if req.include_ai_summary:
+        context = {
+            "periodo": f"{start:%Y-%m-%d} a {end:%Y-%m-%d}",
+            "alertas": data["alerts"].get("total"), "por_severidad": data["alerts"].get("by_severity"),
+            "incidentes": data["incidents"]["total"], "mttr_min": data["incidents"]["mttr_minutes"],
+            "fuerza_bruta": data["honeypot"].get("bruteforce_detections"),
+            "intrusiones": data["honeypot"].get("intrusions_after_bruteforce"),
+            "tecnicas_mitre": [t["id"] for t in data["alerts"].get("mitre_techniques", [])][:8],
+            "riesgo": data["risk"],
+        }
+        summary = await generate_executive_summary(context)
+        if summary and not summary.startswith(_AI_UNAVAILABLE):
+            data["ai_summary"] = summary
+        else:
+            data["limitations"].append("La IA local no estaba disponible: el resumen ejecutivo es solo cuantitativo.")
+
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    seq = (await db.execute(select(func.count(Report.id)).where(Report.report_id.like(f"VHL-{today}-%")))).scalar() or 0
+    report_id = f"VHL-{today}-{seq + 1:03d}"
+    data["meta"]["report_id"] = report_id
+    digest = rb.fingerprint(data)
+
+    row = Report(report_id=report_id, kind=req.kind, tlp=req.tlp, period_start=start, period_end=end,
+                 created_by_id=current.id, created_by_username=current.username, sha256=digest, data=data)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {**_report_summary(row), "data": data}
+
+
+@app.get("/api/reports/{report_id}")
+async def get_report(report_id: str = Path(..., pattern=_REPORT_ID_RE), db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    _require_report_role(current)
+    r = (await db.execute(select(Report).where(Report.report_id == report_id))).scalar_one_or_none()
+    if not r:
+        raise HTTPException(404, "Informe no encontrado")
+    return {**_report_summary(r), "data": r.data}
+
+
+@app.get("/api/reports/{report_id}/verify")
+async def verify_report(report_id: str = Path(..., pattern=_REPORT_ID_RE), db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Recalcula la huella del contenido guardado y la compara con la registrada al generarlo."""
+    _require_report_role(current)
+    r = (await db.execute(select(Report).where(Report.report_id == report_id))).scalar_one_or_none()
+    if not r:
+        raise HTTPException(404, "Informe no encontrado")
+    current_hash = rb.fingerprint(r.data)
+    return {"ok": hmac.compare_digest(current_hash, r.sha256), "stored": r.sha256, "current": current_hash}
