@@ -1604,6 +1604,7 @@ async def vt_check_key(request: Request, db: AsyncSession = Depends(get_db), cur
 
 @app.get("/api/virustotal/ip/{ip}")
 async def vt_scan_ip(ip: str, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    ip = InputValidator.validate_ip(ip)  # la IP va en la URL hacia VirusTotal: validar antes
     key = await _resolve_vt_api_key(request, db, current)
     return await vt.check_ip(ip, key)
 

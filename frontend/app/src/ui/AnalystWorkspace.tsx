@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import logger from '../lib/logger';
 import {
   listTickets, createTicket, updateTicket, assignTicket, resolveTicket, deleteTicket, purgeResolvedTickets,
-  listUsers, listRunbooks, uploadEvidence, getEvidenceDownloadUrl, getTicketTimeline, addTicketComment, verifyEvidence,
+  listUsers, listRunbooks, uploadEvidence, getEvidenceDownloadUrl, getTicketTimeline, addTicketComment, verifyEvidence, vtCheckIp,
   type TicketOut, type UserOut, type Runbook, type RunbookStep, type TicketEventOut, type TicketClassification,
 } from '../lib/api';
 import { playNotificationSound, playResolvedSound } from './audio';
@@ -15,7 +15,7 @@ import {
   X, Trash2, FileText, Info, Bot, NotebookPen, BookOpen, Paperclip, Download, Upload, Users, ExternalLink,
   Copy, Clock, Globe, Server, User as UserIcon, Target, Hash, Save, ShieldCheck, Flag, Eraser,
   Link2, History, Send, Fingerprint, ShieldAlert, Percent, MessageSquare, Pencil, ArrowRightLeft,
-  ListFilter, Check, RotateCcw,
+  ListFilter, Check, RotateCcw, Columns3, Table2, ArrowUpDown, ArrowUp, ArrowDown, Download as DownloadIcon, ScanSearch,
 } from 'lucide-react';
 import { HoldButton, toast } from './premium/widgets';
 import './premium/profile.css';
@@ -77,8 +77,13 @@ const stepCmd = (s: RunbookStep) => (typeof s === 'string' ? undefined : s.comma
 
 const EMPTY_FORM = { title: '', description: '', severity: 'medium', category: '', source_ip: '', affected_asset: '', affected_user: '', mitre_technique: '', assigned_to_id: '' };
 
-export default function AnalystWorkspace({ lang = 'es', initialData, onClearInitialData, currentUser }: {
-  lang?: Lang; initialData?: any; onClearInitialData?: () => void; currentUser: UserOut;
+type ViewMode = 'kanban' | 'table';
+type SortKey = 'id' | 'severity' | 'title' | 'status' | 'assignee' | 'sla' | 'created';
+const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+const STATUS_RANK: Record<string, number> = { open: 1, in_progress: 2, escalated: 3, resolved: 4 };
+
+export default function AnalystWorkspace({ lang = 'es', initialData, onClearInitialData, currentUser, initialMode }: {
+  lang?: Lang; initialData?: any; onClearInitialData?: () => void; currentUser: UserOut; initialMode?: ViewMode;
 }) {
   const es = lang === 'es';
   const dispatch = useAppDispatch();
@@ -94,6 +99,13 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const [quickFilter, setQuickFilter] = useState<'none' | 'unassigned' | 'breach'>('none');
 
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mode, setMode] = useState<ViewMode>(() => {
+    if (initialMode) return initialMode;
+    try { return (localStorage.getItem('valhalla.workspace.mode') as ViewMode) || 'kanban'; } catch { return 'kanban'; }
+  });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'created', dir: -1 });
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [vt, setVt] = useState<{ ip: string; loading: boolean; data?: any; error?: string } | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [overCol, setOverCol] = useState<Status | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -156,6 +168,10 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [showCreate, selectedId, resolveFor]);
+
+  useEffect(() => { try { localStorage.setItem('valhalla.workspace.mode', mode); } catch { /* sin almacenamiento */ } }, [mode]);
+  useEffect(() => { if (initialMode) setMode(initialMode); }, [initialMode]);
+  useEffect(() => { setVt(null); }, [selectedId]);
 
   const loadTimeline = useCallback(async (id: number) => {
     try { setTimeline(await getTicketTimeline(id)); } catch { setTimeline([]); }
@@ -255,6 +271,57 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     } catch (err) { toast(errText(err), 'err'); } finally { setBusy(false); }
   };
 
+  const scanVt = async (ip: string) => {
+    setVt({ ip, loading: true });
+    try {
+      const data = await vtCheckIp(ip);
+      if (data?.error) setVt({ ip, loading: false, error: String(data.error) });
+      else setVt({ ip, loading: false, data });
+    } catch (e) {
+      setVt({ ip, loading: false, error: errText(e) });
+    }
+  };
+
+  const bulkAssignMe = async () => {
+    const ids = [...checked];
+    setBusy(true);
+    const res = await Promise.allSettled(ids.map((id) => assignTicket(id, currentUser.id)));
+    const ok = res.filter((r) => r.status === 'fulfilled').length;
+    toast(es ? `${ok} de ${ids.length} incidentes asignados a ti.` : `${ok} of ${ids.length} incidents assigned to you.`, ok === ids.length ? 'ok' : 'err');
+    setChecked(new Set());
+    setBusy(false);
+    fetchData();
+  };
+
+  const bulkMove = async (status: Status) => {
+    const ids = [...checked].filter((id) => tickets.find((t) => t.id === id)?.status !== status);
+    if (status === 'resolved') { toast(es ? 'Resuelve los incidentes uno a uno: cada cierre necesita clasificación y notas.' : 'Resolve incidents one by one: each needs classification and notes.', 'info'); return; }
+    setBusy(true);
+    const res = await Promise.allSettled(ids.map((id) => updateTicket(id, { status })));
+    const ok = res.filter((r) => r.status === 'fulfilled').length;
+    toast(es ? `${ok} incidentes movidos a ${statusLabel(status)}.` : `${ok} incidents moved to ${statusLabel(status)}.`, 'ok');
+    setChecked(new Set());
+    setBusy(false);
+    fetchData();
+  };
+
+  const exportCsv = (rows: TicketOut[]) => {
+    const cols: [string, (t: TicketOut) => unknown][] = [
+      ['id', (t) => t.id], ['titulo', (t) => t.title], ['severidad', (t) => t.severity], ['fase', (t) => t.status],
+      ['asignado', (t) => t.assignee_username || ''], ['ip_origen', (t) => t.source_ip || ''], ['activo', (t) => t.affected_asset || ''],
+      ['mitre', (t) => t.mitre_technique || ''], ['clasificacion', (t) => t.classification || ''], ['alertas', (t) => t.alerts?.length || 0],
+      ['creado', (t) => t.created_at], ['resuelto', (t) => t.resolved_at || ''],
+    ];
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [cols.map((c) => c[0]).join(','), ...rows.map((t) => cols.map((c) => esc(c[1](t))).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `valhalla-incidentes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(es ? `${rows.length} incidentes exportados.` : `${rows.length} incidents exported.`, 'ok');
+  };
+
   const postComment = async () => {
     if (!selected || !comment.trim()) return;
     setBusy(true);
@@ -327,6 +394,22 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   }, [tickets, query, filterSev, onlyMine, filterAnalyst, quickFilter, currentUser.id]);
 
   const activeFilters = (filterSev !== 'all' ? 1 : 0) + (filterAnalyst !== 'all' ? 1 : 0) + (onlyMine ? 1 : 0) + (quickFilter !== 'none' ? 1 : 0);
+  const sortedRows = useMemo(() => {
+    const val = (t: TicketOut): number | string => {
+      switch (sort.key) {
+        case 'id': return t.id;
+        case 'severity': return SEV_RANK[t.severity] || 0;
+        case 'title': return t.title.toLowerCase();
+        case 'status': return STATUS_RANK[t.status] || 0;
+        case 'assignee': return (t.assignee_username || '~').toLowerCase();
+        case 'sla': return t.status === 'resolved' ? Number.MAX_SAFE_INTEGER : new Date(t.created_at).getTime() + (SLA_HOURS[t.severity as Severity] ?? 24) * 3600000;
+        default: return new Date(t.created_at).getTime();
+      }
+    };
+    return [...filtered].sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * sort.dir; });
+  }, [filtered, sort]);
+  const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === 'title' || key === 'assignee' ? 1 : -1 }));
+
   const active = tickets.filter((t) => t.status !== 'resolved');
   const breached = active.filter((t) => slaState(t).state === 'breach').length;
   const unassigned = active.filter((t) => !t.assigned_to_id).length;
@@ -431,6 +514,11 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
               </>
             )}
           </div>
+          <div className="vx-seg wk-mode" role="group" aria-label={es ? 'Vista' : 'View'}>
+            <button aria-pressed={mode === 'kanban'} onClick={() => setMode('kanban')} title="Kanban" aria-label="Kanban"><Columns3 size={15} /></button>
+            <button aria-pressed={mode === 'table'} onClick={() => setMode('table')} title={es ? 'Tabla' : 'Table'} aria-label={es ? 'Tabla' : 'Table'}><Table2 size={15} /></button>
+          </div>
+          {mode === 'table' && <button className="wk-iconbtn" onClick={() => exportCsv(sortedRows)} disabled={sortedRows.length === 0} title={es ? 'Exportar a CSV' : 'Export CSV'} aria-label={es ? 'Exportar a CSV' : 'Export CSV'}><DownloadIcon size={17} /></button>}
           <button className="vp-btn vp-btn--primary wk-new" onClick={() => { setForm({ ...EMPTY_FORM }); setShowCreate(true); }} title={es ? 'Nuevo incidente' : 'New incident'}><Plus size={15} /><span>{es ? 'Nuevo' : 'New'}</span></button>
         </div>
       </div>
@@ -444,7 +532,51 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
         <Stat icon={Percent} tone="var(--text-dim)" value={fpRate === null ? '—' : `${fpRate}%`} label={es ? 'Falsos positivos' : 'False positives'} />
       </div>
 
-      <div className="wk-board">
+      {mode === 'table' && (
+        <section className="vx-card wk-tablecard">
+          {checked.size > 0 && (
+            <div className="wk-bulk">
+              <span>{checked.size} {es ? 'seleccionados' : 'selected'}</span>
+              <button className="vx-mini-btn" onClick={bulkAssignMe} disabled={busy}><UserCheck size={12} />{es ? 'Asignarme' : 'Assign me'}</button>
+              {STATUSES.filter((st) => st.id !== 'resolved').map((st) => (
+                <button key={st.id} className="vx-mini-btn" onClick={() => bulkMove(st.id)} disabled={busy} style={{ ['--col' as string]: st.color }}><span className="wk-dot" />{es ? st.es : st.en}</button>
+              ))}
+              <button className="vx-iconbtn" onClick={() => setChecked(new Set())} aria-label={es ? 'Quitar selección' : 'Clear selection'} style={{ marginLeft: 'auto' }}><X size={14} /></button>
+            </div>
+          )}
+          <div className="vx-card__body">
+            <div className="vx-table wk-table">
+              <div className="vx-table__head">
+                <span><input type="checkbox" aria-label={es ? 'Seleccionar todo' : 'Select all'} checked={sortedRows.length > 0 && sortedRows.every((t) => checked.has(t.id))} onChange={(e) => setChecked(e.target.checked ? new Set(sortedRows.map((t) => t.id)) : new Set())} /></span>
+                {([['id', '#'], ['severity', es ? 'Sev.' : 'Sev.'], ['title', es ? 'Título' : 'Title'], ['status', es ? 'Fase' : 'Phase'], ['assignee', es ? 'Asignado' : 'Assignee'], ['sla', 'SLA'], ['created', es ? 'Creado' : 'Created']] as [SortKey, string][]).map(([k, l]) => (
+                  <button key={k} className="wk-th" onClick={() => toggleSort(k)} aria-sort={sort.key === k ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+                    {l}{sort.key === k ? (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : <ArrowUpDown size={11} className="wk-th__idle" />}
+                  </button>
+                ))}
+              </div>
+              {sortedRows.length === 0 && <div className="vx-empty" style={{ height: 180 }}><Siren size={22} />{es ? 'Sin incidentes con estos filtros' : 'No incidents match these filters'}</div>}
+              {sortedRows.map((t) => {
+                const sla = slaState(t);
+                const st = STATUSES.find((x) => x.id === t.status);
+                return (
+                  <div key={t.id} className={`vx-table__row wk-trow${checked.has(t.id) ? ' wk-trow--checked' : ''}`} onClick={() => openTicket(t)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openTicket(t); }}>
+                    <span onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`#${t.id}`} checked={checked.has(t.id)} onChange={(e) => setChecked((prev) => { const n = new Set(prev); if (e.target.checked) n.add(t.id); else n.delete(t.id); return n; })} /></span>
+                    <span className="vx-muted">#{t.id}</span>
+                    <span><span className={`vx-sev vx-sev--${t.severity}`}>{sevLabel(t.severity)}</span></span>
+                    <span title={t.title}>{t.title}{(t.alerts?.length || 0) > 1 && <span className="sv-count"><Link2 size={10} />{t.alerts.length}</span>}</span>
+                    <span><span className="wk-phase" style={{ ['--col' as string]: st?.color }}><span className="wk-dot" />{st ? (es ? st.es : st.en) : t.status}</span></span>
+                    <span className={t.assignee_username ? '' : 'wk-assignee--none'}>{t.assignee_username || (es ? 'Sin asignar' : 'Unassigned')}</span>
+                    <span><span className={`wk-sla wk-sla--${sla.state}`} style={{ marginLeft: 0 }}><Clock size={10} />{sla.label}</span></span>
+                    <span className="vx-muted">{new Date(t.created_at).toLocaleString(lang, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {mode === 'kanban' && <div className="wk-board">
         {STATUSES.map((col, colIdx) => {
           const colTickets = filtered.filter((t) => t.status === col.id);
           return (
@@ -518,7 +650,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
             </section>
           );
         })}
-      </div>
+      </div>}
 
       {/* ---------- Detalle ---------- */}
       {selected && createPortal(
@@ -548,7 +680,10 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
                 <div className="wk-section__head"><Info size={14} />{es ? 'Datos del incidente' : 'Incident data'}</div>
                 <div className="wk-section__body">
                   <div className="wk-facts">
-                    <div><div className="wk-fact__k">{es ? 'IP origen' : 'Source IP'}</div><div className="wk-fact__v">{selected.source_ip ? <button className="wk-link" onClick={() => { setSelectedId(null); dispatch(navigateToIntel(selected.source_ip!)); }}><Globe size={12} />{selected.source_ip}</button> : '—'}</div></div>
+                    <div><div className="wk-fact__k">{es ? 'IP origen' : 'Source IP'}</div><div className="wk-fact__v">{selected.source_ip ? <>
+                      <button className="wk-link" onClick={() => { setSelectedId(null); dispatch(navigateToIntel(selected.source_ip!)); }} title={es ? 'Abrir en Threat Intel' : 'Open in Threat Intel'}><Globe size={12} />{selected.source_ip}</button>
+                      <button className="vx-iconbtn" style={{ width: 24, height: 24 }} onClick={() => scanVt(selected.source_ip!)} disabled={vt?.loading} title={es ? 'Reputación en VirusTotal' : 'VirusTotal reputation'} aria-label="VirusTotal"><ScanSearch size={13} /></button>
+                    </> : '—'}</div></div>
                     <div><div className="wk-fact__k">{es ? 'Activo afectado' : 'Affected asset'}</div><div className="wk-fact__v"><Server size={12} />{selected.affected_asset || '—'}</div></div>
                     <div><div className="wk-fact__k">{es ? 'Usuario afectado' : 'Affected user'}</div><div className="wk-fact__v"><UserIcon size={12} />{selected.affected_user || '—'}</div></div>
                     <div><div className="wk-fact__k">MITRE ATT&CK</div><div className="wk-fact__v">{selected.mitre_technique ? (mitreUrl(selected.mitre_technique) ? <a className="wk-link" href={mitreUrl(selected.mitre_technique)!} target="_blank" rel="noopener noreferrer"><Target size={12} />{selected.mitre_technique}<ExternalLink size={10} /></a> : selected.mitre_technique) : '—'}</div></div>
@@ -559,6 +694,16 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
                   </div>
                 </div>
               </section>
+
+              {vt && vt.ip === selected.source_ip && (
+                <div className={`wk-vt${vt.data?.malicious > 0 ? ' wk-vt--bad' : ''}`}>
+                  <ScanSearch size={15} />
+                  {vt.loading ? <span>{es ? 'Consultando VirusTotal…' : 'Querying VirusTotal…'}</span>
+                    : vt.error ? <span>{es ? 'VirusTotal no disponible: ' : 'VirusTotal unavailable: '}{vt.error}</span>
+                    : vt.data?.found === false ? <span>{es ? `${vt.ip} no figura en VirusTotal (normal en IP privadas del laboratorio).` : `${vt.ip} not found in VirusTotal (expected for private lab IPs).`}</span>
+                    : <span><b>{vt.data.malicious}</b>/{vt.data.total} {es ? 'motores la marcan como maliciosa' : 'engines flag it as malicious'}{vt.data.suspicious ? ` · ${vt.data.suspicious} ${es ? 'sospechosa' : 'suspicious'}` : ''}{vt.data.country ? ` · ${vt.data.country}` : ''}{vt.data.as_owner ? ` · ${vt.data.as_owner}` : ''}</span>}
+                </div>
+              )}
 
               {(selected.alerts?.length || 0) > 0 && (
                 <section className="wk-section">

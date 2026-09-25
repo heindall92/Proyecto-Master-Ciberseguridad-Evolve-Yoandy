@@ -103,7 +103,12 @@ body[data-theme="light"] .pf-avatar__status { border-color: #ffffff; }
 .pf-label { font: 700 10px var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--vp-fg-dim); }
 .pf-input-wrap { position: relative; display: flex; align-items: center; }
 .pf-input-wrap > svg { position: absolute; left: 12px; color: var(--vp-fg-dim); pointer-events: none; }
-.pf .pf-input-wrap input { width: 100%; height: 42px; padding: 0 40px 0 38px !important; border-radius: 10px !important; font: 500 13px var(--mono); }
+/* Campo con icono: vale para Perfil, Ajustes y cualquier formulario (antes solo dentro de .pf) */
+.pf-input-wrap > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { width: 100%; height: 42px; padding: 0 40px 0 38px !important; border-radius: 10px !important; font: 500 13px var(--mono); box-sizing: border-box; }
+.pf-input-wrap > input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.pf-input-wrap > input[type="number"]::-webkit-outer-spin-button,
+.pf-input-wrap > input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pf-input-wrap > svg { z-index: 1; }
 .pf-eye { position: absolute; right: 6px; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--vp-fg-dim); display: grid; place-items: center; cursor: pointer; }
 .pf-eye:hover { color: var(--signal); background: var(--vp-hover); }
 .pf-readonly { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; border: 1px dashed var(--vp-border-strong); color: var(--vp-fg-dim); font: 600 12px var(--mono); }

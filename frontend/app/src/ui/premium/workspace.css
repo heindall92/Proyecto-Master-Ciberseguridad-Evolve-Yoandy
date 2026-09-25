@@ -208,3 +208,39 @@ body[data-theme="light"] .wk-card { background: #ffffff; box-shadow: 0 1px 2px r
 .vp-menu-item:disabled { opacity: 0.4; cursor: not-allowed; }
 .wk-new { gap: 6px; }
 @media (max-width: 760px) { .wk-new span { display: none; } .wk-search { width: auto; flex: 1; } }
+
+/* ---------- Vista tabla (antigua sección "Incidentes") ---------- */
+.wk-mode button { width: 34px; padding: 0; display: grid; place-items: center; }
+.wk-tablecard { flex: 1; min-height: 0; }
+.wk-table .vx-table__head, .wk-table .vx-table__row { grid-template-columns: 34px 56px 90px minmax(0, 1fr) 130px 120px 96px 110px; }
+.wk-th { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; text-align: left; }
+.wk-th:hover { color: var(--text-bright); }
+.wk-th[aria-sort="ascending"], .wk-th[aria-sort="descending"] { color: var(--signal); }
+.wk-th__idle { opacity: 0.35; }
+.wk-trow { cursor: pointer; }
+.wk-trow--checked { background: color-mix(in srgb, var(--signal) 8%, transparent) !important; }
+.wk-table input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--signal); cursor: pointer; }
+.wk-table .vx-table__row > span:nth-child(4) { display: flex; align-items: center; gap: 8px; color: var(--text-bright); font-weight: 600; }
+.wk-phase { display: inline-flex; align-items: center; gap: 6px; font: 600 11px var(--mono); color: var(--text); }
+.wk-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--col, var(--signal)); flex-shrink: 0; }
+.wk-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--signal) 6%, transparent); font: 700 11px var(--mono); color: var(--text-bright); }
+.wk-bulk .vx-mini-btn { gap: 6px; }
+
+/* Reputación VirusTotal en el detalle */
+.wk-vt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--vp-surface); font: 500 12px/1.45 var(--mono); color: var(--text); }
+.wk-vt > svg { color: var(--signal); flex-shrink: 0; }
+.wk-vt--bad { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 7%, var(--vp-surface)); }
+.wk-vt--bad > svg, .wk-vt--bad b { color: var(--danger); }
+
+/* Columnas: 1 check · 2 # · 3 sev · 4 título · 5 fase · 6 asignado · 7 SLA · 8 creado */
+@container (max-width: 980px) {
+  .wk-table .vx-table__head, .wk-table .vx-table__row { grid-template-columns: 34px 52px 86px minmax(0, 1fr) 124px 84px; }
+  .wk-table .vx-table__head > :nth-child(6), .wk-table .vx-table__row > :nth-child(6),
+  .wk-table .vx-table__head > :nth-child(8), .wk-table .vx-table__row > :nth-child(8) { display: none; }
+}
+@container (max-width: 620px) {
+  .wk-table .vx-table__head, .wk-table .vx-table__row { grid-template-columns: 30px 82px minmax(0, 1fr) 76px; }
+  .wk-table .vx-table__head > :nth-child(2), .wk-table .vx-table__row > :nth-child(2),
+  .wk-table .vx-table__head > :nth-child(5), .wk-table .vx-table__row > :nth-child(5) { display: none; }
+}
+

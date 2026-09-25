@@ -1,7 +1,7 @@
 /* ======================================================
    VALHALLA SOC — Ajustes globales (reutiliza pf-card / pf-field del perfil)
    ====================================================== */
-.st { max-width: 1240px; margin: 0 auto; padding: 18px 20px 90px; display: flex; flex-direction: column; gap: 16px; color: var(--vp-fg); }
+.st { max-width: 1240px; margin: 0 auto; padding: 18px 20px 24px; display: flex; flex-direction: column; gap: 16px; color: var(--vp-fg); }
 .st-head h1 { margin: 0; font: 700 20px var(--sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-bright); }
 .st-head p { margin: 6px 0 0; display: flex; align-items: center; gap: 6px; font: 500 11px var(--mono); color: var(--text-faint); }
 .st-head p svg { color: var(--signal); }
@@ -20,7 +20,7 @@
 .st-unit span { position: absolute; right: 12px; font: 600 11px var(--mono); color: var(--text-faint); pointer-events: none; }
 .st .st-unit input { padding-right: 52px !important; }
 .st-bar {
-  position: sticky; bottom: 12px; z-index: 5; align-self: flex-end;
+  position: static; z-index: 5; align-self: flex-end;
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px 10px 16px; border-radius: 12px;
   background: var(--vp-surface); border: 1px solid var(--line-strong);
@@ -29,6 +29,7 @@
   font: 600 11px var(--mono); color: var(--text-dim);
   opacity: 0.6; transition: opacity 0.2s, border-color 0.2s;
 }
-.st-bar--show { opacity: 1; border-color: var(--signal); color: var(--text-bright); }
+/* Solo flota sobre el contenido cuando hay cambios pendientes */
+.st-bar--show { position: sticky; bottom: 12px; opacity: 1; border-color: var(--signal); color: var(--text-bright); }
 .st-bar .vp-btn { height: 34px; }
 @media (max-width: 980px) { .st-grid { grid-template-columns: 1fr; } }
