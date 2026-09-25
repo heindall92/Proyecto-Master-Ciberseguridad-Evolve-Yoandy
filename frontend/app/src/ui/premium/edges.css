@@ -144,3 +144,16 @@ body .login-btn::before, body[data-theme] .login-btn::before {
 .chat-report-card:hover:not(:disabled) { background: color-mix(in srgb, var(--signal) 16%, transparent); }
 .chat-report-card:disabled { opacity: .55; cursor: not-allowed; }
 .chat-msg__text { white-space: pre-line; }
+
+/* ---------- Panel del login (técnica 1: anillo evenodd, forma con % y muesca lateral) ---------- */
+.cyber-panel { position: relative; border-color: transparent !important; --edge-c: color-mix(in srgb, var(--signal) 55%, transparent); }
+body[data-theme="light"] .cyber-panel { border-color: transparent !important; --edge-c: color-mix(in srgb, var(--signal) 50%, transparent); }
+.cyber-panel::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  background: var(--edge-c);
+  clip-path: polygon(evenodd,
+    0% 0%, 80% 0%, 100% 15%, 100% 100%, 25% 100%, 0% 82%, 0% 55%, 5% 50%, 5% 40%, 0% 35%, 0% 0%,
+    1px 1px, calc(80% - .6px) 1px, calc(100% - 1px) calc(15% + .8px), calc(100% - 1px) calc(100% - 1px),
+    calc(25% + .6px) calc(100% - 1px), 1px calc(82% - .8px), 1px calc(55% + .5px), calc(5% + 1px) calc(50% + .4px),
+    calc(5% + 1px) calc(40% - .4px), 1px calc(35% - .5px), 1px 1px, 0% 0%);
+}
