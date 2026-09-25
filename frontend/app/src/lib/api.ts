@@ -167,7 +167,11 @@ export async function uploadEvidence(ticketId: number, file: File): Promise<Evid
     headers,
     body: formData
   });
-  if (!resp.ok) throw new Error("Failed to upload evidence");
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`;
+    try { detail = (await resp.json()).detail || detail; } catch { /* cuerpo no JSON */ }
+    throw new Error(String(detail));
+  }
   return resp.json();
 }
 
@@ -176,7 +180,7 @@ export function getEvidenceDownloadUrl(evidenceId: number): string {
 }
 
 export function syncWazuhAlerts(hours = 1) {
-  return http<{created: number, skipped: number, error: string | null}>(`/api/wazuh/sync-alerts?hours=${hours}`);
+  return http<{created: number, linked: number, skipped: number, error: string | null}>(`/api/wazuh/sync-alerts?hours=${hours}`);
 }
 
 export function autoCreateTicket(alertData: {
@@ -306,7 +310,9 @@ export type TicketOut = {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  classification: TicketClassification | null;
   evidence: EvidenceOut[];
+  alerts: TicketAlertOut[];
 };
 
 export type RunbookOut = Runbook;
@@ -317,7 +323,54 @@ export interface EvidenceOut {
   filename: string;
   file_size: number;
   content_type: string | null;
+  sha256: string | null;
+  uploaded_by_username: string | null;
   created_at: string;
+}
+
+export type TicketClassification = "true_positive" | "false_positive" | "benign";
+
+export interface TicketAlertOut {
+  id: number;
+  alert_id: string;
+  rule_id: string | null;
+  rule_level: number | null;
+  description: string | null;
+  source_ip: string | null;
+  agent_name: string | null;
+  alert_timestamp: string | null;
+  created_at: string;
+}
+
+export interface TicketEventOut {
+  id: number;
+  kind: string;
+  message: string;
+  username: string | null;
+  created_at: string;
+}
+
+export function getTicketTimeline(ticketId: number) {
+  return http<TicketEventOut[]>(`/api/tickets/${ticketId}/timeline`);
+}
+
+export function addTicketComment(ticketId: number, text: string) {
+  return http<TicketEventOut>(`/api/tickets/${ticketId}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+}
+
+export function verifyEvidence(evidenceId: number) {
+  return http<{ ok: boolean; stored: string | null; current: string }>(`/api/evidence/${evidenceId}/verify`);
+}
+
+/** Escala una alerta a incidente; el backend la vincula a uno activo si hay correlación (misma IP / regla+agente). */
+export function createTicketFromAlert(alert: {
+  alert_id: string; rule_id?: string; rule_level?: number; description?: string; source_ip?: string | null;
+  agent_name?: string; timestamp?: string; severity?: string;
+}) {
+  return http<{ outcome: "created" | "linked" | "duplicate"; ticket_id: number; title: string }>("/api/tickets/from-alert", {
+    method: "POST",
+    body: JSON.stringify(alert),
+  });
 }
 
 export function listTickets(
@@ -349,10 +402,10 @@ export function assignTicket(ticketId: number, userId: number) {
   });
 }
 
-export function resolveTicket(ticketId: number, notes: string) {
+export function resolveTicket(ticketId: number, notes: string, classification?: TicketClassification) {
   return http<TicketOut>(`/api/tickets/${ticketId}/resolve`, {
     method: "POST",
-    body: JSON.stringify({ resolution_notes: notes }),
+    body: JSON.stringify({ resolution_notes: notes, ...(classification ? { classification } : {}) }),
   });
 }
 

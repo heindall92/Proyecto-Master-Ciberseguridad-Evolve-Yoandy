@@ -144,54 +144,31 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 # --- BACKGROUND TASKS ---
 
 async def _sync_wazuh_alerts_to_tickets(hours: int = 1) -> dict[str, Any]:
-    """Crea tickets desde alertas Wazuh high/critical no duplicadas."""
-    alerts = await osc.get_recent_alerts(limit=50, hours=hours)
-    created = 0
-    skipped = 0
+    """Escala a incidente las alertas Wazuh high/critical, correlacionándolas con incidentes activos."""
+    alerts = await osc.get_recent_alerts(limit=100, hours=hours)
+    created = linked = skipped = 0
     error: str | None = None
     try:
         async with SessionLocal() as db:
-            admin_res = await db.execute(select(User).where(User.username == "admin"))
-            admin = admin_res.scalar_one_or_none()
-            if not admin:
-                return {"created": 0, "skipped": 0, "error": "Usuario admin no encontrado"}
+            admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
             for alert in alerts:
-                alert_id = alert.get("rule_id")
-                if not alert_id:
+                if not alert.get("id") or alert.get("severity") not in ("high", "critical"):
                     skipped += 1
                     continue
-                if alert.get("severity") not in ("high", "critical"):
+                _, outcome = await _ingest_alert(db, {**alert, "alert_id": alert["id"]}, admin)
+                if outcome == "created":
+                    created += 1
+                elif outcome == "linked":
+                    linked += 1
+                else:
                     skipped += 1
-                    continue
-                existing = (
-                    await db.execute(
-                        select(Ticket).where(Ticket.wazuh_alert_id == str(alert_id))
-                    )
-                ).scalar_one_or_none()
-                if existing:
-                    skipped += 1
-                    continue
-                db.add(
-                    Ticket(
-                        title=f"Wazuh: {alert.get('description', 'Alert')}",
-                        description=alert.get("description", ""),
-                        severity=alert.get("severity"),
-                        category="wazuh-detected",
-                        source_ip=alert.get("source_ip"),
-                        affected_asset=alert.get("agent_name") or "Manager",
-                        wazuh_alert_id=str(alert_id),
-                        reporter_id=admin.id,
-                        status="open",
-                    )
-                )
-                created += 1
-            if created:
+            if created or linked:
                 await db.commit()
-                logger.info(f"Wazuh sync: created {created} tickets")
+                logger.info(f"Wazuh sync: {created} incidentes nuevos, {linked} alertas vinculadas")
     except Exception as e:
         error = str(e)
         logger.warning(f"Wazuh sync failed: {e}")
-    return {"created": created, "skipped": skipped, "error": error}
+    return {"created": created, "linked": linked, "skipped": skipped, "error": error}
 
 
 async def _auto_sync_loop():
@@ -309,12 +286,120 @@ def _migrate_tickets_resolved_at(sync_conn) -> None:
         logger.info("Migración DB: tickets.resolved_at")
 
 
+# Columnas añadidas después de la primera versión (create_all no altera tablas existentes).
+_ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "tickets": {"classification": "VARCHAR(32)"},
+    "evidence": {
+        "sha256": "VARCHAR(64)",
+        "uploaded_by_id": "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+        "uploaded_by_username": "VARCHAR(64)",
+    },
+}
+
+
+def _migrate_added_columns(sync_conn) -> None:
+    insp = inspect(sync_conn)
+    tables = set(insp.get_table_names())
+    for table, cols in _ADDED_COLUMNS.items():
+        if table not in tables:
+            continue
+        existing = {c["name"] for c in insp.get_columns(table)}
+        for col, ddl in cols.items():
+            if col not in existing:
+                sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+                logger.info(f"Migración DB: {table}.{col}")
+
+
 def _track_resolution(t: "Ticket", new_status: str | None) -> None:
     """Fija o limpia resolved_at según el estado."""
     if new_status == "resolved" and t.resolved_at is None:
         t.resolved_at = datetime.now(timezone.utc)
     elif new_status and new_status != "resolved":
         t.resolved_at = None
+        t.classification = None
+
+
+STATUS_LABEL_ES = {"open": "Triaje", "in_progress": "Investigación", "escalated": "Contención", "resolved": "Resuelto", "closed": "Cerrado"}
+CLASSIFICATION_LABEL_ES = {"true_positive": "verdadero positivo", "false_positive": "falso positivo", "benign": "benigno"}
+SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+ALERT_CORRELATION_WINDOW = timedelta(hours=24)
+
+
+def _log_event(db: AsyncSession, ticket_id: int, user: "User | None", kind: str, message: str) -> None:
+    """Añade una entrada a la línea de tiempo del incidente (sin commit)."""
+    db.add(TicketEvent(
+        ticket_id=ticket_id,
+        user_id=user.id if user else None,
+        username=user.username if user else "sistema",
+        kind=kind,
+        message=message[:2000],
+    ))
+
+
+async def _ingest_alert(db: AsyncSession, alert: dict[str, Any], actor: "User | None") -> tuple["Ticket", str]:
+    """Convierte una alerta de Wazuh en incidente o la vincula a uno activo.
+
+    Correlación: incidente activo creado en las últimas 24 h con la misma IP origen;
+    si la alerta no trae IP, con la misma regla en el mismo agente.
+    Devuelve (ticket, "created" | "linked" | "duplicate"). No hace commit.
+    """
+    alert_id = str(alert["alert_id"])
+    dup = (await db.execute(select(TicketAlert).where(TicketAlert.alert_id == alert_id).limit(1))).scalar_one_or_none()
+    if dup:
+        return (await db.get(Ticket, dup.ticket_id)), "duplicate"
+
+    since = datetime.now(timezone.utc) - ALERT_CORRELATION_WINDOW
+    q = select(Ticket).where(Ticket.status.in_(ACTIVE_TICKET_STATUSES), Ticket.created_at >= since)
+    ip = alert.get("source_ip") or None
+    if ip:
+        q = q.where(Ticket.source_ip == ip)
+    else:
+        q = (q.join(TicketAlert, TicketAlert.ticket_id == Ticket.id)
+              .where(TicketAlert.rule_id == str(alert.get("rule_id") or ""),
+                     TicketAlert.agent_name == (alert.get("agent_name") or None)))
+    ticket = (await db.execute(q.order_by(desc(Ticket.created_at)).limit(1))).scalars().first()
+
+    severity = alert.get("severity") or "medium"
+    link = TicketAlert(
+        alert_id=alert_id,
+        rule_id=str(alert.get("rule_id") or "") or None,
+        rule_level=alert.get("rule_level"),
+        description=(alert.get("description") or "")[:1000] or None,
+        source_ip=ip,
+        agent_name=alert.get("agent_name") or None,
+        alert_timestamp=alert.get("timestamp") or None,
+    )
+    if ticket:
+        link.ticket_id = ticket.id
+        db.add(link)
+        if SEVERITY_RANK.get(severity, 0) > SEVERITY_RANK.get(ticket.severity, 0):
+            _log_event(db, ticket.id, actor, "severity", f"Severidad elevada de {ticket.severity} a {severity} por una alerta vinculada")
+            ticket.severity = severity
+        _log_event(db, ticket.id, actor, "alert_linked", f"Alerta vinculada (regla {link.rule_id or '?'}): {link.description or ''}")
+        return ticket, "linked"
+
+    ticket = Ticket(
+        title=f"Wazuh: {alert.get('description') or 'Alerta'}"[:200],
+        description=(
+            f"Origen: {ip or 'N/A'}\nAgente: {alert.get('agent_name') or 'N/A'}\n"
+            f"Regla: {alert.get('rule_id') or '?'} (nivel {alert.get('rule_level') if alert.get('rule_level') is not None else '?'})\n\n"
+            f"{alert.get('description') or ''}"
+        ),
+        severity=severity,
+        category="wazuh-alert",
+        source_ip=ip,
+        affected_asset=alert.get("agent_name") or "Manager",
+        wazuh_alert_id=alert_id,
+        mitre_technique=alert.get("mitre_technique") or None,
+        reporter_id=actor.id if actor else None,
+        status="open",
+    )
+    db.add(ticket)
+    await db.flush()
+    link.ticket_id = ticket.id
+    db.add(link)
+    _log_event(db, ticket.id, actor, "created", "Incidente creado a partir de una alerta de Wazuh")
+    return ticket, "created"
 
 
 @app.on_event("startup")
@@ -323,6 +408,7 @@ async def on_startup():
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_users_rank_column)
         await conn.run_sync(_migrate_tickets_resolved_at)
+        await conn.run_sync(_migrate_added_columns)
     
     # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
@@ -679,7 +765,7 @@ async def list_tickets(
 
     q = (
         select(Ticket)
-        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence), selectinload(Ticket.alerts))
         .order_by(desc(Ticket.created_at))
     )
     q = _tickets_assignee_filter(q, current)
@@ -707,7 +793,8 @@ async def get_ticket(
     t = (await db.execute(select(Ticket).options(
         selectinload(Ticket.assignee), 
         selectinload(Ticket.reporter), 
-        selectinload(Ticket.evidence)
+        selectinload(Ticket.evidence),
+        selectinload(Ticket.alerts),
     ).where(Ticket.id == ticket_id))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Ticket not found")
@@ -735,6 +822,11 @@ async def create_ticket(req: TicketCreate, db: AsyncSession = Depends(get_db), c
         assigned_to_id=req.assigned_to_id,
     )
     db.add(ticket)
+    await db.flush()
+    _log_event(db, ticket.id, current, "created", "Incidente creado manualmente")
+    if req.assigned_to_id:
+        assignee = await db.get(User, req.assigned_to_id)
+        _log_event(db, ticket.id, current, "assigned", f"Asignado a {assignee.username if assignee else req.assigned_to_id}")
     await db.commit()
     await db.refresh(ticket)
     return await get_ticket(ticket.id, db, current)
@@ -746,6 +838,12 @@ async def update_ticket_ep(ticket_id: int, req: TicketUpdate, db: AsyncSession =
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
     changes = req.model_dump(exclude_unset=True)
+    if "status" in changes and changes["status"] != t.status:
+        _log_event(db, t.id, current, "status", f"Fase: {STATUS_LABEL_ES.get(t.status, t.status)} → {STATUS_LABEL_ES.get(changes['status'], changes['status'])}")
+    if "severity" in changes and changes["severity"] != t.severity:
+        _log_event(db, t.id, current, "severity", f"Severidad: {t.severity} → {changes['severity']}")
+    if "analysis_notes" in changes and (changes["analysis_notes"] or "") != (t.analysis_notes or ""):
+        _log_event(db, t.id, current, "notes", "Notas del analista actualizadas")
     for field, value in changes.items():
         setattr(t, field, value)
     _track_resolution(t, changes.get("status"))
@@ -758,7 +856,11 @@ async def assign_ticket_ep(ticket_id: int, req: TicketAssign, db: AsyncSession =
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
+    assignee = await db.get(User, req.assigned_to_id)
+    if not assignee:
+        raise HTTPException(404, "Usuario no encontrado")
     t.assigned_to_id = req.assigned_to_id
+    _log_event(db, t.id, current, "assigned", f"Asignado a {assignee.username}")
     await db.commit()
     return await get_ticket(t.id, db, current)
 
@@ -768,9 +870,14 @@ async def resolve_ticket_ep(ticket_id: int, req: TicketResolve, db: AsyncSession
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
+    previous = t.status
     t.status = req.status
     t.resolution_notes = req.resolution_notes
+    if req.classification:
+        t.classification = req.classification
     _track_resolution(t, req.status)
+    label = CLASSIFICATION_LABEL_ES.get(req.classification or "", "sin clasificar")
+    _log_event(db, t.id, current, "resolved", f"Resuelto como {label} (desde {STATUS_LABEL_ES.get(previous, previous)})")
     await db.commit()
     return await get_ticket(t.id, db, current)
 
@@ -786,11 +893,19 @@ async def delete_ticket_ep(ticket_id: int, db: AsyncSession = Depends(get_db), c
     await db.commit()
     return {"ok": True}
 
-@app.post("/api/tickets/{ticket_id}/evidence")
+def _sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+@app.post("/api/tickets/{ticket_id}/evidence", response_model=EvidenceOut)
 async def upload_evidence(
-    ticket_id: int, 
-    file: UploadFile = File(...), 
-    db: AsyncSession = Depends(get_db), 
+    ticket_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_user)
 ):
     t = (await db.execute(select(Ticket).where(Ticket.id == ticket_id))).scalar_one_or_none()
@@ -809,33 +924,105 @@ async def upload_evidence(
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     if len(file_content) > max_bytes:
         raise HTTPException(400, f"Archivo supera {settings.max_upload_size_mb} MB")
+    if not file_content:
+        raise HTTPException(400, "Archivo vacío")
 
-    file_path = os.path.join(upload_dir, f"{ticket_id}_{safe_name}")
-    real_path = os.path.realpath(file_path)
-    if not real_path.startswith(upload_dir):
+    # Nombre único en disco: dos evidencias con el mismo nombre ya no se sobrescriben.
+    stored = f"{ticket_id}_{secrets.token_hex(8)}_{safe_name}"
+    real_path = os.path.realpath(os.path.join(upload_dir, stored))
+    if not real_path.startswith(upload_dir + os.sep):
         raise HTTPException(400, "Ruta de archivo inválida")
 
+    digest = hashlib.sha256(file_content).hexdigest()
     with open(real_path, "wb") as buffer:
         buffer.write(file_content)
-    file_size = len(file_content)
-    
+
     evidence = Evidence(
         ticket_id=ticket_id,
         filename=safe_name,
         file_path=real_path,
-        file_size=file_size,
-        content_type=file.content_type
+        file_size=len(file_content),
+        content_type=file.content_type,
+        sha256=digest,
+        uploaded_by_id=current.id,
+        uploaded_by_username=current.username,
     )
     db.add(evidence)
+    _log_event(db, ticket_id, current, "evidence", f"Evidencia añadida: {safe_name} (SHA-256 {digest[:16]}…)")
     await db.commit()
-    return {"status": "ok", "filename": file.filename}
+    await db.refresh(evidence)
+    return evidence
+
+
+async def _get_evidence_checked(evidence_id: int, db: AsyncSession, current: User) -> Evidence:
+    ev = await db.get(Evidence, evidence_id)
+    if not ev:
+        raise HTTPException(404, "Evidencia no encontrada")
+    ticket = await db.get(Ticket, ev.ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, ticket)
+    upload_dir = os.path.abspath(settings.evidence_dir)
+    if not os.path.realpath(ev.file_path).startswith(upload_dir + os.sep) or not os.path.isfile(ev.file_path):
+        raise HTTPException(410, "El fichero de la evidencia ya no existe en el servidor")
+    return ev
+
+
+@app.get("/api/evidence/{evidence_id}/download")
+async def download_evidence(evidence_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    ev = await _get_evidence_checked(evidence_id, db, current)
+    headers = {"X-Evidence-SHA256": ev.sha256 or "", "Cache-Control": "no-store"}
+    return FileResponse(ev.file_path, filename=ev.filename, media_type="application/octet-stream", headers=headers)
+
+
+@app.get("/api/evidence/{evidence_id}/verify")
+async def verify_evidence(evidence_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Recalcula el SHA-256 y lo compara con el registrado al subir (integridad de la cadena de custodia)."""
+    ev = await _get_evidence_checked(evidence_id, db, current)
+    current_hash = _sha256_file(ev.file_path)
+    ok = bool(ev.sha256) and hmac.compare_digest(current_hash, ev.sha256)
+    _log_event(db, ev.ticket_id, current, "evidence_verified",
+               f"Integridad de {ev.filename} {'verificada' if ok else 'NO coincide'} (SHA-256 {current_hash[:16]}…)")
+    await db.commit()
+    return {"ok": ok, "stored": ev.sha256, "current": current_hash}
+
+
+@app.get("/api/tickets/{ticket_id}/timeline", response_model=list[TicketEventOut])
+async def ticket_timeline(ticket_id: int, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    t = await db.get(Ticket, ticket_id)
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    rows = (await db.execute(select(TicketEvent).where(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.id))).scalars().all()
+    return rows
+
+
+@app.post("/api/tickets/{ticket_id}/comments", response_model=TicketEventOut)
+async def add_ticket_comment(ticket_id: int, req: TicketCommentIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    t = await db.get(Ticket, ticket_id)
+    if not t:
+        raise HTTPException(404, "Ticket not found")
+    _require_ticket_access(current, t)
+    ev = TicketEvent(ticket_id=ticket_id, user_id=current.id, username=current.username, kind="comment", message=req.text)
+    db.add(ev)
+    await db.commit()
+    await db.refresh(ev)
+    return ev
+
+
+@app.post("/api/tickets/from-alert")
+async def ticket_from_alert(req: AlertToTicketIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Escala una alerta a incidente; si ya hay uno activo correlacionado, la vincula a él."""
+    ticket, outcome = await _ingest_alert(db, req.model_dump(), current)
+    await db.commit()
+    return {"outcome": outcome, "ticket_id": ticket.id, "title": ticket.title}
 
 @app.get("/api/incidents", response_model=list[TicketOut])
 async def list_incidents(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     from sqlalchemy.orm import selectinload
     q = (
         select(Ticket)
-        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence))
+        .options(selectinload(Ticket.assignee), selectinload(Ticket.reporter), selectinload(Ticket.evidence), selectinload(Ticket.alerts))
         .where(Ticket.severity.in_(["high", "critical"]))
         .order_by(desc(Ticket.created_at))
     )

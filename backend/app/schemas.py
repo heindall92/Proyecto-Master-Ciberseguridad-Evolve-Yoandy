@@ -13,6 +13,7 @@ def _sanitize_html(v: str | None) -> str | None:
 
 Severity = Literal["low", "medium", "high", "critical"]
 TicketStatus = Literal["open", "in_progress", "escalated", "resolved", "closed"]
+TicketClassification = Literal["true_positive", "false_positive", "benign"]
 
 
 class Page(BaseModel):
@@ -204,8 +205,9 @@ class TicketAssign(BaseModel):
     assigned_to_id: int
 
 class TicketResolve(BaseModel):
-    resolution_notes: str = Field(..., max_length=5000)
+    resolution_notes: str = Field(..., min_length=1, max_length=5000)
     status: TicketStatus = "resolved"
+    classification: TicketClassification | None = None
 
     @field_validator("resolution_notes")
     @classmethod
@@ -243,7 +245,9 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None = None
+    classification: str | None = None
     evidence: list[EvidenceOut] = []
+    alerts: list[TicketAlertOut] = []
 
 class EvidenceOut(BaseModel):
     id: int
@@ -251,7 +255,70 @@ class EvidenceOut(BaseModel):
     filename: str
     file_size: int
     content_type: str | None
+    sha256: str | None = None
+    uploaded_by_username: str | None = None
     created_at: datetime
+
+
+class TicketAlertOut(BaseModel):
+    id: int
+    alert_id: str
+    rule_id: str | None = None
+    rule_level: int | None = None
+    description: str | None = None
+    source_ip: str | None = None
+    agent_name: str | None = None
+    alert_timestamp: str | None = None
+    created_at: datetime
+
+
+class TicketEventOut(BaseModel):
+    id: int
+    kind: str
+    message: str
+    username: str | None = None
+    created_at: datetime
+
+
+class TicketCommentIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("text")
+    @classmethod
+    def sanitize_html(cls, v: str):
+        return _sanitize_html(v) or ""
+
+
+class AlertToTicketIn(BaseModel):
+    """Alerta de Wazuh que el analista escala a incidente (se correlaciona con uno abierto si procede)."""
+    alert_id: str = Field(..., min_length=1, max_length=255)
+    rule_id: str | None = Field(default=None, max_length=32)
+    rule_level: int | None = Field(default=None, ge=0, le=16)
+    description: str | None = Field(default=None, max_length=1000)
+    source_ip: str | None = Field(default=None, max_length=45)
+    agent_name: str | None = Field(default=None, max_length=128)
+    timestamp: str | None = Field(default=None, max_length=64)
+    severity: Severity = "medium"
+    mitre_technique: str | None = Field(default=None, max_length=20)
+
+    @field_validator("source_ip")
+    @classmethod
+    def validate_ip(cls, v: str | None):
+        if not v: return None
+        if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", v) or any(not (0 <= int(o) <= 255) for o in v.split(".")):
+            raise ValueError("Invalid IPv4 format")
+        return v
+
+    @field_validator("mitre_technique")
+    @classmethod
+    def validate_mitre(cls, v: str | None):
+        if not v: return None
+        return v if re.match(r"^T\d{4}(?:\.\d{3})?$", v) else None
+
+    @field_validator("description", "agent_name")
+    @classmethod
+    def sanitize_html(cls, v: str | None):
+        return _sanitize_html(v)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

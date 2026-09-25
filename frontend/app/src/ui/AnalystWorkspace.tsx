@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import logger from '../lib/logger';
 import {
   listTickets, createTicket, updateTicket, assignTicket, resolveTicket, deleteTicket, purgeResolvedTickets,
-  listUsers, listRunbooks, uploadEvidence, getEvidenceDownloadUrl,
-  type TicketOut, type UserOut, type Runbook, type RunbookStep,
+  listUsers, listRunbooks, uploadEvidence, getEvidenceDownloadUrl, getTicketTimeline, addTicketComment, verifyEvidence,
+  type TicketOut, type UserOut, type Runbook, type RunbookStep, type TicketEventOut, type TicketClassification,
 } from '../lib/api';
 import { playNotificationSound, playResolvedSound } from './audio';
 import { useAppDispatch } from '../store/hooks';
@@ -13,8 +14,10 @@ import {
   Search, Plus, UserCheck, Siren, AlertTriangle, UserX, Timer, CircleCheckBig, ChevronLeft, ChevronRight,
   X, Trash2, FileText, Info, Bot, NotebookPen, BookOpen, Paperclip, Download, Upload, Users, ExternalLink,
   Copy, Clock, Globe, Server, User as UserIcon, Target, Hash, Save, ShieldCheck, Flag, Eraser,
+  Link2, History, Send, Fingerprint, ShieldAlert, Percent, MessageSquare, Pencil, ArrowRightLeft,
 } from 'lucide-react';
 import { HoldButton, toast } from './premium/widgets';
+import './premium/profile.css';
 import './premium/workspace.css';
 
 type Lang = 'es' | 'en';
@@ -58,6 +61,16 @@ const mitreUrl = (id: string) => {
   const m = id.trim().toUpperCase().match(/^T(\d{4})(?:\.(\d{3}))?$/);
   return m ? `https://attack.mitre.org/techniques/T${m[1]}/${m[2] ? `${m[2]}/` : ''}` : null;
 };
+const CLASSIFICATIONS: { id: TicketClassification; es: string; en: string; hint_es: string; hint_en: string }[] = [
+  { id: 'true_positive', es: 'Verdadero positivo', en: 'True positive', hint_es: 'Actividad maliciosa real', hint_en: 'Real malicious activity' },
+  { id: 'false_positive', es: 'Falso positivo', en: 'False positive', hint_es: 'La detección se equivocó', hint_en: 'The detection was wrong' },
+  { id: 'benign', es: 'Benigno', en: 'Benign', hint_es: 'Real pero autorizado o esperado', hint_en: 'Real but authorised or expected' },
+];
+const EVENT_ICON: Record<string, LucideIcon> = {
+  created: Plus, status: ArrowRightLeft, assigned: UserCheck, notes: Pencil, evidence: Paperclip,
+  evidence_verified: Fingerprint, resolved: CircleCheckBig, comment: MessageSquare, alert_linked: Link2, severity: ShieldAlert,
+};
+
 const stepText = (s: RunbookStep) => (typeof s === 'string' ? s : s.text);
 const stepCmd = (s: RunbookStep) => (typeof s === 'string' ? undefined : s.command);
 
@@ -92,6 +105,10 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [resolveFor, setResolveFor] = useState<number | null>(null);
   const [resolveNotes, setResolveNotes] = useState('');
+  const [resolveClass, setResolveClass] = useState<TicketClassification | ''>('');
+  const [timeline, setTimeline] = useState<TicketEventOut[] | null>(null);
+  const [comment, setComment] = useState('');
+  const [verified, setVerified] = useState<Record<number, boolean>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
   const canDelete = ['admin', 'analyst', 'analista'].includes((currentUser?.role || '').toLowerCase());
@@ -137,6 +154,12 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     return () => window.removeEventListener('keydown', onKey);
   }, [showCreate, selectedId, resolveFor]);
 
+  const loadTimeline = useCallback(async (id: number) => {
+    try { setTimeline(await getTicketTimeline(id)); } catch { setTimeline([]); }
+  }, []);
+  useEffect(() => { if (selectedId !== null) loadTimeline(selectedId); else setTimeline(null); }, [selectedId, loadTimeline]);
+  const refreshSelected = async () => { await fetchData(); if (selectedId !== null) loadTimeline(selectedId); };
+
   const openTicket = (t: TicketOut) => {
     setSelectedId(t.id);
     setNotes(t.analysis_notes || '');
@@ -148,7 +171,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const moveTicket = async (id: number, status: Status) => {
     const t = tickets.find((x) => x.id === id);
     if (!t || t.status === status) return;
-    if (status === 'resolved') { setResolveFor(id); setResolveNotes(''); return; }
+    if (status === 'resolved') { setResolveFor(id); setResolveNotes(''); setResolveClass(''); return; }
     setTickets((prev) => prev.map((x) => (x.id === id ? { ...x, status } : x)));
     try {
       await updateTicket(id, { status });
@@ -157,18 +180,18 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     } catch (e) {
       toast(errText(e), 'err');
     }
-    fetchData();
+    refreshSelected();
   };
 
   const confirmResolve = async () => {
-    if (resolveFor === null || !resolveNotes.trim()) return;
+    if (resolveFor === null || !resolveNotes.trim() || !resolveClass) return;
     setBusy(true);
     try {
-      await resolveTicket(resolveFor, resolveNotes.trim());
+      await resolveTicket(resolveFor, resolveNotes.trim(), resolveClass);
       playResolvedSound();
       toast(es ? `Incidente #${resolveFor} resuelto.` : `Incident #${resolveFor} resolved.`, 'ok');
       setResolveFor(null);
-      await fetchData();
+      await refreshSelected();
     } catch (e) {
       toast(errText(e), 'err');
     } finally { setBusy(false); }
@@ -181,6 +204,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
       await updateTicket(selected.id, { analysis_notes: notes });
       setTickets((prev) => prev.map((x) => (x.id === selected.id ? { ...x, analysis_notes: notes } : x)));
       toast(es ? 'Notas guardadas.' : 'Notes saved.', 'ok');
+      loadTimeline(selected.id);
     } catch (e) { toast(errText(e), 'err'); } finally { setBusy(false); }
   };
 
@@ -191,7 +215,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
       await assignTicket(selected.id, userId);
       const who = users.find((u) => u.id === userId)?.username || '';
       toast(es ? `#${selected.id} asignado a ${who}.` : `#${selected.id} assigned to ${who}.`, 'ok');
-      await fetchData();
+      await refreshSelected();
     } catch (e) { toast(errText(e), 'err'); } finally { setBusy(false); }
   };
 
@@ -223,8 +247,30 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     try {
       const ev = await uploadEvidence(selected.id, file);
       setTickets((prev) => prev.map((x) => (x.id === selected.id ? { ...x, evidence: [...(x.evidence || []), ev] } : x)));
-      toast(es ? 'Evidencia adjuntada.' : 'Evidence attached.', 'ok');
+      toast(es ? `Evidencia adjuntada · SHA-256 ${ev.sha256?.slice(0, 12)}…` : `Evidence attached · SHA-256 ${ev.sha256?.slice(0, 12)}…`, 'ok');
+      loadTimeline(selected.id);
     } catch (err) { toast(errText(err), 'err'); } finally { setBusy(false); }
+  };
+
+  const postComment = async () => {
+    if (!selected || !comment.trim()) return;
+    setBusy(true);
+    try {
+      await addTicketComment(selected.id, comment.trim());
+      setComment('');
+      loadTimeline(selected.id);
+    } catch (e) { toast(errText(e), 'err'); } finally { setBusy(false); }
+  };
+
+  const doVerify = async (evidenceId: number) => {
+    try {
+      const r = await verifyEvidence(evidenceId);
+      setVerified((v) => ({ ...v, [evidenceId]: r.ok }));
+      toast(r.ok
+        ? (es ? 'Integridad verificada: el SHA-256 coincide con el registrado.' : 'Integrity verified: SHA-256 matches.')
+        : (es ? 'ALERTA: el fichero ha cambiado desde que se registró.' : 'WARNING: the file changed since it was registered.'), r.ok ? 'ok' : 'err');
+      if (selected) loadTimeline(selected.id);
+    } catch (e) { toast(errText(e), 'err'); }
   };
 
   const openInWazuh = async (alertId: string) => {
@@ -281,6 +327,8 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const breached = active.filter((t) => slaState(t).state === 'breach').length;
   const unassigned = active.filter((t) => !t.assigned_to_id).length;
   const resolvedWithTime = tickets.filter((t) => t.status === 'resolved' && t.resolved_at);
+  const classified = tickets.filter((t) => t.status === 'resolved' && t.classification);
+  const fpRate = classified.length ? Math.round((classified.filter((t) => t.classification === 'false_positive').length / classified.length) * 100) : null;
   const mttr = resolvedWithTime.length
     ? resolvedWithTime.reduce((s, t) => s + (new Date(t.resolved_at!).getTime() - new Date(t.created_at).getTime()), 0) / resolvedWithTime.length
     : null;
@@ -357,6 +405,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
         <Stat icon={UserX} tone="var(--amber)" value={unassigned} label={es ? 'Sin asignar' : 'Unassigned'} onClick={() => setQuickFilter(quickFilter === 'unassigned' ? 'none' : 'unassigned')} pressed={quickFilter === 'unassigned'} />
         <Stat icon={Timer} tone="var(--cyan)" value={mttr === null ? '—' : fmtDuration(mttr)} label={es ? 'Tiempo medio de resolución' : 'Mean time to resolve'} />
         <Stat icon={CircleCheckBig} tone="#3fb37f" value={tickets.length - active.length} label={es ? 'Resueltos' : 'Resolved'} />
+        <Stat icon={Percent} tone="var(--text-dim)" value={fpRate === null ? '—' : `${fpRate}%`} label={es ? 'Falsos positivos' : 'False positives'} />
       </div>
 
       <div className="wk-board">
@@ -411,6 +460,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
                         {t.source_ip && <span className="wk-chip"><Globe size={10} />{t.source_ip}</span>}
                         {t.affected_asset && <span className="wk-chip"><Server size={10} />{t.affected_asset}</span>}
                         {t.mitre_technique && <span className="wk-chip"><Target size={10} />{t.mitre_technique}</span>}
+                        {(t.alerts?.length || 0) > 1 && <span className="wk-chip" title={es ? 'Alertas correlacionadas' : 'Correlated alerts'}><Link2 size={10} />{t.alerts.length}</span>}
                         {t.ai_summary && <span className="wk-chip wk-chip--ai"><Bot size={10} />IA</span>}
                         {(t.evidence?.length || 0) > 0 && <span className="wk-chip"><Paperclip size={10} />{t.evidence.length}</span>}
                       </div>
@@ -435,7 +485,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
       </div>
 
       {/* ---------- Detalle ---------- */}
-      {selected && (
+      {selected && createPortal(
         <>
           <div className="wk-drawer-backdrop" onClick={() => setSelectedId(null)} aria-hidden="true" />
           <aside className="wk-drawer" role="dialog" aria-modal="true" aria-labelledby="wk-drawer-title">
@@ -473,6 +523,29 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
                   </div>
                 </div>
               </section>
+
+              {(selected.alerts?.length || 0) > 0 && (
+                <section className="wk-section">
+                  <div className="wk-section__head"><Link2 size={14} />{es ? 'Alertas vinculadas' : 'Linked alerts'}
+                    <span className="wk-sec-tools"><span className="vx-code">{selected.alerts.length}</span></span>
+                  </div>
+                  <div className="wk-section__body" style={{ padding: 0 }}>
+                    <ul className="vx-list">
+                      {selected.alerts.map((a) => (
+                        <li key={a.id}>
+                          <div className="vx-list__row">
+                            <span className="vx-code">{es ? 'regla' : 'rule'} {a.rule_id || '?'}</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.description || ''}>{a.description || '—'}</span>
+                          </div>
+                          <div className="vx-list__sub">
+                            {a.alert_timestamp ? new Date(a.alert_timestamp).toLocaleString(lang) : ''}{a.agent_name ? ` · ${a.agent_name}` : ''}{a.rule_level != null ? ` · ${es ? 'nivel' : 'level'} ${a.rule_level}` : ''}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+              )}
 
               {selected.description && (
                 <section className="wk-section">
@@ -559,8 +632,18 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
                           <FileText size={16} />
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div className="wk-file__name">{ev.filename}</div>
-                            <div className="wk-file__meta">{(ev.file_size / 1024).toFixed(1)} KB</div>
+                            <div className="wk-file__meta">
+                              {(ev.file_size / 1024).toFixed(1)} KB · {ev.uploaded_by_username || '—'} · {new Date(ev.created_at).toLocaleString(lang)}
+                            </div>
+                            {ev.sha256 && (
+                              <button className="wk-hash" onClick={() => { navigator.clipboard.writeText(ev.sha256!); toast(es ? 'SHA-256 copiado.' : 'SHA-256 copied.', 'ok'); }} title={ev.sha256}>
+                                <Fingerprint size={11} />SHA-256 {ev.sha256.slice(0, 20)}…
+                                {verified[ev.id] === true && <span className="wk-hash__ok"><ShieldCheck size={11} />{es ? 'íntegro' : 'intact'}</span>}
+                                {verified[ev.id] === false && <span className="wk-hash__bad"><ShieldAlert size={11} />{es ? 'alterado' : 'tampered'}</span>}
+                              </button>
+                            )}
                           </div>
+                          {ev.sha256 && <button className="vx-mini-btn" onClick={() => doVerify(ev.id)} title={es ? 'Recalcular el hash en el servidor' : 'Recompute hash on server'}><Fingerprint size={12} />{es ? 'Verificar' : 'Verify'}</button>}
                           <a className="vx-mini-btn" href={getEvidenceDownloadUrl(ev.id)} target="_blank" rel="noopener noreferrer"><Download size={12} />{es ? 'Descargar' : 'Download'}</a>
                         </div>
                       ))}
@@ -591,9 +674,40 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
               {selected.status === 'resolved' && selected.resolution_notes && (
                 <section className="wk-section">
                   <div className="wk-section__head"><ShieldCheck size={14} />{es ? 'Resolución' : 'Resolution'}</div>
-                  <div className="wk-section__body"><p>{selected.resolution_notes}</p>{selected.resolved_at && <p className="vx-muted" style={{ marginTop: 6 }}>{new Date(selected.resolved_at).toLocaleString(lang)}</p>}</div>
+                  <div className="wk-section__body">
+                    {selected.classification && (() => { const c = CLASSIFICATIONS.find((x) => x.id === selected.classification); return c ? <span className={`wk-class wk-class--${c.id}`}>{es ? c.es : c.en}</span> : null; })()}
+                    <p style={{ marginTop: 8 }}>{selected.resolution_notes}</p>
+                    {selected.resolved_at && <p className="vx-muted" style={{ marginTop: 6 }}>{new Date(selected.resolved_at).toLocaleString(lang)} · {es ? 'tiempo de resolución' : 'time to resolve'} {fmtDuration(new Date(selected.resolved_at).getTime() - new Date(selected.created_at).getTime())}</p>}
+                  </div>
                 </section>
               )}
+              <section className="wk-section">
+                <div className="wk-section__head"><History size={14} />{es ? 'Línea de tiempo' : 'Timeline'}</div>
+                <div className="wk-section__body">
+                  <div className="wk-comment">
+                    <input value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') postComment(); }} placeholder={es ? 'Añadir comentario al caso…' : 'Add a comment to the case…'} />
+                    <button className="vx-mini-btn" style={{ height: 34 }} onClick={postComment} disabled={busy || !comment.trim()} aria-label={es ? 'Enviar comentario' : 'Send comment'}><Send size={12} /></button>
+                  </div>
+                  {timeline === null && <div className="pf-skel" style={{ marginTop: 12 }} />}
+                  {timeline && timeline.length === 0 && <p className="vx-muted" style={{ marginTop: 10 }}>{es ? 'Sin actividad registrada todavía.' : 'No activity recorded yet.'}</p>}
+                  {timeline && timeline.length > 0 && (
+                    <ul className="pf-timeline" style={{ marginTop: 12 }}>
+                      {[...timeline].reverse().map((ev) => {
+                        const Icon = EVENT_ICON[ev.kind] || History;
+                        return (
+                          <li key={ev.id} className="pf-tl">
+                            <span className="pf-tl__dot"><Icon size={13} /></span>
+                            <div className="pf-tl__main">
+                              <div className={`pf-tl__title${ev.kind === 'comment' ? ' wk-tl-comment' : ''}`}>{ev.message}</div>
+                              <div className="pf-tl__meta"><span>{ev.username || (es ? 'sistema' : 'system')}</span><span title={new Date(ev.created_at).toLocaleString(lang)}>{new Date(ev.created_at).toLocaleString(lang)}</span></div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </section>
             </div>
 
             {selected.status !== 'resolved' && (
@@ -603,29 +717,39 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
               </div>
             )}
           </aside>
-        </>
+        </>,
+        document.body,
       )}
 
       {/* ---------- Resolver (notas obligatorias) ---------- */}
-      {resolveFor !== null && (
+      {resolveFor !== null && createPortal(
         <div className="vp-modal-backdrop" onMouseDown={() => setResolveFor(null)}>
           <div className="vp-pop wk-modal" role="dialog" aria-modal="true" aria-label={es ? 'Resolver incidente' : 'Resolve incident'} onMouseDown={(e) => e.stopPropagation()}>
             <div className="vp-pop__head"><CircleCheckBig size={16} color="var(--signal)" /><div className="vp-pop__title">{es ? `Resolver incidente #${resolveFor}` : `Resolve incident #${resolveFor}`}</div></div>
             <div className="wk-form">
+              <div className="wk-form__full wk-classes" role="radiogroup" aria-label={es ? 'Clasificación' : 'Classification'}>
+                <span className="wk-classes__label">{es ? 'Clasificación *' : 'Classification *'}</span>
+                {CLASSIFICATIONS.map((c) => (
+                  <button key={c.id} type="button" role="radio" aria-checked={resolveClass === c.id} className={`wk-class-opt wk-class--${c.id}`} onClick={() => setResolveClass(c.id)}>
+                    <strong>{es ? c.es : c.en}</strong><small>{es ? c.hint_es : c.hint_en}</small>
+                  </button>
+                ))}
+              </div>
               <label className="wk-form__full">{es ? 'Notas de resolución *' : 'Resolution notes *'}
                 <textarea autoFocus value={resolveNotes} onChange={(e) => setResolveNotes(e.target.value)} placeholder={es ? 'Causa raíz, acciones de contención y erradicación, verificación…' : 'Root cause, containment and eradication actions, verification…'} />
               </label>
             </div>
             <div className="wk-modal__actions">
               <button className="vp-btn" onClick={() => setResolveFor(null)}>{es ? 'Cancelar' : 'Cancel'}</button>
-              <button className="vp-btn vp-btn--primary" onClick={confirmResolve} disabled={busy || !resolveNotes.trim()}><CircleCheckBig size={13} />{es ? 'Marcar como resuelto' : 'Mark as resolved'}</button>
+              <button className="vp-btn vp-btn--primary" onClick={confirmResolve} disabled={busy || !resolveNotes.trim() || !resolveClass}><CircleCheckBig size={13} />{es ? 'Marcar como resuelto' : 'Mark as resolved'}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ---------- Nuevo incidente ---------- */}
-      {showCreate && (
+      {showCreate && createPortal(
         <div className="vp-modal-backdrop" onMouseDown={() => setShowCreate(false)}>
           <div className="vp-pop wk-modal" role="dialog" aria-modal="true" aria-labelledby="wk-create-title" onMouseDown={(e) => e.stopPropagation()}>
             <div className="vp-pop__head"><Plus size={16} color="var(--signal)" /><div className="vp-pop__title" id="wk-create-title">{es ? 'Nuevo incidente' : 'New incident'}</div>
@@ -672,7 +796,8 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
               <button className="vp-btn vp-btn--primary" onClick={submitCreate} disabled={busy || !formValid}><Plus size={13} />{es ? 'Crear incidente' : 'Create incident'}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -162,3 +162,28 @@ body[data-theme="light"] .wk-card { background: #ffffff; box-shadow: 0 1px 2px r
   .wk-form, .wk-facts { grid-template-columns: 1fr; }
   .wk-search { min-width: 0; flex: 1; }
 }
+
+/* Cadena de custodia */
+.wk-hash { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text-dim); font: 600 10px var(--mono); cursor: pointer; max-width: 100%; }
+.wk-hash:hover { color: var(--signal); border-color: var(--signal); }
+.wk-hash__ok, .wk-hash__bad { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; font-weight: 700; }
+.wk-hash__ok { color: #3fb37f; }
+.wk-hash__bad { color: var(--danger); }
+
+/* Clasificación al cerrar */
+.wk-classes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.wk-classes__label { grid-column: 1 / -1; font: 700 10px var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); }
+.wk-class-opt { display: flex; flex-direction: column; gap: 3px; padding: 10px; border-radius: 10px; border: 1px solid var(--line-strong); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.wk-class-opt strong { font: 700 12px var(--mono); color: var(--tone); }
+.wk-class-opt small { font: 500 10px var(--mono); color: var(--text-faint); text-transform: none; letter-spacing: 0; }
+.wk-class-opt[aria-checked="true"] { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 10%, transparent); }
+.wk-class--true_positive { --tone: var(--danger); }
+.wk-class--false_positive { --tone: var(--amber); }
+.wk-class--benign { --tone: #3fb37f; }
+.wk-class { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font: 700 10px var(--mono); text-transform: uppercase; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent); }
+
+/* Comentarios en la línea de tiempo */
+.wk-comment { display: flex; gap: 8px; }
+.wk-comment input { flex: 1; height: 34px; padding: 0 10px !important; font: 500 12px var(--mono); }
+.wk-tl-comment { font-weight: 500 !important; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--signal) 6%, transparent); border: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
+@media (max-width: 640px) { .wk-classes { grid-template-columns: 1fr; } }
