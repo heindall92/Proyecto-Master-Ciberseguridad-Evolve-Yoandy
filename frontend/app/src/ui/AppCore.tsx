@@ -74,7 +74,7 @@ import QuickSettings from "./premium/QuickSettings";
 import { Toaster } from "./premium/widgets";
 import "./premium/dashboard.css";
 import {
-  Search, MessageSquare, Bell, BellOff, LifeBuoy, Palette, Sun, Moon, ChevronDown,
+  Search, MessageSquare, Bell, BellOff, CircleHelp, Palette, Sun, Moon, ChevronDown,
   UserRound, SlidersHorizontal, LayoutGrid, Lock, Unlock, RefreshCw, Play, LogOut,
   AlertTriangle, ShieldAlert, Info, ArrowRight, UserCheck, Minimize2,
   LayoutDashboard, Layers, Monitor, Siren, Radar, Activity, ScrollText, Bug, Globe2,
@@ -799,7 +799,7 @@ export default function App() {
     { id: 'act-lang', label: es ? 'Switch to English' : 'Cambiar a español', group: es ? 'Acciones' : 'Actions', icon: Globe2, keywords: 'idioma language', run: toggleLang },
     { id: 'act-appearance', label: es ? 'Apariencia y color de acento' : 'Appearance & accent colour', group: es ? 'Acciones' : 'Actions', icon: Palette, keywords: 'tema acento scanlines tv', run: () => setTweaksOpen(true) },
     { id: 'act-chat', label: es ? 'Abrir chat interno' : 'Open internal chat', group: es ? 'Acciones' : 'Actions', icon: MessageSquare, keywords: 'ia chatbot', run: () => dispatch(setChatOpen(true)) },
-    { id: 'act-help', label: es ? 'Centro de ayuda' : 'Help center', group: es ? 'Acciones' : 'Actions', icon: LifeBuoy, hint: '?', keywords: 'soporte support faq', run: () => setHelpOpen(true) },
+    { id: 'act-help', label: es ? 'Centro de ayuda' : 'Help center', group: es ? 'Acciones' : 'Actions', icon: CircleHelp, hint: '?', keywords: 'soporte support faq', run: () => setHelpOpen(true) },
     { id: 'act-logout', label: es ? 'Cerrar sesión' : 'Log out', group: es ? 'Acciones' : 'Actions', icon: LogOut, run: handleLogout },
   ];
 
@@ -889,7 +889,7 @@ export default function App() {
                 {unreadNotifs && <span className="vp-badge">{incidentCount}</span>}
               </button>
               <button className="vp-iconbtn" onClick={() => setHelpOpen(true)} aria-expanded={helpOpen} title={es ? 'Soporte y centro de ayuda (?)' : 'Support & help center (?)'} aria-label={es ? 'Soporte' : 'Support'}>
-                <LifeBuoy size={17} />
+                <CircleHelp size={17} />
               </button>
             </div>
             <div className="vp-tb-sep" aria-hidden="true" />
@@ -932,7 +932,7 @@ export default function App() {
                 <button role="menuitem" className="vp-menu-item" onClick={() => window.location.reload()}><RefreshCw size={16} />{t('sync')}</button>
                 <button role="menuitem" className="vp-menu-item" onClick={() => { setShowCinematic(true); setUserMenuOpen(false); }}><Play size={16} />{es ? 'Intro Hyperframe' : 'Hyperframe intro'}</button>
                 <div className="vp-menu-sep" />
-                <button role="menuitem" className="vp-menu-item" onClick={() => { setHelpOpen(true); setUserMenuOpen(false); }}><LifeBuoy size={16} />{es ? 'Centro de ayuda' : 'Help center'}<span className="vp-menu-item__hint">?</span></button>
+                <button role="menuitem" className="vp-menu-item" onClick={() => { setHelpOpen(true); setUserMenuOpen(false); }}><CircleHelp size={16} />{es ? 'Centro de ayuda' : 'Help center'}<span className="vp-menu-item__hint">?</span></button>
                 <button role="menuitem" className="vp-menu-item vp-menu-item--danger" onClick={handleLogout}><LogOut size={16} />{t('exit')}</button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  LifeBuoy, X, Search, Rocket, ShieldAlert, Siren, Radar, Bot, Settings2,
+  CircleHelp, X, Search, Rocket, ShieldAlert, Siren, Radar, Bot, Settings2,
   ChevronDown, ArrowRight, BookOpen, ExternalLink, Keyboard, MessageSquare, Activity, ScrollText,
 } from "lucide-react";
 
@@ -208,7 +208,7 @@ export default function HelpCenter({ open, onClose, lang, isAdmin, onNavigate, o
     <div className="vp-modal-backdrop vp-help-backdrop" onMouseDown={onClose}>
       <aside className="vp-help" role="dialog" aria-modal="true" aria-labelledby="vp-help-title" onMouseDown={(e) => e.stopPropagation()}>
         <div className="vp-help__bar">
-          <LifeBuoy size={18} color="var(--signal)" />
+          <CircleHelp size={18} color="var(--signal)" />
           <span className="vp-pop__title" id="vp-help-title">{es ? "Centro de ayuda" : "Help center"}</span>
           <span className="vp-chip">Valhalla SOC</span>
           <button className="vp-iconbtn" onClick={onClose} aria-label={es ? "Cerrar" : "Close"}><X size={18} /></button>
@@ -291,7 +291,7 @@ export default function HelpCenter({ open, onClose, lang, isAdmin, onNavigate, o
           )}
 
           <section className="vp-help__cta">
-            <h3><LifeBuoy size={16} />{es ? "¿Sigues con dudas?" : "Still stuck?"}</h3>
+            <h3><CircleHelp size={16} />{es ? "¿Sigues con dudas?" : "Still stuck?"}</h3>
             <p>{es ? "Valhalla SOC se ejecuta en tu infraestructura, sin soporte externo en vivo. Antes de escalar, revisa:" : "Valhalla SOC runs on your infrastructure with no live external support. Before escalating, check:"}</p>
             <ul>
               <li>{es ? "El estado de las integraciones (Wazuh, Ollama, base de datos)." : "Integration health (Wazuh, Ollama, database)."}</li>

@@ -187,3 +187,24 @@ body[data-theme="light"] .wk-card { background: #ffffff; box-shadow: 0 1px 2px r
 .wk-comment input { flex: 1; height: 34px; padding: 0 10px !important; font: 500 12px var(--mono); }
 .wk-tl-comment { font-weight: 500 !important; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--signal) 6%, transparent); border: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; }
 @media (max-width: 640px) { .wk-classes { grid-template-columns: 1fr; } }
+
+/* Barra de herramientas compacta: buscador + icono de filtros + nuevo */
+.wk-search { min-width: 0; width: 240px; }
+.wk-search input { min-width: 0; text-overflow: ellipsis; }
+.wk-search__clear { border: 0; background: none; padding: 0; color: var(--text-faint); cursor: pointer; display: grid; place-items: center; }
+.wk-search__clear:hover { color: var(--signal); }
+.wk-filter { position: relative; }
+.wk-iconbtn { position: relative; width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line-strong); background: transparent; color: var(--text-dim); display: grid; place-items: center; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.wk-iconbtn:hover, .wk-iconbtn[aria-expanded="true"] { color: var(--signal); border-color: var(--signal); background: color-mix(in srgb, var(--signal) 8%, transparent); }
+.wk-filter__backdrop { position: fixed; inset: 0; z-index: 40; }
+.wk-filter__pop { position: absolute; top: 44px; right: 0; z-index: 41; width: 290px; max-height: 70vh; }
+.wk-chipset { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 8px; }
+.wk-chipset button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: var(--text-dim); font: 700 10px var(--mono); letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; }
+.wk-chipset button:hover { color: var(--text-bright); }
+.wk-chipset button[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); background: color-mix(in srgb, var(--signal) 10%, transparent); }
+.wk-chipset button.wk-chipset__sev[aria-pressed="true"] { border-color: var(--sev); color: var(--sev); background: color-mix(in srgb, var(--sev) 12%, transparent); }
+.wk-filter__list { max-height: 180px; overflow-y: auto; }
+.wk-filter__list .vp-menu-item[aria-pressed="true"] { color: var(--text-bright); background: var(--vp-hover); }
+.vp-menu-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.wk-new { gap: 6px; }
+@media (max-width: 760px) { .wk-new span { display: none; } .wk-search { width: auto; flex: 1; } }

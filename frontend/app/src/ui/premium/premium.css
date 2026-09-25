@@ -379,9 +379,9 @@ body[data-theme="light"] .vp-modal-backdrop { background: rgba(13, 40, 24, 0.28)
 .vp-help__cta-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Inputs integrados en un contenedor con borde propio: anulan el estilo global de HUD.css */
-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus {
+body input.vp-bare-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+body input.vp-bare-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+body input.vp-bare-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus {
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
