@@ -387,3 +387,23 @@ body[data-theme="light"] .hp-tty code, body[data-theme="light"] .hp-tty time { c
 .rb-step-tools { display: flex; gap: 2px; }
 .rb-add { align-self: flex-start; height: 30px; font-size: 11px; }
 @container intel (max-width: 640px) { .rb .wk-head .in-bar { justify-content: flex-start; } .rb-form { grid-template-columns: 1fr; } }
+
+/* ---------- Usuarios (prefijo us-) ---------- */
+.us .wk-head .in-bar { justify-content: flex-end; }
+.us-row { grid-template-columns: 38px minmax(0, 1.4fr) 130px minmax(0, .9fr) 100px 150px; }
+.us-av { position: relative; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--mono); color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 12%, transparent); border: 1px solid color-mix(in srgb, var(--signal) 35%, transparent); }
+.us-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.us-av i { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #3fb37f; border: 2px solid var(--vp-surface); }
+.us-role { display: inline-flex; padding: 2px 9px; border-radius: 999px; font: 700 10px var(--mono); letter-spacing: .4px; text-transform: uppercase; color: var(--r); background: color-mix(in srgb, var(--r) 12%, transparent); border: 1px solid color-mix(in srgb, var(--r) 40%, transparent); white-space: nowrap; }
+.us-role--admin { --r: #ef4f5f; } .us-role--analista { --r: var(--signal); } .us-role--reporter { --r: #4f8ff7; } .us-role--viewer { --r: var(--text-dim); }
+body[data-theme="light"] .us-role--admin { --r: #b3261e; } body[data-theme="light"] .us-role--reporter { --r: #1d5fd1; }
+.us-roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.us-roles > div { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.us-roles small { font-size: 11.5px; color: var(--text-dim); }
+.us-hint { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+@container intel (max-width: 1000px) { .us-row { grid-template-columns: 38px minmax(0, 1fr) 120px 140px; } .us-row > :nth-child(4), .us-row > :nth-child(5) { display: none; } .us-roles { grid-template-columns: 1fr 1fr; } }
+@container intel (max-width: 640px) {
+  .us-row { grid-template-columns: 34px minmax(0, 1fr) auto; } .us-row > :nth-child(3) { display: none; }
+  .us .wk-head .in-bar { justify-content: flex-start; } .us-roles { grid-template-columns: 1fr; }
+}

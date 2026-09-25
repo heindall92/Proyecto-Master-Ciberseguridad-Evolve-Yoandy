@@ -1,251 +1,140 @@
-import { useEffect, useState } from "react";
-import logger from "../lib/logger";
-import {
-  PersonAdd as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-} from "@mui/icons-material";
-import { listUsers, deleteUser, createUser, updateUser, UserOut } from "../lib/api";
-import { translations } from "./translations";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { Bot, KeyRound, Pencil, Plus, Save, Search, ShieldCheck, Trash2, UserCog, Users, Wifi, X, Info, Eye } from "lucide-react";
+import { listUsers, createUser, updateUser, deleteUser, resetPassword, fetchAuth, type UserOut } from "../lib/api";
+import { useAppSelector } from "../store/hooks";
+import { HoldButton, KpiCard, toast } from "./premium/widgets";
+import "./premium/dashboard.css";
+import "./premium/workspace.css";
+import "./premium/executive.css";
+import "./intel/intel.css";
 
-export default function UsersView({ lang = "es" }: { lang?: "es" | "en" }) {
-  const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
-  const [users, setUsers] = useState<UserOut[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+/** Usuarios: equipo del SOC, roles, presencia en línea y gestión de accesos (solo admin). */
 
-  // Form state
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("analyst");
-  const [rank, setRank] = useState("L1 Analyst");
-  const [password, setPassword] = useState("");
+const ROLES: Record<string, [string, string]> = {
+  admin: ["Administrador", "Gestiona usuarios, sistema y configuración"],
+  analista: ["Analista", "Investiga, gestiona incidentes y genera informes"],
+  reporter: ["Reportero", "Crea incidentes y ve los suyos"],
+  viewer: ["Lector", "Solo ve los incidentes asignados o creados por él"],
+};
+const roleKey = (r: string) => (r === "analyst" ? "analista" : r);
+const initials = (n: string) => n.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "?";
+type Presence = Array<{ id: number; username: string; role: string; sessions: number }>;
+type Form = { id?: number; username: string; email: string; role: string; security_rank: string; password: string };
 
-  const fetchUsers = async () => {
-    setLoading(true);
+export default function UsersView({ lang = "es" }: { lang?: string }) {
+  void lang;
+  const me = useAppSelector(s => s.auth.user);
+  const [users, setUsers] = useState<UserOut[] | null>(null);
+  const [online, setOnline] = useState<Presence>([]);
+  const [q, setQ] = useState("");
+  const [role, setRole] = useState("all");
+  const [form, setForm] = useState<Form | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => listUsers().then(setUsers).catch(() => setUsers([]));
+  const loadPresence = () => fetchAuth<Presence>("/api/presence").then(setOnline).catch(() => {});
+  useEffect(() => { load(); loadPresence(); const iv = setInterval(loadPresence, 15000); return () => clearInterval(iv); }, []);
+
+  const isOnline = (id: number) => online.find(o => o.id === id);
+  const rows = useMemo(() => (users ?? []).filter(u => (role === "all" || roleKey(u.role) === role) && (!q || `${u.username} ${u.email ?? ""} ${u.security_rank}`.toLowerCase().includes(q.toLowerCase()))), [users, q, role]);
+  const count = (r: string) => (users ?? []).filter(u => roleKey(u.role) === r).length;
+
+  const save = async () => {
+    if (!form) return;
+    setErr(null); setBusy(true);
     try {
-      const data = await listUsers();
-      setUsers(data);
-    } catch (e) {
-      logger.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const onDelete = async (id: number) => {
-    if (!confirm(t('confirm_delete'))) return;
-    try {
-      await deleteUser(id);
-      fetchUsers();
-    } catch (e) {
-      alert(String(e));
-    }
-  };
-
-  const openCreateModal = () => {
-    setEditingUserId(null);
-    setUsername("");
-    setEmail("");
-    setRole("analyst");
-    setRank("L1 Analyst");
-    setPassword("");
-    setModalOpen(true);
-  };
-
-  const openEditModal = (user: UserOut) => {
-    setEditingUserId(user.id);
-    setUsername(user.username);
-    setEmail(user.email || "");
-    setRole(user.role);
-    setRank(user.rank || "L1 Analyst");
-    setPassword(""); // Keep empty so user only types if they want to change
-    setModalOpen(true);
-  };
-
-  const onSave = async () => {
-    if (!username) {
-      alert(t('username_required'));
-      return;
-    }
-    if (!editingUserId && !password) {
-      alert(t('password_required'));
-      return;
-    }
-
-    try {
-      const payload: any = { username, role, rank, email };
-      if (password) {
-        payload.password = password;
-      }
-
-      if (editingUserId) {
-        await updateUser(editingUserId, payload);
-        alert(t('user_updated'));
+      if (form.id) {
+        await updateUser(form.id, { username: form.username, email: form.email || undefined, role: form.role, security_rank: form.security_rank });
+        if (form.password) await resetPassword(form.id, form.password);
+        toast("Usuario actualizado.", "ok");
       } else {
-        await createUser(payload);
-        alert(t('user_created'));
+        await createUser({ username: form.username, email: form.email || null, role: form.role, security_rank: form.security_rank, password: form.password });
+        toast(`Usuario ${form.username} creado.`, "ok");
       }
-      setModalOpen(false);
-      fetchUsers();
-    } catch (e) {
-      alert(String(e));
-    }
+      setForm(null); load();
+    } catch (e) { setErr(e instanceof Error ? e.message.replace(/^HTTP \d+:\s*/, "").replace(/^\{"detail":"?|"?\}$/g, "") : String(e)); }
+    finally { setBusy(false); }
+  };
+  const remove = async (u: UserOut) => {
+    try { await deleteUser(u.id); toast(`Usuario ${u.username} eliminado.`, "ok"); setForm(null); load(); }
+    catch (e) { toast(e instanceof Error ? e.message.replace(/^HTTP \d+:\s*/, "") : String(e), "err"); }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--ff-mono)', color: 'var(--signal)', fontSize: '18px', letterSpacing: '2px' }}>{t('access_control')}</h2>
-        <button 
-          className="action-btn"
-          onClick={openCreateModal}
-          style={{ padding: '8px 15px', display: 'flex', alignItems: 'center', cursor: 'pointer', fontFamily: 'var(--ff-mono)', fontSize: '11px', fontWeight: 'bold' }}
-        >
-          <AddIcon sx={{ fontSize: 14, mr: 1 }} />
-          {t('add_user')}
-        </button>
-      </div>
-
-      <div className="panel">
-        <div className="panel__head">
-           <span className="panel__title">{t('authorized_personnel')}</span>
-           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{t('role_system_active')}</span>
+    <div className="view in us">
+      <div className="wk-head">
+        <div><h1>Usuarios</h1><p>Equipo del SOC, roles y accesos</p></div>
+        <div className="in-bar">
+          <label className="wk-search"><Search size={15} /><input className="vp-bare-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Usuario, email o rango…" />
+            {q && <button className="wk-search__clear" onClick={() => setQ("")} aria-label="Borrar"><X size={13} /></button>}</label>
+          <button type="button" className="vp-btn vp-btn--primary" onClick={() => { setErr(null); setForm({ username: "", email: "", role: "analista", security_rank: "L1 Analyst", password: "" }); }}><Plus size={14} />Nuevo usuario</button>
         </div>
-        <div className="panel__body" style={{ padding: '0', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ background: 'rgba(60,255,158,0.05)', color: 'var(--signal)', textAlign: 'left' }}>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ID_UID</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>OPERADOR</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>EMAIL</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>RANGO_OPERATIVO</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>NIVEL_ACCESO</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ALTA_REGISTRO</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="tr-hover" style={{ borderBottom: '1px solid var(--line-faint)' }}>
-                  <td style={{ padding: '12px 20px', fontFamily: 'var(--ff-mono)', opacity: 0.6 }}>{u.id.toString().padStart(4, '0')}</td>
-                  <td style={{ padding: '12px 20px', fontWeight: 800, color: 'var(--text-bright)' }}>{u.username.toUpperCase()}</td>
-                  <td style={{ padding: '12px 20px', opacity: 0.8 }}>{u.email?.toLowerCase() || 'N/A'}</td>
-                  <td style={{ padding: '12px 20px', fontWeight: 'bold', color: 'var(--cyan)' }}>{u.rank?.toUpperCase() || 'L1 ANALYST'}</td>
-                  <td style={{ padding: '12px 20px' }}>
-                     <span style={{ 
-                        padding: '2px 8px', 
-                        fontSize: '9px', 
-                        background: u.role === 'admin' ? 'rgba(255,58,58,0.1)' : 'rgba(60,255,158,0.1)', 
-                        border: '1px solid',
-                        borderColor: u.role === 'admin' ? 'var(--danger)' : 'var(--signal)',
-                        color: u.role === 'admin' ? 'var(--danger)' : 'var(--signal)',
-                        fontFamily: 'var(--ff-mono)'
-                     }}>
-                       {u.role.toUpperCase()}
-                     </span>
-                  </td>
-                  <td style={{ padding: '12px 20px', opacity: 0.6, fontSize: '11px' }}>{new Date(u.created_at).toLocaleString()}</td>
-                  <td style={{ padding: '12px 20px' }}>
-                     <button onClick={() => openEditModal(u)} style={{ background: 'none', border: '1px solid var(--signal)', color: 'var(--signal)', padding: '4px 8px', marginRight: '5px', cursor: 'pointer', borderRadius: 'var(--r-sm)' }}><EditIcon sx={{ fontSize: 14 }} /></button>
-                     <button onClick={() => onDelete(u.id)} style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '4px 8px', cursor: 'pointer', borderRadius: 'var(--r-sm)' }}><DeleteIcon sx={{ fontSize: 14 }} /></button>
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '20px', opacity: 0.5 }}>NO HAY DATOS</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      </div>
+      <div className="in-body">
+        <div className="in-vulns">
+          <div className="in-kpis">
+            <KpiCard icon={Users} label="Usuarios" value={users?.length ?? 0} sub="Con acceso a Valhalla" tone="info" />
+            <KpiCard icon={Wifi} label="Conectados ahora" value={online.length} sub={online.map(o => o.username).join(", ") || "—"} tone="ok" />
+            <KpiCard icon={ShieldCheck} label="Administradores" value={count("admin")} sub="Mínimo 1 siempre" tone="danger" />
+            <KpiCard icon={UserCog} label="Analistas" value={count("analista")} sub={`${count("viewer")} lectores · ${count("reporter")} reporteros`} tone="accent" />
+          </div>
+          <div className="wk-chipset rb-cats">
+            <button type="button" aria-pressed={role === "all"} onClick={() => setRole("all")}>Todos <small>{users?.length ?? 0}</small></button>
+            {Object.entries(ROLES).map(([k, [l]]) => <button key={k} type="button" aria-pressed={role === k} onClick={() => setRole(k)}>{l} <small>{count(k)}</small></button>)}
+          </div>
+          <div className="in-list" role="table">
+            <div className="in-row us-row in-row--head" role="row"><span /><span>Usuario</span><span>Rol</span><span>Rango</span><span>Alta</span><span>Estado</span></div>
+            {!users && <p className="in-empty">Cargando…</p>}
+            {users && !rows.length && <p className="in-empty">Ningún usuario con este filtro.</p>}
+            {rows.map(u => {
+              const on = isOnline(u.id); const sys = u.username.toLowerCase() === "valhalla-ia";
+              return (
+                <div key={u.id} role="row" className="in-row us-row" tabIndex={0} onClick={() => { setErr(null); setForm({ id: u.id, username: u.username, email: u.email ?? "", role: roleKey(u.role), security_rank: u.security_rank ?? "", password: "" }); }} onKeyDown={e => e.key === "Enter" && (e.currentTarget as HTMLElement).click()}>
+                  <span className="us-av">{sys ? <Bot size={15} /> : u.avatar_url ? <img src={u.avatar_url} alt="" /> : initials(u.username)}{on && <i />}</span>
+                  <span className="in-prod"><b>{u.username}{u.id === me?.id ? " (tú)" : ""}</b><small>{sys ? "Usuario de sistema · asistente IA del chat" : u.email || "sin email"}</small></span>
+                  <span><span className={`us-role us-role--${roleKey(u.role)}`}>{ROLES[roleKey(u.role)]?.[0] ?? u.role}</span></span>
+                  <span className="in-muted">{u.security_rank || "—"}</span>
+                  <span className="in-muted">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-ES") : "—"}</span>
+                  <span>{on ? <span className="sy-pill sy-st--ok">En línea{on.sessions > 1 ? ` · ${on.sessions}` : ""}</span> : <span className="in-muted">Desconectado</span>}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="us-roles">
+            {Object.entries(ROLES).map(([k, [l, d]]) => <div key={k}><span className={`us-role us-role--${k}`}>{l}</span><small>{d}</small></div>)}
+          </div>
+          <p className="in-foot"><Info size={12} />Contraseñas: mínimo 8 caracteres con mayúsculas, minúsculas, números y símbolos. No se puede eliminar al último administrador, a uno mismo ni al usuario de sistema de la IA.</p>
         </div>
       </div>
 
-      {/* User Modal */}
-      {modalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
-           <div className="panel" style={{ width: '450px' }}>
-              <div className="panel__head">
-                 <span className="panel__title">{editingUserId ? 'EDITAR OPERADOR' : 'NUEVO OPERADOR'}</span>
-                 <button onClick={() => setModalOpen(false)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>X</button>
-              </div>
-              <div className="panel__body">
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    
-                    <div className="users-form-field">
-                       <label className="users-form-label">OPERADOR_ID</label>
-                       <input
-                        type="text"
-                        className="users-form-input"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        placeholder="Ej: admin_neo"
-                       />
-                    </div>
-
-                    <div className="users-form-field">
-                       <label className="users-form-label">COM_LINK (EMAIL)</label>
-                       <input
-                        type="email"
-                        className="users-form-input"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="neo@valhalla.soc"
-                       />
-                    </div>
-
-                     <div className="users-form-field">
-                       <label className="users-form-label">RANGO_OPERATIVO (RANK)</label>
-                       <select
-                        className="users-form-select"
-                        value={rank}
-                        onChange={e => setRank(e.target.value)}
-                       >
-                         <option value="L1 Analyst">L1 ANALYST</option>
-                         <option value="L2 Responder">L2 RESPONDER</option>
-                         <option value="L3 Blue Team">L3 BLUE TEAM</option>
-                         <option value="SOC Manager">SOC MANAGER</option>
-                       </select>
-                    </div>
-
-                    <div className="users-form-field">
-                       <label className="users-form-label">NIVEL_ACCESO (ROL)</label>
-                       <select
-                        className="users-form-select"
-                        value={role}
-                        onChange={e => setRole(e.target.value)}
-                       >
-                         <option value="analyst">ANALISTA</option>
-                         <option value="admin">ADMINISTRADOR</option>
-                         <option value="viewer">VISOR (SOLO LECTURA)</option>
-                       </select>
-                    </div>
-
-                    <div className="users-form-field">
-                       <label className="users-form-label">{editingUserId ? 'ACTUALIZAR LLAVE_ACCESO (OPCIONAL)' : 'LLAVE_ACCESO (PASSWORD)'}</label>
-                       <input
-                        type="password"
-                        className="users-form-input"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder={editingUserId ? "Dejar en blanco para mantener" : "********"}
-                       />
-                    </div>
-
-                    <button onClick={onSave} className="action-btn" style={{ padding: '12px', marginTop: '10px', cursor: 'pointer', textAlign: 'center', fontWeight: 'bold' }}>
-                       {editingUserId ? 'GUARDAR CAMBIOS' : 'REGISTRAR OPERADOR'}
-                    </button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
+      {form && createPortal(<>
+        <div className="wk-drawer-backdrop" onClick={() => setForm(null)} aria-hidden="true" />
+        <aside className="wk-drawer" role="dialog" aria-modal="true" aria-label={form.id ? "Editar usuario" : "Nuevo usuario"}>
+          <div className="wk-drawer__head">{form.id ? <Pencil size={15} /> : <Plus size={15} />}<span className="wk-drawer__id">{form.id ? `Editar ${form.username}` : "Nuevo usuario"}</span>
+            <button className="vx-iconbtn" style={{ marginLeft: "auto" }} onClick={() => setForm(null)} aria-label="Cerrar"><X size={16} /></button></div>
+          <div className="wk-drawer__scroll">
+            <div className="rb-form">
+              <label>Usuario<input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} autoComplete="off" maxLength={64} /></label>
+              <label>Email<input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} autoComplete="off" /></label>
+              <label>Rol<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} disabled={form.username.toLowerCase() === "valhalla-ia"}>{Object.entries(ROLES).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></label>
+              <label>Rango<input value={form.security_rank} onChange={e => setForm({ ...form, security_rank: e.target.value })} maxLength={64} placeholder="L1 Analyst, Commander…" /></label>
+              <label className="rb-full">{form.id ? "Nueva contraseña (dejar vacío para no cambiarla)" : "Contraseña inicial"}
+                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} autoComplete="new-password" /></label>
+            </div>
+            <p className="in-muted us-hint"><KeyRound size={12} /> {ROLES[form.role]?.[1]}</p>
+            {form.id && isOnline(form.id) && <p className="in-muted us-hint"><Eye size={12} /> Conectado ahora ({isOnline(form.id)!.sessions} sesión/es).</p>}
+            {err && <p className="wk-form__err">{err}</p>}
+          </div>
+          <div className="wk-drawer__foot">
+            {form.id && form.id !== me?.id && form.username.toLowerCase() !== "valhalla-ia" && (
+              <HoldButton className="hp-block hp-block--wide" onConfirm={() => remove(users!.find(u => u.id === form.id)!)} title="Mantén pulsado para eliminar"><Trash2 size={13} />Eliminar</HoldButton>
+            )}
+            <button className="vp-btn vp-btn--primary" onClick={save} disabled={busy || form.username.trim().length < 3 || (!form.id && !form.password)}><Save size={13} />{busy ? "Guardando…" : "Guardar"}</button>
+          </div>
+        </aside>
+      </>, document.body)}
     </div>
   );
 }
