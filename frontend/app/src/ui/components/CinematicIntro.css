@@ -261,3 +261,8 @@
   94% { opacity: 0.55; }
   96% { opacity: 1; }
 }
+
+/* Móvil: la línea del lema no debe partirse en letras sueltas */
+@media (max-width: 700px) {
+  #c-tag { font-size: 8.5px; letter-spacing: .16em !important; max-width: 88vw; line-height: 1.7; }
+}
