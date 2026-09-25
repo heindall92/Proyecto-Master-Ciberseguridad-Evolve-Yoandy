@@ -13,8 +13,10 @@ Todas las fórmulas y umbrales se devuelven en `method` para que el informe los 
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +26,31 @@ from app import report_builder as rb
 from app.wazuh_client import WazuhClient
 
 logger = logging.getLogger("valhalla.grc")
+
+# ─── Mapa multinorma (Rosetta) ──────────────────────────────────────────────
+# Equivalencias revisadas entre los controles que Valhalla evalúa y los requisitos
+# de ENS, ISO 27001, NIS2 e ISO 42001 (catálogo Rosetta del autor). Solo se incluyen
+# los controles de Rosetta de los que Valhalla aporta evidencia real (p. ej. no MFA).
+_CROSSWALK = json.loads((Path(__file__).parent / "data" / "rosetta_crosswalk.json").read_text(encoding="utf-8"))
+
+
+def _multinorma(controls: list[dict]) -> dict[str, Any]:
+    per_fw: dict[str, dict[str, set]] = {fw: {"covered": set(), "partial": set()} for fw in _CROSSWALK["frameworks"]}
+    for c in controls:
+        c["crosswalk"] = _CROSSWALK["controls"].get(c["iso"], [])
+        bucket = {"covered": "covered", "partial": "partial"}.get(c["status"])
+        if not bucket:
+            continue
+        for rc in c["crosswalk"]:
+            for fw, reqs in rc["maps"].items():
+                per_fw[fw][bucket].update(r["id"] for r in reqs)
+    out = {}
+    for fw, meta in _CROSSWALK["frameworks"].items():
+        partial = per_fw[fw]["partial"] - per_fw[fw]["covered"]
+        out[fw] = {"name": meta["name"], "total": meta["total"],
+                   "covered": len(per_fw[fw]["covered"]), "partial": len(partial)}
+    return {"source": _CROSSWALK["source"], "frameworks": out}
+
 
 # ─── Cobertura ATT&CK del ruleset (cacheada: el ruleset cambia poco) ─────────
 _COVERAGE_TTL = 3600
@@ -204,6 +231,7 @@ async def build_grc(db: AsyncSession, start: datetime, end: datetime, *, author:
 
     scenarios = _scenarios(d, observed_gap)
     ctrls = d["controls"]
+    multinorma = _multinorma(ctrls)
     compliance = round(sum({"covered": 1, "partial": 0.5}.get(c["status"], 0) for c in ctrls) * 100 / len(ctrls)) if ctrls else 0
 
     plan = []
@@ -233,6 +261,7 @@ async def build_grc(db: AsyncSession, start: datetime, end: datetime, *, author:
             "observed_gap": observed_gap,
         },
         "controls": ctrls,
+        "multinorma": multinorma,
         "plan": plan,
         "limitations": limitations,
         "method": {
@@ -242,5 +271,7 @@ async def build_grc(db: AsyncSession, start: datetime, end: datetime, *, author:
             "coverage": "Técnica cubierta si al menos una regla del ruleset la etiqueta (alta con ≥3 reglas); las subtécnicas cuentan para su técnica.",
             "nist": "Controles: cubierto 100, parcial 50, carencia 0; se promedian con la métrica indicada en cada función.",
             "deadlines": "Plazo por prioridad: crítica 7 días, alta 30, media 90, baja 180.",
+            "multinorma": "Requisitos a los que Valhalla aporta evidencia a través de sus controles (mapa Rosetta). "
+                          "Aportar evidencia no equivale a cumplir la norma completa: un SIEM cubre sobre todo detección y respuesta.",
         },
     }

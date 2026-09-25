@@ -1,0 +1,487 @@
+{
+ "source": "Rosetta multinorma v2.0.0 (catálogo propio del autor)",
+ "frameworks": {
+  "ens": {
+   "name": "ENS (RD 311/2022)",
+   "total": 73
+  },
+  "iso27001": {
+   "name": "ISO/IEC 27001:2022",
+   "total": 117
+  },
+  "nis2": {
+   "name": "NIS2 (Directiva (UE) 2022/2555 y Reglamento de Ejecución 2024/2690)",
+   "total": 57
+  },
+  "iso42001": {
+   "name": "ISO/IEC 42001:2023 (IA)",
+   "total": 64
+  }
+ },
+ "controls": {
+  "A.8.16": [
+   {
+    "id": "OPE-10",
+    "t": "Monitorización y detección de intrusiones",
+    "obj": "Vigilancia continua de redes y sistemas para detectar comportamientos anómalos.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.mon.1",
+       "code": "op.mon.1",
+       "t": "Detección de intrusión",
+       "w": 1
+      },
+      {
+       "id": "op.mon.3",
+       "code": "op.mon.3",
+       "t": "Vigilancia",
+       "w": 1
+      },
+      {
+       "id": "op.exp.8",
+       "code": "op.exp.8",
+       "t": "Registro de la actividad",
+       "w": 0.5
+      },
+      {
+       "id": "mp.s.4",
+       "code": "mp.s.4",
+       "t": "Protección frente a denegación de servicio",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A8.16",
+       "code": "A.8.16",
+       "t": "Actividades de monitorización",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.2",
+       "code": "RE 3.2",
+       "t": "Monitorización y registro",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.5.25 / A.5.26": [
+   {
+    "id": "INC-03",
+    "t": "Evaluación y clasificación de eventos",
+    "obj": "Criterios para decidir si un evento es incidente y cuál es su gravedad.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.7",
+       "code": "op.exp.7",
+       "t": "Gestión de incidentes",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.25",
+       "code": "A.5.25",
+       "t": "Evaluación y decisión sobre eventos de seguridad",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.4",
+       "code": "RE 3.4",
+       "t": "Evaluación y clasificación de eventos",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   },
+   {
+    "id": "INC-04",
+    "t": "Respuesta a incidentes",
+    "obj": "Contención, erradicación y recuperación según procedimientos probados.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.7",
+       "code": "op.exp.7",
+       "t": "Gestión de incidentes",
+       "w": 1
+      },
+      {
+       "id": "op.exp.9",
+       "code": "op.exp.9",
+       "t": "Registro de la gestión de incidentes",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.26",
+       "code": "A.5.26",
+       "t": "Respuesta a incidentes de seguridad",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.5",
+       "code": "RE 3.5",
+       "t": "Respuesta a incidentes",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.5.27": [
+   {
+    "id": "INC-05",
+    "t": "Lecciones aprendidas",
+    "obj": "Revisión posterior de cada incidente relevante y acciones de mejora.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.9",
+       "code": "op.exp.9",
+       "t": "Registro de la gestión de incidentes",
+       "w": 1
+      },
+      {
+       "id": "op.exp.7",
+       "code": "op.exp.7",
+       "t": "Gestión de incidentes",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.27",
+       "code": "A.5.27",
+       "t": "Aprendizaje de los incidentes",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.6",
+       "code": "RE 3.6",
+       "t": "Revisiones posteriores al incidente",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.5.28": [
+   {
+    "id": "INC-06",
+    "t": "Recopilación de evidencias",
+    "obj": "Evidencias recogidas y custodiadas de forma que sirvan ante un tribunal.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.9",
+       "code": "op.exp.9",
+       "t": "Registro de la gestión de incidentes",
+       "w": 0.5
+      },
+      {
+       "id": "op.exp.7",
+       "code": "op.exp.7",
+       "t": "Gestión de incidentes",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.28",
+       "code": "A.5.28",
+       "t": "Recopilación de evidencias",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.5",
+       "code": "RE 3.5",
+       "t": "Respuesta a incidentes",
+       "w": 0.5
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.8.15": [
+   {
+    "id": "OPE-08",
+    "t": "Registro de actividad",
+    "obj": "Registros de eventos de usuarios y sistemas, protegidos y conservados.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.8",
+       "code": "op.exp.8",
+       "t": "Registro de la actividad",
+       "w": 1
+      },
+      {
+       "id": "op.mon.1",
+       "code": "op.mon.1",
+       "t": "Detección de intrusión",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A8.15",
+       "code": "A.8.15",
+       "t": "Registro de eventos",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "3.2",
+       "code": "RE 3.2",
+       "t": "Monitorización y registro",
+       "w": 0.5
+      }
+     ],
+     "iso42001": [
+      {
+       "id": "A6.2.8",
+       "code": "A.6.2.8",
+       "t": "Registro de eventos del sistema de IA",
+       "w": 0
+      }
+     ]
+    }
+   },
+   {
+    "id": "IA-10",
+    "t": "Registros de eventos del sistema de IA",
+    "obj": "Registro de entradas, decisiones y eventos relevantes para la trazabilidad.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.exp.8",
+       "code": "op.exp.8",
+       "t": "Registro de la actividad",
+       "w": 0
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A8.15",
+       "code": "A.8.15",
+       "t": "Registro de eventos",
+       "w": 0
+      }
+     ],
+     "nis2": [],
+     "iso42001": [
+      {
+       "id": "A6.2.8",
+       "code": "A.6.2.8",
+       "t": "Registro de eventos del sistema de IA",
+       "w": 1
+      }
+     ]
+    }
+   }
+  ],
+  "A.5.7": [
+   {
+    "id": "RIE-03",
+    "t": "Inteligencia de amenazas",
+    "obj": "Se recoge y analiza información sobre amenazas para anticiparse a ellas.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.mon.3",
+       "code": "op.mon.3",
+       "t": "Vigilancia",
+       "w": 0.5
+      },
+      {
+       "id": "op.pl.1",
+       "code": "op.pl.1",
+       "t": "Análisis de riesgos",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.7",
+       "code": "A.5.7",
+       "t": "Inteligencia de amenazas",
+       "w": 1
+      }
+     ],
+     "nis2": [],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.8.20": [
+   {
+    "id": "RED-01",
+    "t": "Seguridad y perímetro de red",
+    "obj": "Red protegida en su perímetro y servicios de red gestionados de forma segura.",
+    "maps": {
+     "ens": [
+      {
+       "id": "mp.com.1",
+       "code": "mp.com.1",
+       "t": "Perímetro seguro",
+       "w": 1
+      },
+      {
+       "id": "mp.com.4",
+       "code": "mp.com.4",
+       "t": "Separación de flujos de información en la red",
+       "w": 0.5
+      },
+      {
+       "id": "op.pl.2",
+       "code": "op.pl.2",
+       "t": "Arquitectura de Seguridad",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A8.20",
+       "code": "A.8.20",
+       "t": "Seguridad de las redes",
+       "w": 1
+      },
+      {
+       "id": "A8.21",
+       "code": "A.8.21",
+       "t": "Seguridad de los servicios de red",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "6.7",
+       "code": "RE 6.7",
+       "t": "Seguridad de la red",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ],
+  "A.5.15 / A.8.5": [
+   {
+    "id": "ACC-02",
+    "t": "Control de acceso y mínimo privilegio",
+    "obj": "Política de acceso basada en necesidad de conocer y mínimo privilegio.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.acc.2",
+       "code": "op.acc.2",
+       "t": "Requisitos de acceso",
+       "w": 1
+      },
+      {
+       "id": "op.acc.4",
+       "code": "op.acc.4",
+       "t": "Proceso de gestión de derechos de acceso",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.15",
+       "code": "A.5.15",
+       "t": "Control de acceso",
+       "w": 1
+      },
+      {
+       "id": "A8.3",
+       "code": "A.8.3",
+       "t": "Restricción del acceso a la información",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "11.1",
+       "code": "RE 11.1",
+       "t": "Política de control de acceso",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   },
+   {
+    "id": "ACC-06",
+    "t": "Autenticación segura",
+    "obj": "Mecanismos de autenticación proporcionales al riesgo y credenciales bien protegidas.",
+    "maps": {
+     "ens": [
+      {
+       "id": "op.acc.5",
+       "code": "op.acc.5",
+       "t": "Mecanismo de autenticación (usuarios externos)",
+       "w": 1
+      },
+      {
+       "id": "op.acc.6",
+       "code": "op.acc.6",
+       "t": "Mecanismo de autenticación (usuarios de la organización)",
+       "w": 1
+      },
+      {
+       "id": "op.acc.1",
+       "code": "op.acc.1",
+       "t": "Identificación",
+       "w": 0.5
+      }
+     ],
+     "iso27001": [
+      {
+       "id": "A5.17",
+       "code": "A.5.17",
+       "t": "Información de autenticación",
+       "w": 1
+      },
+      {
+       "id": "A8.5",
+       "code": "A.8.5",
+       "t": "Autenticación segura",
+       "w": 1
+      }
+     ],
+     "nis2": [
+      {
+       "id": "11.6",
+       "code": "RE 11.6",
+       "t": "Autenticación",
+       "w": 1
+      }
+     ],
+     "iso42001": []
+    }
+   }
+  ]
+ }
+}
