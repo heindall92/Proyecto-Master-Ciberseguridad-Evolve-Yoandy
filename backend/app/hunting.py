@@ -38,6 +38,17 @@ HUNT_QUERIES: dict[str, dict[str, Any]] = {
         "description": "Nombres de usuario más usados en intentos de login.",
         "field": "data.username",
     },
+    "valid_credentials": {
+        "name": "Credenciales que funcionaron",
+        "description": "Usuarios con login aceptado: las contraseñas que el atacante ya conoce (T1078).",
+        "field": "data.username",
+        "eventid": "cowrie.login.success",
+    },
+    "ssh_clients": {
+        "name": "Clientes SSH de los atacantes",
+        "description": "Versión del cliente: identifica herramientas automáticas (libssh, paramiko, Go…).",
+        "field": "data.version",
+    },
     "malware_downloads": {
         "name": "Descargas de malware (wget/curl/tftp)",
         "description": "Comandos de transferencia de herramientas (T1105).",
@@ -56,12 +67,16 @@ async def run_query(query_id: str, hours: int = 168, limit: int = 20) -> dict[st
         return {"error": "consulta no encontrada", "query_id": query_id}
 
     base_must = [{"range": {"@timestamp": {"gte": _since(hours)}}}, osc._cowrie_query_clause()]
+    if spec.get("eventid"):
+        base_must.append({"term": {"data.eventid": spec["eventid"]}})
+    # Excluye las alertas del bucle antiguo de la IA (llevan el grupo cowrie pero no son ataques)
+    not_ai = [{"term": {"rule.groups": "ai_analysis"}}]
 
     # Caza por coincidencia de comando (malware): devuelve documentos recientes
     if "match" in spec:
         body = {
             "size": limit,
-            "query": {"bool": {"must": base_must,
+            "query": {"bool": {"must": base_must, "must_not": not_ai,
                                "filter": [{"regexp": {"data.input": f".*({spec['match']}).*"}}]}},
             "sort": [{"@timestamp": {"order": "desc"}}],
             "_source": ["@timestamp", "data.src_ip", "data.input", "rule.description"],
@@ -80,10 +95,15 @@ async def run_query(query_id: str, hours: int = 168, limit: int = 20) -> dict[st
 
     # Caza por agregación de términos (top-N)
     field = spec["field"]
-    terms_agg: dict[str, Any] = {"field": field, "size": limit, "missing": "unknown"}
+    # Sin cubo "unknown" (eventos sin el campo): dominaba todas las listas y no aporta
+    terms_agg: dict[str, Any] = {"field": field, "size": limit}
+    if field in ("data.username", "data.password"):
+        # Cabeceras de protocolo (p. ej. SIP de nmap) que Cowrie registra como usuario: no son credenciales
+        from app.report_builder import _PROTO_NOISE
+        terms_agg["exclude"] = _PROTO_NOISE
     if "min_doc_count" in spec:
         terms_agg["min_doc_count"] = spec["min_doc_count"]
-    body = {"size": 0, "query": {"bool": {"must": base_must}}, "aggs": {"hunt": {"terms": terms_agg}}}
+    body = {"size": 0, "query": {"bool": {"must": base_must, "must_not": not_ai}}, "aggs": {"hunt": {"terms": terms_agg}}}
     resp = await osc._search(body)
     buckets = resp.get("aggregations", {}).get("hunt", {}).get("buckets", [])
     results = [{"value": b["key"], "count": b["doc_count"]} for b in buckets]
