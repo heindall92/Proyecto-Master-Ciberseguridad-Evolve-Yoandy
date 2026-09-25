@@ -104,14 +104,14 @@ export default function IntelVulns({ es }: { es: boolean }) {
             <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)} title={l}><I size={14} /><span>{l}</span></button>
           ))}
         </div>
-        <span className="in-progress" title={es ? "La API del NVD limita las consultas sin clave; los datos se guardan 24 h" : "NVD API rate limit; cached 24 h"}>
-          {cves && done < cves.length ? <><RefreshCw size={12} className="ex-spin" />{es ? `Enriqueciendo ${done}/${cves.length}` : `Enriching ${done}/${cves.length}`}</> : cves ? (es ? "Datos NVD · GitHub · Exploit-DB" : "NVD · GitHub · Exploit-DB data") : ""}
-        </span>
         <button type="button" className="wk-iconbtn" onClick={load} title={es ? "Recargar" : "Reload"} aria-label={es ? "Recargar" : "Reload"}><RefreshCw size={15} /></button>
         <button type="button" className="vp-btn vp-btn--primary in-notice" disabled={posting || !postIds.length} onClick={genPost}
           title={es ? `Redactar con la IA local un aviso para el equipo sobre ${sel.size ? "las CVE marcadas" : "las 5 más prioritarias (o marca las que quieras)"}` : "Draft a team notice with local AI"}>
           <Megaphone size={14} />{posting ? (es ? "Redactando…" : "Drafting…") : sel.size ? `${es ? "Aviso" : "Notice"} (${sel.size})` : (es ? "Aviso top 5" : "Notice top 5")}
         </button>
+        <span className="in-progress" title={es ? "La API del NVD limita las consultas sin clave; los datos se guardan 24 h" : "NVD API rate limit; cached 24 h"}>
+          {cves && done < cves.length ? <><RefreshCw size={12} className="ex-spin" />{es ? `Enriqueciendo ${done}/${cves.length}` : `Enriching ${done}/${cves.length}`}</> : cves ? (es ? "Datos NVD · GitHub · Exploit-DB" : "NVD · GitHub · Exploit-DB data") : ""}
+        </span>
       </div>
 
       <div className="in-list" role="table" aria-label={es ? "Vulnerabilidades explotadas" : "Exploited vulnerabilities"}>
