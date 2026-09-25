@@ -409,6 +409,7 @@ async def on_startup():
         await conn.run_sync(_migrate_users_rank_column)
         await conn.run_sync(_migrate_tickets_resolved_at)
         await conn.run_sync(_migrate_added_columns)
+    await _load_runtime_settings()
     
     # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
@@ -921,9 +922,9 @@ async def upload_evidence(
         raise HTTPException(400, f"Tipo de archivo no permitido: {ext}")
 
     file_content = await file.read()
-    max_bytes = settings.max_upload_size_mb * 1024 * 1024
-    if len(file_content) > max_bytes:
-        raise HTTPException(400, f"Archivo supera {settings.max_upload_size_mb} MB")
+    max_mb = int(await _get_setting(db, "max_upload_mb", str(settings.max_upload_size_mb)))
+    if len(file_content) > max_mb * 1024 * 1024:
+        raise HTTPException(400, f"Archivo supera {max_mb} MB")
     if not file_content:
         raise HTTPException(400, "Archivo vacío")
 
@@ -1031,6 +1032,68 @@ async def list_incidents(db: AsyncSession = Depends(get_db), current: User = Dep
     return rows
 
 # SETTINGS
+# Ajustes editables desde "Ajustes globales": clave -> validación. Cualquier otra clave se rechaza.
+AI_LEVEL_THRESHOLDS = {"low": 3, "medium": 5, "high": 7, "critical": 12}
+
+
+def _validate_setting(key: str, value: str) -> str:
+    v = (value or "").strip()
+    if key == "ollama_url":
+        if not _re.match(r"^https?://[\w.\-]+(:\d{1,5})?/?$", v):
+            raise HTTPException(422, "URL de Ollama no válida (http(s)://host:puerto)")
+        return v.rstrip("/")
+    if key == "ollama_model":
+        if not _re.match(r"^[\w.\-/]+(:[\w.\-]+)?$", v):
+            raise HTTPException(422, "Nombre de modelo no válido")
+        return v
+    if key == "ollama_temperature":
+        try:
+            f = float(v)
+        except ValueError:
+            raise HTTPException(422, "Temperatura no válida")
+        if not 0 <= f <= 1:
+            raise HTTPException(422, "La temperatura debe estar entre 0 y 1")
+        return str(f)
+    if key == "ollama_min_alert_level":
+        if v not in AI_LEVEL_THRESHOLDS:
+            raise HTTPException(422, "Nivel mínimo no válido")
+        return v
+    if key == "max_upload_mb":
+        if not v.isdigit() or not 1 <= int(v) <= 50:
+            raise HTTPException(422, "El límite de subida debe estar entre 1 y 50 MB")
+        return v
+    if key == "retention_days":
+        if not v.isdigit() or not 7 <= int(v) <= 365:
+            raise HTTPException(422, "La retención debe estar entre 7 y 365 días")
+        return v
+    if key in ("vt_api_key", "otx_api_key", "abuseipdb_api_key"):
+        return v
+    raise HTTPException(422, f"Ajuste no reconocido: {key}")
+
+
+async def _get_setting(db: AsyncSession, key: str, default: str) -> str:
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+    return row.value if row and not row.is_sensitive and row.value else default
+
+
+def _apply_ai_runtime(key: str, value: str) -> None:
+    """Aplica al momento los ajustes de IA (el cliente de Ollama lee `settings`)."""
+    if key == "ollama_url":
+        settings.ollama_base_url = value
+    elif key == "ollama_model":
+        settings.ollama_model = value
+    elif key == "ollama_temperature":
+        settings.ollama_temperature = float(value)
+
+
+async def _load_runtime_settings() -> None:
+    async with SessionLocal() as db:
+        for key in ("ollama_url", "ollama_model", "ollama_temperature"):
+            val = await _get_setting(db, key, "")
+            if val:
+                _apply_ai_runtime(key, val)
+
+
 @app.get("/api/settings", response_model=list[SystemSettingOut])
 async def get_settings(db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403, "Forbidden")
@@ -1042,6 +1105,8 @@ async def get_settings(db: AsyncSession = Depends(get_db), current: User = Depen
         "ollama_model": settings.ollama_model,
         "ollama_temperature": str(settings.ollama_temperature),
         "max_upload_mb": str(settings.max_upload_size_mb),
+        "ollama_min_alert_level": "high",
+        "retention_days": "",  # vacío = sin política: las alertas se conservan indefinidamente
     }
     stored = {r.key for r in rows}
     out += [SystemSettingOut(key=k, value=v, is_sensitive=False, source="env") for k, v in effective.items() if k not in stored]
@@ -1050,16 +1115,34 @@ async def get_settings(db: AsyncSession = Depends(get_db), current: User = Depen
 @app.put("/api/settings")
 async def update_settings(payload: list[SystemSettingIn], db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403, "Forbidden")
+    applied: dict[str, str] = {}
     for s in payload:
         # Clave enmascarada o vacía: no sobrescribir el secreto guardado
         if s.is_sensitive and (s.value == "********" or not s.value.strip()): continue
+        # Campo opcional vacío (p. ej. retención sin configurar): no se guarda
+        if not s.is_sensitive and not s.value.strip() and s.key == "retention_days": continue
+        value = _validate_setting(s.key, s.value)
         existing = (await db.execute(select(SystemSetting).where(SystemSetting.key == s.key))).scalar_one_or_none()
-        val = encrypt_secret(s.value) if s.is_sensitive else s.value
+        if not s.is_sensitive and existing and existing.value == value:
+            continue
+        val = encrypt_secret(value) if s.is_sensitive else value
         if existing:
             existing.value = val; existing.is_sensitive = s.is_sensitive
         else:
             db.add(SystemSetting(key=s.key, value=val, is_sensitive=s.is_sensitive))
-    await db.commit(); return {"status": "ok"}
+        applied[s.key] = "***" if s.is_sensitive else value
+    await db.commit()
+
+    for key, value in applied.items():
+        _apply_ai_runtime(key, value)
+    retention = None
+    if "retention_days" in applied:
+        try:
+            retention = await osc.apply_retention_policy(int(applied["retention_days"]))
+        except Exception as e:
+            logger.warning(f"No se pudo aplicar la política de retención: {e}")
+            raise HTTPException(502, "Ajustes guardados, pero el Wazuh Indexer no aceptó la política de retención")
+    return {"status": "ok", "changed": sorted(applied), "retention": retention}
 
 # AGENTS & WAZUH
 @app.get("/api/agents")
@@ -2070,7 +2153,8 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     level = int(rule.get("level", 0))
     description = rule.get("description", "Alert")
     rule_id = rule.get("id", "0")
-    source_ip = alert.get("data", {}).get("srcip") or alert.get("srcip", "N/A")
+    # Wazuh usa data.srcip y Cowrie data.src_ip
+    source_ip = alert.get("data", {}).get("srcip") or alert.get("data", {}).get("src_ip") or alert.get("srcip", "N/A")
     agent_name = alert.get("agent", {}).get("name") or "Manager"
     
     # Map Wazuh level to Valhalla severity
@@ -2083,10 +2167,12 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     # Hacemos el triage SÍNCRONO solo cuando hay que tomar una decisión (ticket/bloqueo);
     # si no, en background para no bloquear el webhook de Wazuh.
     ai = None
+    # Umbral de análisis IA configurable en Ajustes (por defecto "high" = nivel 7)
+    ai_min_level = AI_LEVEL_THRESHOLDS.get(await _get_setting(db, "ollama_min_alert_level", "high"), 7)
     need_decision = (settings.auto_create_webhook_tickets and level >= 9) or (
         settings.auto_block_enabled and level >= 7
     )
-    if level >= 7 and need_decision:
+    if level >= ai_min_level and need_decision:
         try:
             alert["knowledge"] = await build_knowledge(db, description, [])
             res = await analyze_alert(int(rule_id), alert)
@@ -2094,7 +2180,7 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 ai = res.data
         except Exception as e:
             logger.warning("Co-piloto: triage falló para %s: %s", rule_id, e)
-    elif level >= 7:
+    elif level >= ai_min_level:
         async def run_ai():
             try:
                 res = await analyze_alert(int(rule_id), alert)

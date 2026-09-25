@@ -98,6 +98,44 @@ async def _search(body: dict[str, Any]) -> dict[str, Any]:
         return {}
 
 
+# ── Retención de alertas (ISM) ───────────────────────────────────────────────
+
+RETENTION_POLICY_ID = "valhalla-alerts-retention"
+
+
+async def apply_retention_policy(days: int) -> dict[str, Any]:
+    """Crea/actualiza la política ISM que borra los índices wazuh-alerts-* con más de
+    `days` días y la aplica a los índices existentes. Limita la conservación de datos
+    (incluidas IP de terceros) al plazo configurado en Ajustes."""
+    policy = {
+        "policy": {
+            "description": f"Valhalla SOC: conservar alertas {days} días",
+            "default_state": "hot",
+            "states": [
+                {"name": "hot", "actions": [],
+                 "transitions": [{"state_name": "delete", "conditions": {"min_index_age": f"{days}d"}}]},
+                {"name": "delete", "actions": [{"delete": {}}], "transitions": []},
+            ],
+            "ism_template": [{"index_patterns": ["wazuh-alerts-*"], "priority": 100}],
+        }
+    }
+    async with _client() as c:
+        url = f"/_plugins/_ism/policies/{RETENTION_POLICY_ID}"
+        current = await c.get(url)
+        if current.status_code == 200:
+            meta = current.json()
+            r = await c.put(url, params={"if_seq_no": meta["_seq_no"], "if_primary_term": meta["_primary_term"]}, json=policy)
+        else:
+            r = await c.put(url, json=policy)
+        r.raise_for_status()
+        # Índices ya existentes: asignar la política (los que ya la tienen se ignoran)
+        add = await c.post(f"/_plugins/_ism/add/{INDEX}", json={"policy_id": RETENTION_POLICY_ID})
+        applied = add.json() if add.status_code == 200 else {}
+        # Si ya tenían la política, actualizar a la nueva versión
+        await c.post(f"/_plugins/_ism/change_policy/{INDEX}", json={"policy_id": RETENTION_POLICY_ID})
+    return {"days": days, "updated_indices": applied.get("updated_indices", 0)}
+
+
 # ── Top 20 Attackers ────────────────────────────────────────────────────────
 
 async def get_top_attackers(limit: int = 20, hours: int = 24) -> list[dict]:
