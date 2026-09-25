@@ -163,7 +163,7 @@ services:
       - ./wazuh_config/rules/cowrie_rules.xml:/var/ossec/etc/rules/cowrie_rules.xml
       - ./wazuh_config/rules/local_rules.xml:/var/ossec/etc/rules/local_rules.xml
       - ./wazuh_config/rules/sigma_rules.xml:/var/ossec/etc/rules/sigma_rules.xml
-      - ./wazuh_config/rules/correlation_rules.xml:/var/ossec/etc/rules/correlation_rules.xml
+      - ./wazuh_config/rules/correlation_rules.xml:/var/ossec/etc/rules/zz_correlation_rules.xml  # "zz_": Wazuh carga por orden alfabético y estas reglas dependen de cowrie_rules
       - ./wazuh_config/decoders/cowrie_decoders.xml:/var/ossec/etc/decoders/cowrie_decoders.xml
       # Montamos el script en /tmp para luego copiarlo con permisos correctos en el entrypoint
       - ./wazuh_config/integrations/custom-ollama.py:/tmp/custom-ollama-src:ro
