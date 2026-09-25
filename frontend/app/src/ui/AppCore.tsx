@@ -1318,7 +1318,23 @@ export default function App() {
                         <span className="chat-msg__time">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       {msg.text && <div className="chat-msg__text">{renderMsgText(msg.text)}</div>}
-                      {msg.attachment && (
+                      {msg.attachment?.type === 'valhalla/report' ? (
+                        <button
+                          type="button"
+                          className="chat-report-card"
+                          disabled={user?.role === 'viewer'}
+                          onClick={() => {
+                            try { sessionStorage.setItem('valhalla.openReport', msg.attachment!.name); } catch { /* sin almacenamiento */ }
+                            dispatch(setView('reports'));
+                            if (isMobile) dispatch(setChatOpen(false));
+                          }}
+                          title={user?.role === 'viewer' ? (lang === 'es' ? 'Requiere rol analista' : 'Analyst role required') : undefined}
+                        >
+                          <FileBarChart size={16} />
+                          <span><b>{lang === 'es' ? 'Abrir informe' : 'Open report'}</b>{msg.attachment.name}</span>
+                          <ArrowRight size={14} />
+                        </button>
+                      ) : msg.attachment && (
                         <div className="chat-msg__attachment">
                           {!safeAttachmentUrl(msg.attachment) ? (
                             <span style={{ color: 'var(--text-faint)' }}>{lang === 'es' ? 'Adjunto bloqueado (tipo no permitido)' : 'Attachment blocked'}</span>
