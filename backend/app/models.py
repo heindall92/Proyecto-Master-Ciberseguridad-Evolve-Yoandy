@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
-from sqlalchemy import Integer, BigInteger, DateTime, ForeignKey, Identity, Index, String, Text, func, JSON, Boolean
+from sqlalchemy import Integer, BigInteger, DateTime, ForeignKey, Identity, Index, String, Text, func, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 import sqlalchemy.dialects.postgresql
 
@@ -100,9 +100,13 @@ class Ticket(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Clasificación al cerrar: true_positive | false_positive | benign
+    classification: Mapped[str | None] = mapped_column(String(32), nullable=True)
     assignee: Mapped["User | None"] = relationship("User", back_populates="assigned_tickets", foreign_keys=[assigned_to_id])
     reporter: Mapped["User | None"] = relationship("User", back_populates="reported_tickets", foreign_keys=[reporter_id])
     evidence: Mapped[list["Evidence"]] = relationship("Evidence", back_populates="ticket", cascade="all, delete-orphan")
+    events: Mapped[list["TicketEvent"]] = relationship("TicketEvent", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketEvent.id")
+    alerts: Mapped[list["TicketAlert"]] = relationship("TicketAlert", back_populates="ticket", cascade="all, delete-orphan", order_by="TicketAlert.id")
 
 class Evidence(Base):
     __tablename__ = "evidence"
@@ -112,8 +116,42 @@ class Evidence(Base):
     file_path: Mapped[str] = mapped_column(String(512), nullable=False)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Cadena de custodia: huella SHA-256 al recibir el fichero y quién lo aportó
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    uploaded_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    uploaded_by_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="evidence")
+
+
+class TicketEvent(Base):
+    """Línea de tiempo del incidente (creación, cambios de fase, asignaciones, evidencias, comentarios...)."""
+    __tablename__ = "ticket_events"
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="events")
+
+
+class TicketAlert(Base):
+    """Alertas de Wazuh correlacionadas con un incidente (misma IP origen o misma regla y agente)."""
+    __tablename__ = "ticket_alerts"
+    __table_args__ = (UniqueConstraint("ticket_id", "alert_id", name="uq_ticket_alert"),)
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    alert_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    rule_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    rule_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    alert_timestamp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="alerts")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import logger from "../lib/logger";
 import { Responsive as ResponsiveGridLayout } from "react-grid-layout";
 import {
   getDashboardSummary, getRecentAlerts, getTopAttackers, getAlertVolume, listAgents, syncWazuhAlerts,
-  getMitreCoverage, getWazuhServices, createTicket, blockIp, getBlockedIps, AgentOut,
+  getMitreCoverage, getWazuhServices, createTicketFromAlert, blockIp, getBlockedIps, AgentOut,
 } from "../lib/api";
 import { translations } from "./translations";
 import { useAppDispatch } from "../store/hooks";
@@ -217,7 +218,9 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
     setBusy(true);
     try {
       const r = await syncWazuhAlerts(1);
-      toast(es ? `Sincronizado: ${r.created} incidentes nuevos, ${r.skipped} ya existían.` : `Synced: ${r.created} new incidents, ${r.skipped} already existed.`, "ok");
+      toast(es
+        ? `Sincronizado: ${r.created} incidentes nuevos, ${r.linked ?? 0} alertas vinculadas a incidentes abiertos.`
+        : `Synced: ${r.created} new incidents, ${r.linked ?? 0} alerts linked to open incidents.`, "ok");
       fetchData();
     } catch (e) {
       toast(es ? "No se pudo sincronizar con Wazuh." : "Could not sync with Wazuh.", "err");
@@ -226,21 +229,28 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
   };
 
   const handleCreateTicket = async (al: any) => {
+    if (!al.id) { toast(es ? "La alerta no tiene identificador de Wazuh." : "Alert has no Wazuh id.", "err"); return; }
     setBusy(true);
     try {
-      await createTicket({
-        title: `Wazuh Alert: ${al.description || al.rule_id}`.slice(0, 200),
-        description: `Source: ${al.source_ip || "N/A"}\nAgent: ${al.agent_name || "N/A"}\nRule: ${al.rule_id} (level ${al.rule_level ?? "?"})\n\n${al.description || ""}`,
-        severity: al.severity || "medium",
-        category: "wazuh-alert",
+      const r = await createTicketFromAlert({
+        alert_id: String(al.id),
+        rule_id: al.rule_id ? String(al.rule_id) : undefined,
+        rule_level: typeof al.rule_level === "number" ? al.rule_level : undefined,
+        description: al.description || undefined,
         source_ip: al.source_ip || null,
-        affected_asset: al.agent_name || al.agent_id || "Manager",
-        wazuh_alert_id: al.id ? String(al.id) : null,
+        agent_name: al.agent_name || undefined,
+        timestamp: al.timestamp || undefined,
+        severity: al.severity || "medium",
       });
-      toast(es ? "Incidente creado a partir de la alerta." : "Incident created from alert.", "ok");
+      const msg = {
+        created: es ? `Incidente #${r.ticket_id} creado.` : `Incident #${r.ticket_id} created.`,
+        linked: es ? `Alerta vinculada al incidente abierto #${r.ticket_id} (misma IP o regla).` : `Alert linked to open incident #${r.ticket_id} (same IP or rule).`,
+        duplicate: es ? `Esta alerta ya pertenece al incidente #${r.ticket_id}.` : `This alert already belongs to incident #${r.ticket_id}.`,
+      }[r.outcome];
+      toast(msg, r.outcome === "duplicate" ? "info" : "ok");
       fetchData();
     } catch (e) {
-      toast(es ? "Error al crear el incidente." : "Failed to create incident.", "err");
+      toast(String(e).replace(/^Error:\s*/, ""), "err");
       logger.error("Error creating ticket:", e);
     } finally { setBusy(false); }
   };
@@ -496,7 +506,7 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
         ))}
       </ResponsiveGridLayout>
 
-      {catalogOpen && (
+      {catalogOpen && createPortal(
         <div className="vp-modal-backdrop" onMouseDown={() => setCatalogOpen(false)}>
           <div className="vp-pop" style={{ position: "static", width: "min(520px, 100%)" }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={t("add_widget_title")}>
             <div className="vp-pop__head">
@@ -512,7 +522,8 @@ export default function DashboardFinal({ isLockedProp = false, showWidgetCatalog
             </div>
             <div className="vp-pop__foot"><button className="vp-btn vp-btn--block" onClick={() => setCatalogOpen(false)}>{t("close")}</button></div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
