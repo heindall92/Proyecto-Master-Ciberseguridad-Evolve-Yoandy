@@ -747,10 +747,18 @@ export default function App() {
   }
 
 
+  // Iconos Lucide únicos por módulo (los mismos que usa el buscador Ctrl+K)
+  const NAV_ICONS: Record<string, PaletteCommand['icon']> = {
+    overview: LayoutDashboard, siem: Layers, assets: Monitor, incidents: Siren, monitors: Radar,
+    health: Activity, audit: ScrollText, cowrie: Bug, threat: ShieldAlert, threatmap: Globe2,
+    lsamonitor: KeyRound, bifrost: BarChart3, heimdall: FileText, cveintel: ShieldCheck,
+    runbooks: BookOpen, workspace: Briefcase, 'executive-report': FileBarChart, users: Users,
+  };
+
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
     <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__icon-wrap">
-        <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>
+        {(() => { const Icon = NAV_ICONS[id]; return Icon ? <Icon className="navbtn__icon" aria-hidden="true" /> : <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>; })()}
       </span>
       <span className="navbtn__main">{label}</span>
       <span className="navbtn__sub">{sub}</span>

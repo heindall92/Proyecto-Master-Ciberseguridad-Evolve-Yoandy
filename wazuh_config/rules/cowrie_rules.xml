@@ -197,7 +197,9 @@
   </rule>
 
   <!-- ════════ OLLAMA AI INTEGRATION RULES ════════ -->
-  <rule id="100200" level="10">
+  <!-- Nivel 3 (informativo): el análisis de la IA acompaña a la alerta original, no es una alerta nueva.
+       Además queda por debajo del umbral de la integración (nivel 5) y no la vuelve a disparar. -->
+  <rule id="100200" level="3">
     <decoded_as>json</decoded_as>
     <field name="integration">ollama_ai</field>
     <description>Ollama AI Insight para Alerta $(original_rule_id): $(ai_verdict)</description>
