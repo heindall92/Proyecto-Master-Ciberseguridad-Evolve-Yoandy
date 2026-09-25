@@ -133,7 +133,7 @@ export default function SocMaturityView({ lang = "es" }: { lang?: string }) {
             <div key={a.analyst} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", padding: "3px 0", borderBottom: "1px solid var(--line-faint)" }}>
               <span>{a.analyst}</span><span style={{ color: "var(--signal)", fontWeight: 600 }}>{a.closed}</span>
             </div>
-          )) : <div style={{ fontSize: "10px", color: "var(--text-dim)", opacity: 0.6 }}>{t("Sin tickets cerrados aún", "No closed tickets yet")}</div>}
+          )) : <div style={{ fontSize: "10px", color: "var(--text-faint)" }}>{t("Sin tickets cerrados aún", "No closed tickets yet")}</div>}
         </div>
 
         {/* ATT&CK técnicas vistas */}

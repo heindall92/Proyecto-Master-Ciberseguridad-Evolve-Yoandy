@@ -63,6 +63,7 @@ body[data-theme="light"] .wk-card { background: #ffffff; box-shadow: 0 1px 2px r
 .wk-card__foot { display: flex; align-items: center; gap: 6px; }
 .wk-assignee { display: inline-flex; align-items: center; gap: 6px; font: 600 10px var(--mono); color: var(--text-dim); min-width: 0; }
 .wk-assignee--none { color: var(--amber); }
+body[data-theme="light"] .wk-assignee--none { color: #8a5a00; }
 .wk-av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font: 700 10px var(--sans); color: var(--bg-void); background: var(--signal); }
 .wk-av--none { background: transparent; border: 1px dashed var(--amber); color: var(--amber); }
 .wk-move { margin-left: auto; display: flex; gap: 4px; }

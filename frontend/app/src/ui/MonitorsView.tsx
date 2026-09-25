@@ -151,7 +151,7 @@ export default function MonitorsView({ lang }: { lang: 'en' | 'es' }) {
                             </div>
 
                             {m.rule_id_pattern && (
-                                <div style={{ marginTop: '15px', padding: '8px', background: 'rgba(0,0,0,0.5)', fontSize: '9px', fontFamily: 'var(--mono)', color: 'var(--cyan)' }}>
+                                <div style={{ marginTop: '15px', padding: '8px', background: 'color-mix(in srgb, var(--text) 6%, transparent)', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '10px', fontFamily: 'var(--mono)', color: 'var(--text-dim)' }}>
                                     MATCH PATTERN: {m.rule_id_pattern}
                                 </div>
                             )}

@@ -542,7 +542,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
       <div className="panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
         <div className="panel__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="panel__title">IOC WATCHLIST</span>
-            <span style={{ fontSize: '10px', background: 'var(--danger)', color: '#fff', padding: '2px 6px', borderRadius: '10px' }}>{watchlist.length} ACTIVOS</span>
+            <span style={{ fontSize: '10px', background: 'color-mix(in srgb, var(--danger) 16%, transparent)', color: 'var(--danger)', border: '1px solid color-mix(in srgb, var(--danger) 45%, transparent)', padding: '2px 6px', borderRadius: '10px' }}>{watchlist.length} ACTIVOS</span>
         </div>
         <div className="panel__body" style={{ flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {watchlist.map(ioc => {
@@ -576,7 +576,6 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
             })}
             {watchlist.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: '11px', marginTop: '40px' }}>
-                    <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '10px' }}></div>
                     No hay indicadores en seguimiento.
                 </div>
             )}

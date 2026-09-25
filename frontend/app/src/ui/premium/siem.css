@@ -7,6 +7,7 @@
 .sv-title h1 { margin: 0; font: 700 20px var(--sans); letter-spacing: 1.5px; color: var(--text-bright); }
 .sv-live { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font: 700 10px var(--mono); letter-spacing: 1px; color: #3fb37f; background: color-mix(in srgb, #3fb37f 12%, transparent); }
 .sv-live svg { animation: vx-ping-op 2s ease-in-out infinite; }
+body[data-theme="light"] .sv-live { color: #1f7a4d; } /* 4,5:1 en claro */
 @keyframes vx-ping-op { 50% { opacity: 0.35; } }
 .sv-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sv-tools .wk-search { width: 220px; }

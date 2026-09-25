@@ -29,7 +29,8 @@
 
 /* TLP 2.0 (colores oficiales FIRST) */
 .rc-tlp { display: inline-flex; align-items: center; justify-content: center; height: 26px; padding: 0 8px; border-radius: 6px; border: 1px solid transparent; background: #000; font: 800 10px var(--mono); letter-spacing: 0.5px; cursor: default; }
-button.rc-tlp { cursor: pointer; opacity: 0.45; }
+button.rc-tlp { cursor: pointer; border-color: #2a2f33; } /* sin atenuar: los colores TLP deben leerse siempre */
+button.rc-tlp:not([aria-pressed="true"]):hover { border-color: #5a6268; }
 button.rc-tlp[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--bg-void), 0 0 0 3px var(--signal); }
 .rc-tlp--CLEAR { color: #fff; }
 .rc-tlp--GREEN { color: #33ff00; }
@@ -42,6 +43,11 @@ button.rc-tlp[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--bg-
 .rc-risk--medio { --tone: #d9a62c; }
 .rc-risk--alto { --tone: #f08a3c; }
 .rc-risk--crítico, .rc-risk--critico { --tone: #ef4f5f; }
+/* Modo claro: tonos más oscuros para llegar a 4,5:1 sobre fondo claro */
+body[data-theme="light"] .rc-risk--bajo { --tone: #1f7a4d; }
+body[data-theme="light"] .rc-risk--medio { --tone: #8a5a00; }
+body[data-theme="light"] .rc-risk--alto { --tone: #a84a08; }
+body[data-theme="light"] :is(.rc-risk--crítico, .rc-risk--critico) { --tone: #b3261e; }
 
 .rc-viewer { min-height: 0; }
 .rc-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
