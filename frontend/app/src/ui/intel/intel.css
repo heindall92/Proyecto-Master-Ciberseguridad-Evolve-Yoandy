@@ -87,7 +87,11 @@ body[data-theme="light"] .in-st--whitelist { --st: #1f7a4d; }
 .in-vulns { display: flex; flex-direction: column; gap: 12px; }
 .in-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .in-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.in-bar .wk-search { flex: 1 1 220px; min-width: 0; }
+.in-bar { min-width: 0; }
+.in-bar > * { flex-shrink: 0; }
+.in-bar .wk-search { flex: 0 1 300px; min-width: 160px; max-width: 300px; }
+.in-bar .in-progress { flex: 1 1 auto; min-width: 0; justify-content: flex-end; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.in-notice { white-space: nowrap; }
 .in-progress { display: inline-flex; align-items: center; gap: 6px; font: 500 11px var(--mono); color: var(--text-faint); }
 .in-list { border: 1px solid var(--line); border-radius: 14px; background: var(--vp-surface); overflow: hidden; }
 .in-row { display: grid; grid-template-columns: 28px 150px minmax(0, 1fr) 84px 96px 92px 110px; gap: 10px; align-items: center; padding: 9px 14px;
@@ -150,6 +154,7 @@ a.in-repo:hover { color: var(--signal); }
   .in-row { grid-template-columns: 22px minmax(0, 1fr) 70px 96px; gap: 8px; padding: 9px 10px; }
   .in-row > :nth-child(3), .in-row > :nth-child(5), .in-row > :nth-child(6) { display: none; }
   .in-seg button span { display: none; }
+  .in-bar .wk-search { flex: 1 1 100%; max-width: none; }
   .in-row { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
   .in-cvss small { display: none; } /* el color ya indica la gravedad */
   .in-keys { grid-template-columns: 1fr; }
