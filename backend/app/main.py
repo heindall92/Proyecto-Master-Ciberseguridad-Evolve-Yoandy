@@ -2249,6 +2249,40 @@ async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) ->
     return "\n".join(context)[:3000]
 
 
+_DAILY_RE = _re.compile(r"\b(resumen|informe|reporte|parte)\b.*\b(dia|día|hoy|diario|24\s*h)\b|\b(resumen|informe) diario\b", _re.IGNORECASE)
+
+
+async def _daily_summary(db: AsyncSession, requester: User) -> tuple[str, dict | None]:
+    """Genera el informe SOC real de las últimas 24 h y devuelve (texto corto, tarjeta del informe).
+
+    El informe queda en el Centro de informes con su id y huella; en el chat solo van cifras
+    agregadas (el chat global lo ven todos los roles). Un lector recibe el resumen sin informe.
+    """
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=24)
+    data = await rb.build_report(db, start, end, author=requester.username, tlp="AMBER", kind="soc")
+    data["ai_summary"] = None
+    a, h, inc, risk = data["alerts"], data["honeypot"], data["incidents"], data["risk"]
+    sev = a.get("by_severity", {})
+    active = inc["total"] - inc["resolved"]
+    lines = [
+        f"Resumen últimas 24 h · riesgo {risk['level']} ({risk['score']}/100)",
+        f"• Alertas: {a.get('total', 0)} ({sev.get('critical', 0)} críticas, {sev.get('high', 0)} altas)",
+        f"• Incidentes: {active} abiertos, {inc['resolved']} resueltos",
+    ]
+    if h.get("available"):
+        lines.append(f"• Honeypot: {h.get('bruteforce_detections', 0)} fuerza bruta, {h.get('intrusions_after_bruteforce', 0)} accesos")
+    if data["recommendations"]:
+        lines.append(f"• Prioridad: {data['recommendations'][0]['text']}")
+    if requester.role.lower() not in ("admin", "analyst", "analista"):
+        lines.append("(El informe completo requiere rol analista.)")
+        return "\n".join(lines), None
+    row = await _store_report(db, data, start, end, requester, "AMBER", "soc")
+    card = {"type": "valhalla/report", "name": row.report_id, "size": 0, "data": "",
+            "tlp": row.tlp, "sha256": row.sha256}
+    return "\n".join(lines), card
+
+
 async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None:
     """Genera y publica la respuesta del asistente IA en el chat interno."""
     await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": True})
@@ -2262,7 +2296,11 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
             if not requester:
                 await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": False})
                 return
-            direct_answer = await _build_direct_soc_answer(db, requester, clean_question)
+            report_card = None
+            if _DAILY_RE.search(clean_question):
+                direct_answer, report_card = await _daily_summary(db, requester)
+            else:
+                direct_answer = await _build_direct_soc_answer(db, requester, clean_question)
             app_context = "" if direct_answer else await _build_ai_chat_context(db, requester, clean_question)
         answer = direct_answer or await chat_assistant(clean_question, app_context=app_context)
     except Exception as e:
@@ -2281,6 +2319,7 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
             text=answer,
             chat_id=chat_id,
             mentions=[str(requester_id)],
+            attachment=report_card,
         )
         db.add(m)
         await db.commit()
@@ -2940,18 +2979,22 @@ async def generate_report(req: ReportGenerateIn, db: AsyncSession = Depends(get_
         else:
             data["limitations"].append("La IA local no estaba disponible: el resumen ejecutivo es solo cuantitativo.")
 
+    row = await _store_report(db, data, start, end, current, req.tlp, req.kind)
+    return {**_report_summary(row), "data": data}
+
+
+async def _store_report(db: AsyncSession, data: dict, start: datetime, end: datetime, user: User, tlp: str, kind: str) -> Report:
+    """Asigna el id VHL-AAAAMMDD-NNN, calcula la huella SHA-256 y guarda el informe."""
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     seq = (await db.execute(select(func.count(Report.id)).where(Report.report_id.like(f"VHL-{today}-%")))).scalar() or 0
     report_id = f"VHL-{today}-{seq + 1:03d}"
     data["meta"]["report_id"] = report_id
-    digest = rb.fingerprint(data)
-
-    row = Report(report_id=report_id, kind=req.kind, tlp=req.tlp, period_start=start, period_end=end,
-                 created_by_id=current.id, created_by_username=current.username, sha256=digest, data=data)
+    row = Report(report_id=report_id, kind=kind, tlp=tlp, period_start=start, period_end=end,
+                 created_by_id=user.id, created_by_username=user.username, sha256=rb.fingerprint(data), data=data)
     db.add(row)
     await db.commit()
     await db.refresh(row)
-    return {**_report_summary(row), "data": data}
+    return row
 
 
 @app.get("/api/reports/{report_id}")

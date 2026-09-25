@@ -214,6 +214,12 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
     try { setHistory(await listReports()); } catch { setHistory([]); }
   };
   useEffect(() => { loadHistory(); }, []);
+  // Informe pedido desde el chat (@ia resumen del día)
+  useEffect(() => {
+    let id: string | null = null;
+    try { id = sessionStorage.getItem('valhalla.openReport'); sessionStorage.removeItem('valhalla.openReport'); } catch { /* sin almacenamiento */ }
+    if (id && /^VHL-\d{8}-\d{3,}$/.test(id)) { setTab('soc'); open(id); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const preset = (days: number) => { const e = new Date(); setEnd(toLocalInput(e)); setStart(toLocalInput(new Date(e.getTime() - days * 86400e3))); };
 

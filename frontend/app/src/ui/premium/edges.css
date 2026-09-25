@@ -134,3 +134,13 @@ body .login-btn::before, body[data-theme] .login-btn::before {
   background: color-mix(in srgb, var(--text-faint, #888) 60%, transparent); }
 .presence-dot.is-on { background: #3fb37f; box-shadow: 0 0 0 2px color-mix(in srgb, #3fb37f 25%, transparent); }
 .chat-panel__online { margin-left: 10px; font: 600 9px var(--mono); letter-spacing: 1px; text-transform: uppercase; opacity: .85; }
+
+/* ---------- Tarjeta de informe en el chat (@ia resumen del día) ---------- */
+.chat-report-card { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 9px 12px; cursor: pointer; text-align: left;
+  border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent); background: color-mix(in srgb, var(--signal) 9%, transparent); color: var(--signal);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+.chat-report-card span { flex: 1; display: flex; flex-direction: column; font: 600 11px var(--mono); color: var(--text); }
+.chat-report-card span b { font: 700 10px var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--signal); }
+.chat-report-card:hover:not(:disabled) { background: color-mix(in srgb, var(--signal) 16%, transparent); }
+.chat-report-card:disabled { opacity: .55; cursor: not-allowed; }
+.chat-msg__text { white-space: pre-line; }
