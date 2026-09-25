@@ -70,9 +70,13 @@ export default function IntelVulns({ es }: { es: boolean }) {
   const kRan = (cves ?? []).filter(c => c.ransomware).length;
   const kOverdue = (cves ?? []).filter(c => c.due_date && c.due_date < today()).length;
 
+  // Sin selección, el aviso se redacta con las 5 más prioritarias (antes el botón quedaba desactivado sin explicación)
+  const top5 = rows.slice(0, 5).map(c => c.id);
+  const postIds = sel.size ? Array.from(sel) : top5;
   const genPost = async () => {
+    if (!postIds.length) return;
     setPosting(true);
-    try { setPost((await generateCveSocialPost(Array.from(sel))).post); }
+    try { setPost((await generateCveSocialPost(postIds)).post); }
     catch { toast(es ? "La IA local no pudo redactar el aviso." : "Local AI could not draft the notice.", "err"); }
     finally { setPosting(false); }
   };
@@ -104,8 +108,9 @@ export default function IntelVulns({ es }: { es: boolean }) {
           {cves && done < cves.length ? <><RefreshCw size={12} className="ex-spin" />{es ? `Enriqueciendo ${done}/${cves.length}` : `Enriching ${done}/${cves.length}`}</> : cves ? (es ? "Datos NVD · GitHub · Exploit-DB" : "NVD · GitHub · Exploit-DB data") : ""}
         </span>
         <button type="button" className="wk-iconbtn" onClick={load} title={es ? "Recargar" : "Reload"} aria-label={es ? "Recargar" : "Reload"}><RefreshCw size={15} /></button>
-        <button type="button" className="vp-btn vp-btn--primary" disabled={!sel.size || posting} onClick={genPost} title={es ? "Borrador de aviso para el equipo (IA local)" : "Draft team notice (local AI)"}>
-          <Megaphone size={14} />{posting ? (es ? "Redactando…" : "Drafting…") : `${es ? "Aviso" : "Notice"}${sel.size ? ` (${sel.size})` : ""}`}
+        <button type="button" className="vp-btn vp-btn--primary in-notice" disabled={posting || !postIds.length} onClick={genPost}
+          title={es ? `Redactar con la IA local un aviso para el equipo sobre ${sel.size ? "las CVE marcadas" : "las 5 más prioritarias (o marca las que quieras)"}` : "Draft a team notice with local AI"}>
+          <Megaphone size={14} />{posting ? (es ? "Redactando…" : "Drafting…") : sel.size ? `${es ? "Aviso" : "Notice"} (${sel.size})` : (es ? "Aviso top 5" : "Notice top 5")}
         </button>
       </div>
 
