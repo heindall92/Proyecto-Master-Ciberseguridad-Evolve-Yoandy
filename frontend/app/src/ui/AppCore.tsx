@@ -211,6 +211,15 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('valhalla_sidebar_collapsed') === 'true';
   });
+  // En pantallas estrechas el menú se muestra solo con iconos (si no, deja sin espacio al contenido)
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const on = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const navCollapsed = sidebarCollapsed || isNarrow;
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -826,7 +835,7 @@ export default function App() {
     { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', icon: ShieldCheck, kw: 'kev exploit vulnerabilidad' },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', icon: BookOpen, kw: 'playbooks procedimientos' },
     { id: 'workspace', es: 'Workspace de incidentes', en: 'Incident workspace', icon: Briefcase, kw: 'incidentes incidents tickets tabla kanban' },
-    { id: 'reports', es: 'Centro de informes', en: 'Reports center', icon: FileText, kw: 'informe ejecutivo tecnico pdf heimdall inteligencia report' },
+    { id: 'reports', es: 'Centro de informes', en: 'Reports center', icon: FileText, kw: 'informe ejecutivo tecnico pdf grc riesgo cumplimiento mitre iso ens nist report' },
     { id: 'users', es: 'Usuarios', en: 'Users', icon: Users, admin: true },
     { id: 'profile', es: 'Mi perfil', en: 'My profile', icon: UserRound, kw: 'contraseña password avatar' },
     { id: 'settings', es: 'Ajustes globales', en: 'Global settings', icon: SlidersHorizontal, admin: true, kw: 'api keys ollama' },
@@ -848,7 +857,7 @@ export default function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <SvgSymbols />
-      <div className={`app ${tvMode ? 'tv-mode' : ''} ${sidebarCollapsed && !tvMode ? 'sidebar-collapsed' : ''}`}>
+      <div className={`app ${tvMode ? 'tv-mode' : ''} ${navCollapsed && !tvMode ? 'sidebar-collapsed' : ''}`}>
 
         {!tvMode && (
         <header
@@ -1031,7 +1040,7 @@ export default function App() {
         )}
 
         {!tvMode && (
-        <aside className={`sidenav ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <aside className={`sidenav ${navCollapsed ? 'collapsed' : ''}`}>
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
@@ -1096,8 +1105,8 @@ export default function App() {
                 {view === 'cveintel' && <CveIntelView lang={lang} />}
                 {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
                 {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}
-                {/* Centro de informes: integra el Informe ejecutivo (PDF) y Heimdall; se mantienen sus rutas antiguas */}
-                {(view === 'reports' || view === 'executive-report' || view === 'heimdall') && <ReportsCenter lang={lang} initialTab={view === 'heimdall' ? 'intel' : view === 'executive-report' ? 'executive' : 'soc'} />}
+                {/* Centro de informes: SOC, ejecutivo y GRC (sustituye a Heimdall); se mantienen las rutas antiguas */}
+                {(view === 'reports' || view === 'executive-report' || view === 'heimdall') && <ReportsCenter lang={lang} initialTab={view === 'heimdall' ? 'grc' : view === 'executive-report' ? 'executive' : 'soc'} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
                 {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>

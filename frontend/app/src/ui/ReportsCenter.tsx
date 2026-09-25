@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  FileBarChart, FileText, Radar, Plus, Clock, ShieldCheck, ShieldAlert, Fingerprint, Printer, FileJson, Table2,
+  FileBarChart, FileText, Landmark, Plus, Clock, ShieldCheck, ShieldAlert, Fingerprint, Printer, FileJson, Table2,
   CalendarRange, Bot, Loader2, History, Gauge, Layers, Target, Bug, Siren, Ban, ClipboardCheck, Lightbulb, BookOpen, Info,
   ExternalLink, Copy,
 } from "lucide-react";
 import { listReports, generateReport, getReport, verifyReport, type ReportSummary, type ReportData, type ReportTLP } from "../lib/api";
 import { toast } from "./premium/widgets";
 import ExecutiveReport from "./ExecutiveReport";
-import HeimdallReportView from "./HeimdallReportView";
+import GrcReport from "./GrcReport";
 import "./premium/dashboard.css";
 import "./premium/workspace.css";
 import "./premium/reports.css";
 
 type Lang = "es" | "en";
-type Tab = "soc" | "executive" | "intel";
+type Tab = "soc" | "executive" | "grc";
 
 const TLP: { id: ReportTLP; es: string; en: string }[] = [
   { id: "CLEAR", es: "Público", en: "Public" },
@@ -286,8 +286,8 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
 
   const tabs: { id: Tab; icon: LucideIcon; es: string; en: string }[] = [
     { id: "soc", icon: FileBarChart, es: "Informe SOC", en: "SOC report" },
-    { id: "executive", icon: FileText, es: "PDF ejecutivo", en: "Executive PDF" },
-    { id: "intel", icon: Radar, es: "Heimdall", en: "Heimdall" },
+    { id: "executive", icon: FileText, es: "Ejecutivo", en: "Executive" },
+    { id: "grc", icon: Landmark, es: "Informe GRC", en: "GRC report" },
   ];
 
   return (
@@ -303,7 +303,7 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
       </div>
 
       {tab === "executive" && <div className="rc-embed"><ExecutiveReport lang={lang} /></div>}
-      {tab === "intel" && <div className="rc-embed"><HeimdallReportView lang={lang} /></div>}
+      {tab === "grc" && <div className="rc-embed"><GrcReport /></div>}
 
       {tab === "soc" && (
         <div className="rc-body">

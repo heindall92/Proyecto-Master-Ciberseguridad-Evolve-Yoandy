@@ -150,3 +150,35 @@ export async function fetchExecutiveReportData(start?: string, end?: string): Pr
     detail: data.detail,
   };
 }
+
+// ─── Informe GRC ────────────────────────────────────────────────────────────
+export type GrcCoverage = "high" | "partial" | "none";
+export type GrcTechnique = { id: string; name: string; rules: number; rule_ids: number[]; coverage: GrcCoverage };
+export type GrcScenario = {
+  id: string; title: string; probability: number; impact: number; score: number;
+  level: "bajo" | "medio" | "alto" | "crítico"; justification: string; treatment: string; owner: string;
+};
+export type GrcReport = {
+  meta: { period_start: string; period_end: string; generated_at: string; author: string };
+  risk: { score: number; level: string };
+  kpis: { residual_risk: { score: number; level: string }; compliance_pct: number; attack_coverage_pct: number | null; open_actions: number; scenarios_high: number };
+  scenarios: GrcScenario[];
+  nist_csf: Array<{ function: string; code: string; score: number; basis: string }>;
+  attack: {
+    coverage: null | {
+      tactics: Array<{ id: string; name: string; techniques: GrcTechnique[] }>;
+      techniques_total: number; techniques_covered: number; techniques_high: number; coverage_pct: number;
+      rules_total: number; rules_with_mitre: number;
+    };
+    observed: Array<{ id: string; name: string; count: number; tactics: string[] }>;
+    observed_gap: Array<{ id: string; name: string; count: number }>;
+  };
+  controls: ExecutiveDetail["controls"];
+  plan: Array<{ action: string; reason: string; priority: string; deadline_days: number; owner: string; status: string }>;
+  limitations: string[];
+  method: Record<string, string>;
+};
+
+export function fetchGrcReport(start: string, end: string): Promise<GrcReport> {
+  return fetchAuth<GrcReport>(`/api/reports/grc?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+}
