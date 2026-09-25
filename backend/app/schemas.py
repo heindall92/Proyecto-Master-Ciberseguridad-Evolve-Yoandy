@@ -327,16 +327,35 @@ class AlertToTicketIn(BaseModel):
 # RUNBOOKS - Procedimientos operativos estándar
 # ─────────────────────────────────────────────────────────────────────────────
 
+class RunbookStep(BaseModel):
+    text: str = Field(..., min_length=1, max_length=600)
+    command: str | None = Field(default=None, max_length=600)
+
+    @field_validator("text", "command")
+    @classmethod
+    def strip_html(cls, v: str | None) -> str | None:
+        return _sanitize_html(v) if v else v
+
+
+RunbookCategory = Literal["intrusion", "malware", "phishing", "ransomware", "ddos", "data_breach", "insider_threat", "other"]
+
+
 class RunbookIn(BaseModel):
-    name: str
-    category: str
-    description: str
-    identification_steps: list[Any] = []
-    containment_steps: list[Any] = []
-    eradication_steps: list[Any] = []
-    recovery_steps: list[Any] = []
-    post_mortem_steps: list[Any] = []
-    severity_applicable: str = "all"
+    # Validado (antes aceptaba cualquier contenido y longitud)
+    name: str = Field(..., min_length=3, max_length=128)
+    category: RunbookCategory
+    description: str = Field(..., min_length=1, max_length=2000)
+    identification_steps: list[RunbookStep] = Field(default_factory=list, max_length=30)
+    containment_steps: list[RunbookStep] = Field(default_factory=list, max_length=30)
+    eradication_steps: list[RunbookStep] = Field(default_factory=list, max_length=30)
+    recovery_steps: list[RunbookStep] = Field(default_factory=list, max_length=30)
+    post_mortem_steps: list[RunbookStep] = Field(default_factory=list, max_length=30)
+    severity_applicable: Literal["all", "low", "medium", "high", "critical"] = "all"
+
+    @field_validator("name", "description")
+    @classmethod
+    def clean(cls, v: str) -> str:
+        return _sanitize_html(v) or ""
 
 
 class RunbookOut(BaseModel):

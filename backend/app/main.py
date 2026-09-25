@@ -1715,11 +1715,15 @@ async def list_runbooks(db: AsyncSession = Depends(get_db), _=Depends(get_curren
 
 @app.post("/api/runbooks", response_model=RunbookOut)
 async def create_runbook_ep(payload: RunbookIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
-    if current.role not in ("admin", "analyst"):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista")
     rb = Runbook(**payload.model_dump(), created_by_id=current.id, is_active=True)
     db.add(rb)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Ya existe un runbook con ese nombre")
     await db.refresh(rb)
     return rb
 
@@ -1730,14 +1734,18 @@ async def update_runbook_ep(
     db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    if current.role not in ("admin", "analyst"):
+    if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403)
     rb = (await db.execute(select(Runbook).where(Runbook.id == runbook_id))).scalar_one_or_none()
     if not rb:
         raise HTTPException(404, "Runbook no encontrado")
     for k, v in payload.model_dump().items():
         setattr(rb, k, v)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Ya existe un runbook con ese nombre")
     await db.refresh(rb)
     return rb
 
