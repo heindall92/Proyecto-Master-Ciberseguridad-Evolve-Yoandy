@@ -99,6 +99,7 @@ class Ticket(Base):
     reporter_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     assignee: Mapped["User | None"] = relationship("User", back_populates="assigned_tickets", foreign_keys=[assigned_to_id])
     reporter: Mapped["User | None"] = relationship("User", back_populates="reported_tickets", foreign_keys=[reporter_id])
     evidence: Mapped[list["Evidence"]] = relationship("Evidence", back_populates="ticket", cascade="all, delete-orphan")
