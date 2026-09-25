@@ -18,6 +18,7 @@ from typing import Any, Literal
 import httpx
 
 from app.settings import settings
+from app import glossary
 
 logger = logging.getLogger("valhalla.ollama")
 _client_instance: httpx.AsyncClient | None = None
@@ -265,7 +266,15 @@ async def chat_assistant(
 ) -> str:
     """Asistente IA conversacional para el chat interno del SOC (texto plano)."""
     question = (question or "").strip()[:1200]
+    # Preguntas de definición: respuesta verificada del glosario (el modelo 3B confunde conceptos básicos)
+    direct = glossary.definition_answer(question)
+    if direct:
+        return direct
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
+    refs = glossary.reference_block(question)
+    if refs:
+        messages.append({"role": "system", "content": (
+            "Definiciones de referencia verificadas. Son correctas: respétalas y no las contradigas:\n" + refs)})
     if app_context:
         messages.append({
             "role": "system",
