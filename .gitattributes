@@ -21,3 +21,9 @@
 # Windows-specific scripts keep CRLF
 *.bat   text eol=crlf
 *.ps1   text eol=crlf
+
+# Configuración montada en contenedores Linux (Cowrie, Wazuh): siempre LF
+*.cfg   text eol=lf
+*.conf  text eol=lf
+cowrie_config/** text eol=lf
+wazuh_config/** text eol=lf
