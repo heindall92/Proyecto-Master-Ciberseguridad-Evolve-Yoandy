@@ -1,11 +1,16 @@
-# ═══════════════════════════════════════════════════════════
-# Cowrie User Database — Trap Credentials
-# Format: username:x:password:uid:gid:comment
-# These are "allowed" logins — attackers who guess these
-# will get into a fake shell where we log EVERYTHING
-# ═══════════════════════════════════════════════════════════
-
-# Common usernames with weak passwords — irresistible to bots
+# ===========================================================
+# Cowrie userdb - credenciales del honeypot (SOLO ASCII: Cowrie lee
+# este fichero como ASCII y un caracter no ASCII rompe TODA la
+# autenticacion con UnicodeDecodeError).
+#
+# Formato: usuario:x:contrasena
+#   !contrasena  -> DENEGADA (el atacante sigue probando: genera
+#                   intentos fallidos, regla 100110 / fuerza bruta 100111)
+#   *            -> cualquier otra contrasena se ACEPTA (el atacante
+#                   "entra" y sus comandos quedan registrados)
+# Las credenciales mas comunes se deniegan a proposito para que los
+# bots insistan y se detecte la fuerza bruta antes del acceso.
+# ===========================================================
 root:x:!root
 root:x:!admin
 root:x:!password
@@ -29,5 +34,5 @@ jenkins:x:!jenkins
 ftpuser:x:!ftp123
 www-data:x:!www-data
 
-# Block all other attempts (deny by default)
+# Cualquier otra contrasena se ACEPTA (el atacante entra en la shell simulada)
 *:x:*

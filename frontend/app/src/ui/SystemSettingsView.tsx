@@ -14,9 +14,10 @@ export interface SystemSettingIn {
     is_sensitive: boolean;
 }
 
+// Valores vacíos hasta cargar los reales del servidor (antes se mostraban valores inventados)
 const DEFAULT_SETTINGS: SystemSettingIn[] = [
-    { key: "ollama_url", value: "http://localhost:11434", is_sensitive: false },
-    { key: "ollama_model", value: "llama3", is_sensitive: false },
+    { key: "ollama_url", value: "", is_sensitive: false },
+    { key: "ollama_model", value: "", is_sensitive: false },
     { key: "ollama_min_alert_level", value: "high", is_sensitive: false },
     { key: "vt_api_key", value: "", is_sensitive: true },
     { key: "otx_api_key", value: "", is_sensitive: true },
@@ -34,19 +35,12 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
     useEffect(() => {
         const loadSettings = async () => {
             try {
-                const res = await fetchAuth("/api/settings");
-                if (res.ok) {
-                    const data: SystemSettingOut[] = await res.json();
-                    
-                    // Merge remote data with defaults
-                    setSettings(prev => prev.map(s => {
-                        const remote = data.find(d => d.key === s.key);
-                        if (remote) {
-                            return { ...s, value: remote.value, is_sensitive: remote.is_sensitive };
-                        }
-                        return s;
-                    }));
-                }
+                // fetchAuth devuelve el JSON ya parseado (no un Response): antes res.ok era siempre undefined
+                const data = await fetchAuth<SystemSettingOut[]>("/api/settings");
+                setSettings(prev => prev.map(s => {
+                    const remote = data.find(d => d.key === s.key);
+                    return remote ? { ...s, value: remote.value, is_sensitive: remote.is_sensitive } : s;
+                }));
             } catch (err) {
                 console.error(err);
                 setError("Error al cargar la configuración");
@@ -65,11 +59,10 @@ export default function SystemSettingsView({ lang }: { lang: 'en' | 'es' }) {
         setSaving(true);
         setError(null);
         try {
-            const res = await fetchAuth("/api/settings", {
+            await fetchAuth("/api/settings", {
                 method: "PUT",
                 body: JSON.stringify(settings)
             });
-            if (!res.ok) throw new Error("Error al guardar");
             alert(lang === 'es' ? "Configuración guardada correctamente." : "Settings saved successfully.");
         } catch (err) {
             setError(lang === 'es' ? "Error al guardar la configuración." : "Failed to save settings.");
