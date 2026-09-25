@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bot, KeyRound, Pencil, Plus, Save, Search, ShieldCheck, Trash2, UserCog, Users, Wifi, X, Info, Eye } from "lucide-react";
+import { Bot, KeyRound, Pencil, Plus, Save, Search, ShieldCheck, Trash2, UserCog, Users, Wifi, X, Info, Eye, Smartphone, Monitor, Globe } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, resetPassword, fetchAuth, type UserOut } from "../lib/api";
 import { useAppSelector } from "../store/hooks";
 import { HoldButton, KpiCard, toast } from "./premium/widgets";
@@ -19,7 +19,28 @@ const ROLES: Record<string, [string, string]> = {
 };
 const roleKey = (r: string) => (r === "analyst" ? "analista" : r);
 const initials = (n: string) => n.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "?";
-type Presence = Array<{ id: number; username: string; role: string; sessions: number }>;
+type SessionDetail = { device: { type: string; os: string; browser: string }; network: string; since: string; ip?: string };
+type Presence = Array<{ id: number; username: string; role: string; sessions: number; detail: SessionDetail[] }>;
+const sinceTxt = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "ahora" : m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`; };
+function Sessions({ username, role, detail }: { username: string; role: string; detail: SessionDetail[] }) {
+  return (
+    <ul className="us-sessions" aria-label={`Sesiones de ${username}`}>
+      {detail.map((d, i) => {
+        const Dev = d.device.type === "móvil" ? Smartphone : Monitor;
+        return (
+          <li key={i}>
+            <Dev size={14} />
+            <b>{username}</b><span className={`us-role us-role--${roleKey(role)}`}>{ROLES[roleKey(role)]?.[0] ?? role}</span>
+            <span>{d.device.type} · {d.device.os} · {d.device.browser}</span>
+            <span className={`us-net${d.network.startsWith("VPN") ? " is-vpn" : d.network === "internet" ? " is-inet" : ""}`}><Globe size={11} />{d.network}</span>
+            {d.ip && <code>{d.ip}</code>}
+            <span className="in-muted">conectado {sinceTxt(d.since)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 type Form = { id?: number; username: string; email: string; role: string; security_rank: string; password: string };
 
 export default function UsersView({ lang = "es" }: { lang?: string }) {
@@ -91,13 +112,16 @@ export default function UsersView({ lang = "es" }: { lang?: string }) {
             {rows.map(u => {
               const on = isOnline(u.id); const sys = u.username.toLowerCase() === "valhalla-ia";
               return (
-                <div key={u.id} role="row" className="in-row us-row" tabIndex={0} onClick={() => { setErr(null); setForm({ id: u.id, username: u.username, email: u.email ?? "", role: roleKey(u.role), security_rank: u.security_rank ?? "", password: "" }); }} onKeyDown={e => e.key === "Enter" && (e.currentTarget as HTMLElement).click()}>
+                <div key={u.id} className="us-block">
+                <div role="row" className="in-row us-row" tabIndex={0} onClick={() => { setErr(null); setForm({ id: u.id, username: u.username, email: u.email ?? "", role: roleKey(u.role), security_rank: u.security_rank ?? "", password: "" }); }} onKeyDown={e => e.key === "Enter" && (e.currentTarget as HTMLElement).click()}>
                   <span className="us-av">{sys ? <Bot size={15} /> : u.avatar_url ? <img src={u.avatar_url} alt="" /> : initials(u.username)}{on && <i />}</span>
                   <span className="in-prod"><b>{u.username}{u.id === me?.id ? " (tú)" : ""}</b><small>{sys ? "Usuario de sistema · asistente IA del chat" : u.email || "sin email"}</small></span>
                   <span><span className={`us-role us-role--${roleKey(u.role)}`}>{ROLES[roleKey(u.role)]?.[0] ?? u.role}</span></span>
                   <span className="in-muted">{u.security_rank || "—"}</span>
                   <span className="in-muted">{u.created_at ? new Date(u.created_at).toLocaleDateString("es-ES") : "—"}</span>
                   <span>{on ? <span className="sy-pill sy-st--ok">En línea{on.sessions > 1 ? ` · ${on.sessions}` : ""}</span> : <span className="in-muted">Desconectado</span>}</span>
+                </div>
+                {on && on.detail?.length > 0 && <Sessions username={u.username} role={u.role} detail={on.detail} />}
                 </div>
               );
             })}
@@ -124,7 +148,8 @@ export default function UsersView({ lang = "es" }: { lang?: string }) {
                 <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} autoComplete="new-password" /></label>
             </div>
             <p className="in-muted us-hint"><KeyRound size={12} /> {ROLES[form.role]?.[1]}</p>
-            {form.id && isOnline(form.id) && <p className="in-muted us-hint"><Eye size={12} /> Conectado ahora ({isOnline(form.id)!.sessions} sesión/es).</p>}
+            {form.id && isOnline(form.id) && <><p className="in-muted us-hint"><Eye size={12} /> Conectado ahora ({isOnline(form.id)!.sessions} sesión/es):</p>
+              <Sessions username={form.username} role={form.role} detail={isOnline(form.id)!.detail ?? []} /></>}
             {err && <p className="wk-form__err">{err}</p>}
           </div>
           <div className="wk-drawer__foot">

@@ -239,7 +239,7 @@ export default function App() {
   }, [activeChatId, dispatch]);
 
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
-  const [onlineUsers, setOnlineUsers] = useState<Array<{ id: number; username: string; role: string; sessions: number }>>([]);
+  const [onlineUsers, setOnlineUsers] = useState<Array<{ id: number; username: string; role: string; sessions: number; detail?: Array<{ device: { type: string; os: string; browser: string }; network: string }> }>>([]);
   useEffect(() => { unlockAudioOnFirstGesture(); }, []);
 
   useEffect(() => {
@@ -1226,7 +1226,7 @@ export default function App() {
                   ? 'COMMS // EQUIPO'
                   : `DM // ${getDmPartner(activeChatId)?.username?.toUpperCase() || '???'}`
                 }
-                <span className="chat-panel__online" title={onlineUsers.map(u => `${u.username} (${u.role})`).join(', ')}>
+                <span className="chat-panel__online" title={onlineUsers.map(u => `${u.username} (${u.role}): ${(u.detail ?? []).map(d => `${d.device.type} ${d.device.os} · ${d.network}`).join(' | ')}`).join('\n')}>
                   <i className="presence-dot is-on" />{onlineUsers.length} {lang === 'es' ? 'en línea' : 'online'}
                 </span>
               </span>

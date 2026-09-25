@@ -7,7 +7,7 @@ import {
   Bell, Volume2, AtSign, ShieldAlert, Briefcase, BookOpen, Bug, ChevronRight, AlertCircle,
 } from "lucide-react";
 import {
-  UserOut, updateUser, uploadMyAvatar, getMySession, getMyActivity, listTickets, MyActivityEntry,
+  UserOut, updateUser, uploadMyAvatar, getMySession, getMyActivity, listTickets, MyActivityEntry, fetchAuth,
 } from "../lib/api";
 import { getSoundPrefs, setSoundPrefs, SoundCategory } from "./audio";
 import "./premium/profile.css";
@@ -89,6 +89,13 @@ export default function ProfileView({ user, lang = "es", onUpdate, profilePic, s
   const [activity, setActivity] = useState<MyActivityEntry[] | null>(null);
   const [kpis, setKpis] = useState<{ open: number; resolved: number } | null>(null);
   const [sounds, setSounds] = useState(getSoundPrefs);
+  // Sesiones abiertas ahora mismo (dispositivo, red, IP): p. ej. el móvil por VPN
+  const [mySessions, setMySessions] = useState<Array<{ device: { type: string; os: string; browser: string }; network: string; since: string; ip?: string }> | null>(null);
+  useEffect(() => {
+    const load = () => fetchAuth<Array<{ id: number; detail: NonNullable<typeof mySessions> }>>("/api/presence")
+      .then(list => setMySessions(list.find(u => u.id === user.id)?.detail ?? [])).catch(() => setMySessions([]));
+    load(); const iv = setInterval(load, 15000); return () => clearInterval(iv);
+  }, [user.id]);
 
   useEffect(() => {
     getMySession().then(setSession).catch(() => setSession(null));
@@ -304,6 +311,32 @@ export default function ProfileView({ user, lang = "es", onUpdate, profilePic, s
                   <Save size={13} />{savingAccount ? (es ? "Guardando…" : "Saving…") : es ? "Guardar cambios" : "Save changes"}
                 </button>
               </div>
+            </div>
+          </section>
+
+          {/* ---------- Sesiones activas ---------- */}
+          <section className="pf-card">
+            <div className="pf-card__head">
+              <span className="pf-card__icon"><MonitorSmartphone size={16} /></span>
+              <div>
+                <div className="pf-card__title">{es ? "Mis sesiones activas" : "My active sessions"}</div>
+                <div className="pf-card__sub">{es ? "Dispositivos y redes desde los que estás conectado ahora" : "Devices and networks you are connected from"}</div>
+              </div>
+            </div>
+            <div className="pf-card__body">
+              {!mySessions ? <p className="pf-muted">…</p> : !mySessions.length ? <p className="pf-muted">{es ? "Sin sesiones en tiempo real." : "No live sessions."}</p> : (
+                <ul className="pf-sessions">
+                  {mySessions.map((d, i) => (
+                    <li key={i}>
+                      <MonitorSmartphone size={15} />
+                      <span><b>{user.username}</b> · {d.device.type} · {d.device.os} · {d.device.browser}</span>
+                      <span className={`pf-net${d.network.startsWith("VPN") ? " is-vpn" : ""}`}><Globe size={11} />{d.network}</span>
+                      {d.ip && <code>{d.ip}</code>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="pf-muted">{es ? "Si ves una sesión que no reconoces, cambia tu contraseña y avisa al administrador." : "If you don't recognise a session, change your password."}</p>
             </div>
           </section>
 
