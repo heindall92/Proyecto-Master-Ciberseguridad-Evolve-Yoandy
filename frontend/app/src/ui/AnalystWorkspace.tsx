@@ -15,6 +15,7 @@ import {
   X, Trash2, FileText, Info, Bot, NotebookPen, BookOpen, Paperclip, Download, Upload, Users, ExternalLink,
   Copy, Clock, Globe, Server, User as UserIcon, Target, Hash, Save, ShieldCheck, Flag, Eraser,
   Link2, History, Send, Fingerprint, ShieldAlert, Percent, MessageSquare, Pencil, ArrowRightLeft,
+  ListFilter, Check, RotateCcw,
 } from 'lucide-react';
 import { HoldButton, toast } from './premium/widgets';
 import './premium/profile.css';
@@ -92,6 +93,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const [onlyMine, setOnlyMine] = useState(false);
   const [quickFilter, setQuickFilter] = useState<'none' | 'unassigned' | 'breach'>('none');
 
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [overCol, setOverCol] = useState<Status | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -124,7 +126,8 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
       listRunbooks().catch(() => null),
     ]);
     if (tk) setTickets(tk);
-    if (us) setUsers(us);
+    // El usuario de sistema del chatbot no es un analista asignable
+    if (us) setUsers(us.filter((u) => u.username.toLowerCase() !== 'valhalla-ia'));
     if (rb) setRunbooks(rb);
     setLoading(false);
   }, []);
@@ -323,6 +326,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
     });
   }, [tickets, query, filterSev, onlyMine, filterAnalyst, quickFilter, currentUser.id]);
 
+  const activeFilters = (filterSev !== 'all' ? 1 : 0) + (filterAnalyst !== 'all' ? 1 : 0) + (onlyMine ? 1 : 0) + (quickFilter !== 'none' ? 1 : 0);
   const active = tickets.filter((t) => t.status !== 'resolved');
   const breached = active.filter((t) => slaState(t).state === 'breach').length;
   const unassigned = active.filter((t) => !t.assigned_to_id).length;
@@ -383,19 +387,51 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
         <div className="wk-tools">
           <label className="wk-search">
             <Search size={15} />
-            <input className="vp-bare-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={es ? 'Buscar #id, título, IP, activo…' : 'Search #id, title, IP, asset…'} />
+            <input className="vp-bare-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={es ? 'Buscar incidente…' : 'Search incident…'} title={es ? 'Busca por #id, título, IP, activo, MITRE o categoría' : 'Search by #id, title, IP, asset, MITRE or category'} />
+            {query && <button className="wk-search__clear" onClick={() => setQuery('')} aria-label={es ? 'Borrar búsqueda' : 'Clear search'}><X size={13} /></button>}
           </label>
-          <button className="wk-toggle" aria-pressed={onlyMine} onClick={() => setOnlyMine(!onlyMine)}><UserCheck size={14} />{es ? 'Solo míos' : 'Mine'}</button>
-          <select className="wk-select" value={filterSev} onChange={(e) => setFilterSev(e.target.value)} aria-label={es ? 'Severidad' : 'Severity'}>
-            <option value="all">{es ? 'Toda severidad' : 'All severities'}</option>
-            {SEVERITIES.map((s) => <option key={s} value={s}>{sevLabel(s)}</option>)}
-          </select>
-          <select className="wk-select" value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} aria-label={es ? 'Analista' : 'Analyst'}>
-            <option value="all">{es ? 'Todos los analistas' : 'All analysts'}</option>
-            <option value="unassigned">{es ? 'Sin asignar' : 'Unassigned'}</option>
-            {users.map((u) => <option key={u.id} value={u.username}>{u.username}</option>)}
-          </select>
-          <button className="vp-btn vp-btn--primary" onClick={() => { setForm({ ...EMPTY_FORM }); setShowCreate(true); }}><Plus size={14} />{es ? 'Nuevo incidente' : 'New incident'}</button>
+          <div className="wk-filter">
+            <button className="wk-iconbtn" aria-expanded={filtersOpen} aria-haspopup="dialog" onClick={() => setFiltersOpen(!filtersOpen)} title={es ? 'Filtros' : 'Filters'} aria-label={es ? 'Filtros' : 'Filters'}>
+              <ListFilter size={17} />
+              {activeFilters > 0 && <span className="vp-badge">{activeFilters}</span>}
+            </button>
+            {filtersOpen && (
+              <>
+                <div className="wk-filter__backdrop" onClick={() => setFiltersOpen(false)} />
+                <div className="vp-pop wk-filter__pop" role="dialog" aria-label={es ? 'Filtros' : 'Filters'}>
+                  <div className="vp-pop__head"><ListFilter size={15} color="var(--signal)" /><div className="vp-pop__title">{es ? 'Filtros' : 'Filters'}</div></div>
+                  <div className="vp-pop__body">
+                    <div className="vp-menu-label">{es ? 'Severidad' : 'Severity'}</div>
+                    <div className="wk-chipset">
+                      <button aria-pressed={filterSev === 'all'} onClick={() => setFilterSev('all')}>{es ? 'Todas' : 'All'}</button>
+                      {SEVERITIES.map((sv) => (
+                        <button key={sv} aria-pressed={filterSev === sv} onClick={() => setFilterSev(sv)} className={`wk-chipset__sev vx-sev--${sv}`}>{sevLabel(sv)}</button>
+                      ))}
+                    </div>
+                    <div className="vp-menu-label">{es ? 'Analista' : 'Analyst'}</div>
+                    <div className="wk-filter__list">
+                      {[{ v: 'all', l: es ? 'Todos' : 'All' }, { v: 'unassigned', l: es ? 'Sin asignar' : 'Unassigned' }, ...users.map((u) => ({ v: u.username, l: u.username }))].map((o) => (
+                        <button key={o.v} className="vp-menu-item" aria-pressed={filterAnalyst === o.v} onClick={() => setFilterAnalyst(o.v)}>
+                          {o.v === 'unassigned' ? <UserX size={15} /> : o.v === 'all' ? <Users size={15} /> : <UserIcon size={15} />}{o.l}
+                          {filterAnalyst === o.v && <Check size={14} style={{ marginLeft: 'auto', color: 'var(--signal)' }} />}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="vp-menu-sep" />
+                    <div className="vp-switch-row" role="switch" aria-checked={onlyMine} tabIndex={0} onClick={() => setOnlyMine(!onlyMine)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setOnlyMine(!onlyMine)}>
+                      <UserCheck size={16} />
+                      <div>{es ? 'Solo mis incidentes' : 'Only my incidents'}</div>
+                      <span className="vp-switch" data-on={onlyMine} />
+                    </div>
+                  </div>
+                  <div className="vp-pop__foot">
+                    <button className="vp-menu-item" disabled={activeFilters === 0} onClick={() => { setFilterSev('all'); setFilterAnalyst('all'); setOnlyMine(false); setQuickFilter('none'); }}><RotateCcw size={15} />{es ? 'Limpiar filtros' : 'Clear filters'}</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <button className="vp-btn vp-btn--primary wk-new" onClick={() => { setForm({ ...EMPTY_FORM }); setShowCreate(true); }} title={es ? 'Nuevo incidente' : 'New incident'}><Plus size={15} /><span>{es ? 'Nuevo' : 'New'}</span></button>
         </div>
       </div>
 
