@@ -92,7 +92,13 @@ async def _search(body: dict[str, Any]) -> dict[str, Any]:
         async with _client() as c:
             r = await c.post(f"/{INDEX}/_search", json=body)
             r.raise_for_status()
-            return r.json()
+            data = r.json()
+            # Un fallo parcial (p. ej. regex inválida en un índice) devuelve 200 con menos datos: avisarlo
+            failed = data.get("_shards", {}).get("failed", 0)
+            if failed:
+                reasons = [f.get("reason", {}).get("reason") for f in data["_shards"].get("failures", [])][:2]
+                logger.warning("OpenSearch: %s shards fallaron (%s)", failed, reasons)
+            return data
     except Exception as e:
         logger.warning("OpenSearch query failed: %s", e)
         return {}

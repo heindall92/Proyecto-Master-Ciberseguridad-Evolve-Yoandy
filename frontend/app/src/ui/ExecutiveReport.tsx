@@ -1,21 +1,7 @@
 import jsPDF from "jspdf";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Stack,
-  Typography,
-  TextField,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
-  Divider,
-} from "@mui/material";
-import Grid from "@mui/material/Grid2";
-import { fetchExecutiveReportData } from "../lib/reportApi";
+import { fetchExecutiveReportData, type ExecutiveDetail } from "../lib/reportApi";
+import ExecutiveView from "./ExecutiveView";
 import { translations } from "./translations";
 
 interface ValhallaReportJSON {
@@ -56,257 +42,33 @@ interface ValhallaReportJSON {
   geo_intel?: Array<{ country: string; pct: number; desc: string }>;
 }
 
-const GlassCard = ({ children, sx = {}, title }: any) => (
-  <Box sx={{
-    background: 'rgba(10, 20, 15, 0.6)',
-    backdropFilter: 'blur(12px)',
-    border: '1px solid rgba(60,255,158,0.1)',
-    borderRadius: '8px',
-    position: 'relative',
-    overflow: 'hidden',
-    transition: 'all 0.3s ease',
-    '&:hover': { borderColor: 'rgba(60,255,158,0.3)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' },
-    '&::before': { content: '""', position: 'absolute', top: 0, left: 0, width: '10px', height: '10px', borderTop: '2px solid var(--signal)', borderLeft: '2px solid var(--signal)' },
-    ...sx
-  }}>
-    {title && (
-      <Box sx={{ p: '10px 15px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Box sx={{ width: '4px', height: '14px', background: 'var(--signal)' }} />
-        <Typography sx={{ fontSize: '10px', fontWeight: 800, letterSpacing: '2px', color: 'var(--signal)', textTransform: 'uppercase' }}>{title}</Typography>
-      </Box>
-    )}
-    <Box sx={{ p: 2 }}>{children}</Box>
-  </Box>
-);
-
-const NeonText = ({ children, color = 'var(--signal)', size = '2rem' }: any) => (
-  <Typography sx={{ fontSize: size, fontWeight: 900, color: color, fontFamily: 'var(--ff-mono)', textShadow: `0 0 15px ${color}66`, lineHeight: 1 }}>
-    {children}
-  </Typography>
-);
-
-function gaugeColor(score: number): string {
-  if (score >= 80) return "#00ff41";
-  if (score >= 60) return "#ff9f1a";
-  return "#ff3b3b";
-}
-
-const MONTH_NAMES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const DAY_ABBR = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
-
-function DateRangePicker({ dateStart, dateEnd, onChange }: {
-  dateStart: string;
-  dateEnd: string;
-  onChange: (start: string, end: string) => void;
-}) {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [viewYear, setViewYear] = useState(() =>
-    dateStart ? parseInt(dateStart.split('-')[0]) : new Date().getFullYear()
-  );
-  const [viewMonth, setViewMonth] = useState(() =>
-    dateStart ? parseInt(dateStart.split('-')[1]) - 1 : new Date().getMonth()
-  );
-  const [hoverDate, setHoverDate] = useState('');
-  const [open, setOpen] = useState(false);
-  const [picking, setPicking] = useState<'start' | 'end'>(
-    dateStart && !dateEnd ? 'end' : 'start'
-  );
-
-  useEffect(() => {
-    if (dateStart) {
-      setViewYear(parseInt(dateStart.split('-')[0]));
-      setViewMonth(parseInt(dateStart.split('-')[1]) - 1);
-    }
-  }, [dateStart]);
-
-  useEffect(() => {
-    setPicking(dateStart && !dateEnd ? 'end' : 'start');
-  }, [dateStart, dateEnd]);
-
-  const prevMonth = () =>
-    setViewMonth(m => { if (m === 0) { setViewYear(y => y - 1); return 11; } return m - 1; });
-  const nextMonth = () =>
-    setViewMonth(m => { if (m === 11) { setViewYear(y => y + 1); return 0; } return m + 1; });
-
-  function handleClick(ds: string) {
-    if (picking === 'start' || (dateStart && dateEnd)) {
-      onChange(ds, '');
-    } else {
-      const [s, e] = ds >= dateStart ? [dateStart, ds] : [ds, dateStart];
-      onChange(s, e);
-      setOpen(false);
-      setHoverDate('');
-    }
-  }
-
-  function buildWeeks(): (string | null)[][] {
-    const dim = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const off = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const prefix = `${viewYear}-${pad(viewMonth + 1)}-`;
-    const cells: (string | null)[] = [
-      ...Array(off).fill(null),
-      ...Array.from({ length: dim }, (_, i) => `${prefix}${pad(i + 1)}`),
-    ];
-    while (cells.length % 7) cells.push(null);
-    return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
-  }
-
-  function getRange() {
-    const eff = dateEnd || (picking === 'end' && hoverDate ? hoverDate : '');
-    if (!dateStart || !eff) return { rs: dateStart, re: '' };
-    return dateStart <= eff ? { rs: dateStart, re: eff } : { rs: eff, re: dateStart };
-  }
-
-  const { rs, re } = getRange();
-  const weeks = buildWeeks();
-  const fmt = (s: string) => {
-    if (!s) return '—';
-    const [y, m, d] = s.split('-');
-    return `${d}/${m}/${y}`;
-  };
-
-  const navSx: any = {
-    background: 'none', border: 'none', cursor: 'pointer',
-    color: 'var(--signal)', fontSize: '20px', width: 28, height: 28,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: '4px', '&:hover': { bgcolor: 'rgba(60,255,158,0.1)' },
-  };
-
-  return (
-    <Box sx={{ position: 'relative' }}>
-      <Box
-        onClick={() => setOpen(o => !o)}
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
-          pb: '4px', borderBottom: `1px solid ${open ? 'var(--signal)' : 'rgba(60,255,158,0.3)'}`,
-          transition: 'border-color 0.2s', userSelect: 'none',
-          '&:hover': { borderBottomColor: 'var(--signal)' },
-        }}
-      >
-        <Typography sx={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '1.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
-          PERIOD
-        </Typography>
-        <Typography sx={{ fontSize: '11px', color: dateStart ? 'var(--text)' : 'var(--text-dim)', fontFamily: 'var(--ff-mono)', flex: 1 }}>
-          {fmt(dateStart)} → {fmt(dateEnd)}
-        </Typography>
-        <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', ml: 0.5 }}>
-          {open ? '▲' : '▼'}
-        </Typography>
-      </Box>
-
-      {open && (
-        <Box
-          onClick={() => { setOpen(false); setHoverDate(''); }}
-          sx={{ position: 'fixed', inset: 0, zIndex: 999 }}
-        />
-      )}
-
-      {open && (
-        <Box sx={{
-          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 1000,
-          bgcolor: 'rgba(5, 14, 10, 0.98)', border: '1px solid rgba(60,255,158,0.25)',
-          borderRadius: '10px', p: 2, width: 272,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-            <Box component="button" onClick={prevMonth} sx={navSx}>‹</Box>
-            <Typography sx={{ color: 'var(--signal)', fontSize: '11px', fontWeight: 900, letterSpacing: '2px', fontFamily: 'var(--ff-mono)' }}>
-              {MONTH_NAMES_ES[viewMonth].toUpperCase()} {viewYear}
-            </Typography>
-            <Box component="button" onClick={nextMonth} sx={navSx}>›</Box>
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
-            {DAY_ABBR.map(d => (
-              <Typography key={d} sx={{ textAlign: 'center', fontSize: '9px', color: 'var(--text-dim)', fontWeight: 700, py: '3px' }}>
-                {d}
-              </Typography>
-            ))}
-          </Box>
-
-          {weeks.map((week, wi) => (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-              {week.map((ds, di) => {
-                if (!ds) return <Box key={`_${wi}${di}`} sx={{ height: 36 }} />;
-                const isSel = ds === dateStart || ds === dateEnd;
-                const hasRange = !!(rs && re && rs !== re);
-                const inRange = hasRange && ds > rs && ds < re;
-                const isRs = hasRange && ds === rs;
-                const isRe = hasRange && ds === re;
-                const isToday = ds === todayStr;
-                const day = parseInt(ds.split('-')[2]);
-                let bg = 'transparent';
-                if (inRange) bg = 'rgba(60,255,158,0.13)';
-                else if (isRs) bg = 'linear-gradient(to right, transparent 50%, rgba(60,255,158,0.13) 50%)';
-                else if (isRe) bg = 'linear-gradient(to left, transparent 50%, rgba(60,255,158,0.13) 50%)';
-                return (
-                  <Box
-                    key={ds}
-                    onClick={() => handleClick(ds)}
-                    onMouseEnter={() => { if (picking === 'end') setHoverDate(ds); }}
-                    onMouseLeave={() => setHoverDate('')}
-                    sx={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: bg }}
-                  >
-                    <Box sx={{
-                      width: 30, height: 30,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '50%',
-                      bgcolor: isSel ? 'var(--signal)' : 'transparent',
-                      color: isSel ? '#000' : isToday ? 'var(--signal)' : 'var(--text)',
-                      fontSize: '12px', fontFamily: 'var(--ff-mono)',
-                      fontWeight: isSel || isToday ? 700 : 400,
-                      border: isToday && !isSel ? '1px solid rgba(60,255,158,0.4)' : 'none',
-                      transition: 'background-color 0.1s',
-                      '&:hover': { bgcolor: isSel ? 'var(--signal)' : 'rgba(60,255,158,0.2)' },
-                    }}>
-                      {day}
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-          ))}
-
-          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography sx={{ fontSize: '9px', color: 'var(--signal)', fontWeight: 700, letterSpacing: '1px' }}>
-              {picking === 'start' ? '► INICIO' : '► FIN'}
-            </Typography>
-            <Typography sx={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--ff-mono)' }}>
-              {dateStart ? (dateEnd ? `${fmt(dateStart)} → ${fmt(dateEnd)}` : `${fmt(dateStart)} → ?`) : '—'}
-            </Typography>
-          </Box>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
   const [reportData, setReportData] = useState<ValhallaReportJSON | null>(null);
   const [reportType, setReportType] = useState("monthly");
   const [companyName, setCompanyName] = useState("VALHALLA CYBERSECURITY");
-  const [analystName, setAnalystName] = useState("Y. RAMIREZ");
+  const [analystName, setAnalystName] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [reportId, setReportId] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"api" | "fallback">("fallback");
+  const [detail, setDetail] = useState<ExecutiveDetail | null>(null);
+  const [summary, setSummary] = useState("");
 
-  async function load() {
+  // El periodo elegido se envía al backend (antes solo cambiaba la etiqueta: los datos eran siempre de 24 h)
+  async function load(range?: { start: string; end: string }) {
     setLoading(true);
+    setError(null);
     try {
-      const raw = await fetchExecutiveReportData();
-      const d = new Date(raw.generatedAt || Date.now());
+      const d = new Date();
       const year = d.getFullYear();
       const month = d.getMonth();
-      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const firstDay = range?.start ?? `${year}-${String(month + 1).padStart(2, '0')}-01`;
       const lastDayNum = new Date(year, month + 1, 0).getDate();
-      const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+      const lastDay = range?.end ?? `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+      const raw = await fetchExecutiveReportData(`${firstDay}T00:00:00`, `${lastDay}T23:59:59`);
       const fmtDate = (s: string) => { const [y, m, da] = s.split("-"); return `${da}/${m}/${y}`; };
       const derivedPeriod = `${fmtDate(firstDay)} – ${fmtDate(lastDay)}`;
       const derivedReportId = `VHL-${year}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -325,48 +87,24 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         executive_summary: {
           status: raw.riskScore < 40 ? "Operativo" : "Alerta",
           health_score: 100 - raw.riskScore,
-          key_finding: raw.backendKeyFinding ?? "Incremento crítico en ataques de denegación de servicio (DDoS) y fuerza bruta mitigados por el motor de IA."
+          key_finding: raw.backendKeyFinding ?? raw.executiveSummary ?? ""
         },
-        wazuh_metrics: raw.wazuhMetrics ?? {
-          total_alerts: 42890,
-          critical_alerts: 145,
-          top_affected_assets: [
-            { name: "SRV-SAP-PROD", ip: "10.0.1.5", alerts: 1245 },
-            { name: "GW-FIREWALL-01", ip: "10.0.1.1", alerts: 840 },
-            { name: "WS-ADMIN-01", ip: "10.0.2.15", alerts: 620 }
-          ]
-        },
-        mitre_coverage: raw.mitreCoverage ?? [
-          { tactic: "Initial Access", count: 120, level: "High", icon: "📥" },
-          { tactic: "Execution", count: 15, level: "Critical", icon: "⚡" },
-          { tactic: "Persistence", count: 12, level: "Medium", icon: "🛡️" },
-          { tactic: "Credential Access", count: 85, level: "Critical", icon: "🔑" },
-          { tactic: "Lateral Movement", count: 4, level: "High", icon: "↗️" }
-        ],
-        honeypot_intel: raw.honeypotIntel ?? {
-          unique_attackers: 1438,
-          top_passwords_captured: ["admin123", "root", "Valhalla@123"],
-          malware_samples_collected: 12
-        },
-        incident_management: raw.incidentManagement ?? {
-          total_tickets: 45,
-          closed_tickets: 42,
-          avg_resolution_time_min: 18
-        },
-        remediation_steps: raw.remediationSteps ?? [
-          { task: "Bloqueo de IPs persistentes en el firewall core.", action_cmd: "iptables -A INPUT -s 185.x.x.x -j DROP" },
-          { task: "Actualización de parches en activos críticos.", action_cmd: "apt update && apt upgrade -y" },
-          { task: "Refuerzo de política MFA para el grupo de Administradores." }
-        ],
+        // Sin valores de reserva: antes se rellenaban con cifras inventadas (42.890 alertas, SRV-SAP-PROD, 1.438 atacantes...)
+        wazuh_metrics: raw.wazuhMetrics ?? { total_alerts: 0, critical_alerts: 0, top_affected_assets: [] },
+        mitre_coverage: raw.mitreCoverage ?? [],
+        honeypot_intel: raw.honeypotIntel ?? { unique_attackers: 0, top_passwords_captured: [], malware_samples_collected: 0 },
+        incident_management: raw.incidentManagement ?? { total_tickets: 0, closed_tickets: 0, avg_resolution_time_min: 0 },
+        remediation_steps: raw.remediationSteps ?? [],
         iso27001: {
-          overall: raw.iso27001?.overall ?? 73,
+          overall: raw.iso27001?.overall ?? 0,
           controls: raw.iso27001?.controls ?? []
         },
         recommendations: raw.recommendations ?? [],
         geo_intel: raw.geoIntel ?? []
       };
       setReportData(structured);
-      setDataSource(raw.source);
+      setDetail(raw.detail);
+      setSummary(raw.executiveSummary);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -376,7 +114,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
   useEffect(() => { load(); }, []);
 
-  const healthColor = useMemo(() => gaugeColor(reportData?.executive_summary.health_score ?? 0), [reportData]);
 
   const period = useMemo(() => {
     if (!dateStart || !dateEnd) return "";
@@ -485,7 +222,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const kpis = [
       { label: "Salud del Sistema", value: `${health}%`, sub: "Estado general", color: statusColor },
-      { label: "Pérdida Prevenida", value: `$${(reportData.wazuh_metrics.critical_alerts * 10000).toLocaleString()}`, sub: "Impacto evitado (est.)", color: navy },
+      { label: "Alertas Críticas", value: reportData.wazuh_metrics.critical_alerts.toLocaleString("es-ES"), sub: `de ${reportData.wazuh_metrics.total_alerts.toLocaleString("es-ES")} alertas (nivel ≥ 12)`, color: navy },
       { label: "Incidentes Resueltos", value: `${reportData.incident_management.closed_tickets}/${reportData.incident_management.total_tickets}`, sub: "Tasa de resolución", color: green },
       { label: "Tiempo Respuesta", value: `${reportData.incident_management.avg_resolution_time_min} min`, sub: "Tiempo medio (MTTR)", color: navy },
     ];
@@ -533,7 +270,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...black);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    const summaryText = reportData.executive_summary.key_finding + " Durante este período, el equipo de seguridad ha mantenido una postura defensiva activa, neutralizando intentos de acceso no autorizado y protegiendo los activos críticos de la organización.";
+    const summaryText = reportData.executive_summary.key_finding;
     const summaryLines = doc.splitTextToSize(summaryText, col - 10);
     doc.text(summaryLines, M + 5, 175);
 
@@ -1108,11 +845,10 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     let y1 = 82;
     y1 = sectionTitle("1. ESTADO GENERAL DEL SISTEMA", y1);
-    const stateNarrative = health >= 80
-      ? `El sistema de seguridad de ${companyName} opera en condiciones óptimas durante ${period}. El índice de salud del ${health}% refleja una postura defensiva consolidada con todos los controles activos. No se han registrado brechas de datos confirmadas. El equipo SOC mantuvo vigilancia continua con respuesta efectiva a las ${reportData.wazuh_metrics.total_alerts.toLocaleString()} alertas procesadas.`
-      : health >= 60
-      ? `El sistema presenta estado de alerta moderada durante ${period}. El índice de salud del ${health}% indica que algunos controles requieren refuerzo. Se detectaron ${reportData.wazuh_metrics.critical_alerts} alertas críticas que requirieron intervención manual. No se registraron brechas confirmadas, pero la actividad maliciosa exige revisión de los procedimientos de respuesta.`
-      : `El sistema se encuentra en estado crítico durante ${period}. El índice de salud del ${health}% está por debajo del umbral mínimo aceptable. Se registraron ${reportData.wazuh_metrics.critical_alerts} alertas críticas. Se requiere intervención inmediata y revisión urgente de los controles comprometidos.`;
+    // Solo hechos del periodo (antes afirmaba "no se han registrado brechas" sin poder comprobarlo)
+    const stateNarrative = `Periodo ${period}: ${reportData.wazuh_metrics.total_alerts.toLocaleString("es-ES")} alertas procesadas, `
+      + `${reportData.wazuh_metrics.critical_alerts} críticas. Índice de salud ${health}% (100 − riesgo), estado ${reportData.executive_summary.status.toLowerCase()}. `
+      + `${reportData.incident_management.total_tickets} incidentes, ${reportData.incident_management.closed_tickets} resueltos.`;
     y1 = bodyText(stateNarrative, y1);
     y1 += 4;
 
@@ -1411,11 +1147,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     y4 = bodyText(isoNarrative, y4);
     y4 += 4;
 
-    const ctrlNarrative: Record<string, string> = {
-      "A.5.7 Threat Intelligence": "Inteligencia activa vía Cowrie + SIEM. Gap potencial: integración con feeds externos de CTI.",
-      "A.5.24 Incident Management Planning": "Procedimiento operativo activo. Verificar que el runbook esté actualizado y probado con simulacros.",
-      "A.8.16 Monitoring Activities": "Monitoreo continuo vía Wazuh + OpenSearch. Revisar retención de logs (mínimo 12 meses según ISO 27001).",
-    };
     const statusLabelsT: Record<string, string> = { covered: "CUMPLE", partial: "PARCIAL", gap: "INCUMPLE" };
     (reportData.iso27001?.controls ?? []).forEach((ctrl) => {
       const sColor: [number, number, number] = ctrl.status === "covered" ? green : ctrl.status === "partial" ? yellow : red;
@@ -1433,7 +1164,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
-      doc.text(doc.splitTextToSize(ctrlNarrative[ctrl.control] || ctrl.note, col - 30)[0], M + 4, y4 + 14);
+      doc.text(doc.splitTextToSize(ctrl.note, col - 30)[0], M + 4, y4 + 14);
       y4 += 22;
     });
 
@@ -1441,258 +1172,41 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.save(`valhalla-informe-tecnico-${reportData.report_metadata.generation_date}.pdf`);
   }
 
-  if (loading) return (
-    <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)' }}>
-      <CircularProgress sx={{ color: 'var(--signal)' }} />
-    </Box>
-  );
+  const reload = () => load(dateStart && dateEnd ? { start: dateStart, end: dateEnd } : undefined);
 
-  if (error) return (
-    <Box sx={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'var(--bg-void)', p: 4 }}>
-      <GlassCard title="ERROR DE CARGA" sx={{ maxWidth: 500, textAlign: 'center' }}>
-        <Typography sx={{ color: 'var(--danger)', fontSize: '13px', mb: 3, fontFamily: 'var(--ff-mono)', wordBreak: 'break-word' }}>
-          {error}
-        </Typography>
-        <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--signal)', color: 'var(--signal)', '&:hover': { borderColor: 'var(--signal-bright)', color: 'var(--signal-bright)' } }}>
-          REINTENTAR
-        </Button>
-      </GlassCard>
-    </Box>
+  if (!detail || !reportData) return (
+    <div className="ex-state">
+      {error ? (
+        <>
+          <strong>No se pudo cargar el informe</strong>
+          <p>{error}</p>
+          <button type="button" className="ex-btn" onClick={reload}>Reintentar</button>
+        </>
+      ) : <span className="ex-state__spin" aria-label="Cargando" />}
+    </div>
   );
 
   return (
-    <Box sx={{ flex: 1, overflowY: "auto", p: 4, bgcolor: "var(--bg-void)", color: "var(--text)" }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
-        <Stack direction="row" spacing={3} alignItems="center">
-          <Box sx={{ width: 80, height: 80, borderRadius: '16px', background: logo ? `url(${logo}) center/contain no-repeat` : 'var(--signal)', border: '2px solid var(--signal-dim)', display: 'grid', placeItems: 'center', boxShadow: '0 0 30px rgba(60,255,158,0.2)' }}>
-            {!logo && <Typography variant="h3" sx={{ color: '#000', fontWeight: 900 }}>V</Typography>}
-          </Box>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '4px', textShadow: '0 0 15px var(--signal-glow)' }}>
-              EXECUTIVE <span style={{ color: 'var(--signal)' }}>REPORT</span>
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px', textTransform: 'uppercase' }}>
-              {companyName} // SESSION: {reportId}
-            </Typography>
-          </Box>
-        </Stack>
-        <Stack direction="row" spacing={2}>
-          <Chip
-            label={dataSource === "api" ? "● DATOS REALES" : "○ SIMULACIÓN"}
-            size="small"
-            variant="outlined"
-            sx={{
-              color: dataSource === "api" ? 'var(--signal)' : 'var(--amber)',
-              borderColor: dataSource === "api" ? 'rgba(60,255,158,0.4)' : 'rgba(255,159,26,0.4)',
-              fontSize: '9px',
-              fontWeight: 'bold',
-              letterSpacing: '1px',
-            }}
-          />
-          <Button variant="outlined" onClick={() => setPreviewMode(!previewMode)} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
-            {previewMode ? 'EDIT CONFIG' : 'PREVIEW UI'}
-          </Button>
-          <Button variant="outlined" onClick={load} sx={{ borderColor: 'var(--line)', color: 'var(--text-dim)', '&:hover': { borderColor: 'var(--signal)', color: 'var(--signal)' } }}>
-            RECARGAR
-          </Button>
-          <Button variant="contained" onClick={exportToPDF} sx={{ bgcolor: 'var(--signal)', color: '#000', fontWeight: 'bold', '&:hover': { bgcolor: 'var(--signal-bright)' } }}>
-            EXPORT PDF
-          </Button>
-          <Button variant="outlined" onClick={exportTechnicalPDF} sx={{ borderColor: 'var(--cyan)', color: 'var(--cyan)', fontWeight: 'bold', '&:hover': { borderColor: 'var(--cyan)', bgcolor: 'rgba(0,200,255,0.08)' } }}>
-            EXPORT PDF TÉCNICO
-          </Button>
-        </Stack>
-      </Stack>
-
-      {!previewMode && (
-        <Grid container spacing={2} sx={{ mb: 4, p: 3, background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField fullWidth size="small" label="CLIENT NAME" variant="standard" value={companyName} onChange={e => setCompanyName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField fullWidth size="small" label="ANALYST" variant="standard" value={analystName} onChange={e => setAnalystName(e.target.value)} sx={{ input: { color: 'var(--text)' }, label: { color: 'var(--signal)' } }} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <DateRangePicker
-              dateStart={dateStart}
-              dateEnd={dateEnd}
-              onChange={(s, e) => { setDateStart(s); setDateEnd(e); }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControl fullWidth size="small" variant="standard">
-              <InputLabel sx={{ color: 'var(--signal)' }}>REPORT TYPE</InputLabel>
-              <Select value={reportType} onChange={e => setReportType(e.target.value)} sx={{ color: 'var(--text)' }}>
-                <MenuItem value="monthly">MONTHLY SUMMARY</MenuItem>
-                <MenuItem value="weekly">WEEKLY AUDIT</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Button component="label" fullWidth sx={{ color: 'var(--cyan)', border: '1px dashed var(--cyan)' }}>
-              UPLOAD COMPANY LOGO
-              <input type="file" hidden accept="image/*" onChange={handleLogoUpload} />
-            </Button>
-          </Grid>
-        </Grid>
-      )}
-
-      {reportData && (
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <GlassCard sx={{ height: '100%', textAlign: 'center', py: 4 }}>
-              <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px' }}>INFRASTRUCTURE HEALTH</Typography>
-              <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', my: 2 }}>
-                <CircularProgress variant="determinate" value={100} size={120} thickness={2} sx={{ color: 'var(--line)', position: 'absolute' }} />
-                <CircularProgress variant="determinate" value={reportData.executive_summary.health_score} size={120} thickness={4} sx={{ color: healthColor }} />
-                <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <NeonText size="2.5rem" color={healthColor}>{reportData.executive_summary.health_score}%</NeonText>
-                </Box>
-              </Box>
-              <Typography variant="body2" sx={{ color: healthColor, fontWeight: 'bold' }}>{reportData.executive_summary.status.toUpperCase()}</Typography>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 4 }}>
-            <GlassCard sx={{ height: '100%', textAlign: 'center', py: 4, borderBottom: '4px solid var(--cyan)' }}>
-              <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px' }}>MITIGATED IMPACT (EST.)</Typography>
-              <Box sx={{ my: 3 }}>
-                <NeonText size="3.5rem" color="var(--cyan)">${(reportData.wazuh_metrics.critical_alerts * 10000).toLocaleString()}</NeonText>
-                <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>PREVENTED LOSS VALUE (USD)</Typography>
-              </Box>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 4 }}>
-            <GlassCard sx={{ height: '100%', textAlign: 'center', py: 4 }}>
-              <Typography variant="caption" sx={{ color: 'var(--text-dim)', letterSpacing: '2px' }}>RESPONSE EFFICIENCY</Typography>
-              <Box sx={{ my: 3, display: 'flex', justifyContent: 'center', gap: 4 }}>
-                <Box>
-                  <NeonText size="2rem" color="var(--signal)">{reportData.incident_management.closed_tickets}</NeonText>
-                  <Typography variant="caption">SOLVED</Typography>
-                </Box>
-                <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-                <Box>
-                  <NeonText size="2rem" color="var(--amber)">{reportData.incident_management.avg_resolution_time_min}m</NeonText>
-                  <Typography variant="caption">MTTR</Typography>
-                </Box>
-              </Box>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 7 }}>
-            <GlassCard title="EXECUTIVE SUMMARY" sx={{ height: '100%' }}>
-              <Typography sx={{ fontSize: '14px', lineHeight: 2, color: 'var(--text-bright)', textAlign: 'justify' }}>
-                {reportData.executive_summary.key_finding} Durante este periodo, el SOC Valhalla ha mantenido una postura defensiva activa, neutralizando intentos de acceso no autorizado en el perímetro y asegurando la integridad de los activos críticos.
-              </Typography>
-              <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(60,255,158,0.05)', borderLeft: '4px solid var(--signal)' }}>
-                <Typography sx={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--signal)' }}>STRATEGIC VERDICT:</Typography>
-                <Typography sx={{ fontSize: '13px', fontStyle: 'italic' }}>"Infrastructure remains secure under AI-driven monitoring. No breaches recorded."</Typography>
-              </Box>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 5 }}>
-            <GlassCard title="ATTACK ORIGIN (GEO-INTEL)" sx={{ height: '100%' }}>
-              <Stack spacing={2} sx={{ mt: 1 }}>
-                {(reportData.geo_intel ?? []).map((entry, i) => (
-                  <Box key={entry.country}>
-                    <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{entry.country.toUpperCase()}</Typography>
-                      <Typography variant="caption" sx={{ color: 'var(--text-dim)' }}>{entry.pct}% THREAT LOAD</Typography>
-                    </Stack>
-                    <Box sx={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                      <Box sx={{ width: `${entry.pct}%`, height: '100%', background: i === 0 ? 'var(--danger)' : 'var(--amber)', borderRadius: 2 }} />
-                    </Box>
-                  </Box>
-                ))}
-              </Stack>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12 }}>
-            <GlassCard title="MITRE ATT&CK COVERAGE MATRIX" sx={{ borderTop: '4px solid var(--signal)' }}>
-              <Grid container spacing={4} alignItems="center">
-                <Grid size={{ xs: 12, md: 8 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-                    <thead>
-                      <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <th style={{ padding: '15px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>TACTIC</th>
-                        <th style={{ padding: '15px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>DETECTIONS</th>
-                        <th style={{ padding: '15px 10px', fontSize: '10px', color: 'var(--text-dim)' }}>RISK LEVEL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.mitre_coverage.map((row, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '15px 10px', fontSize: '13px', fontWeight: 'bold' }}>{row.icon} {row.tactic}</td>
-                          <td style={{ padding: '15px 10px', fontSize: '14px', fontFamily: 'var(--ff-mono)', color: 'var(--signal)' }}>{row.count}</td>
-                          <td style={{ padding: '15px 10px' }}>
-                            <Chip label={row.level} size="small" sx={{ fontSize: '9px', fontWeight: 'bold', bgcolor: row.level === 'Critical' ? 'rgba(255,77,77,0.1)' : 'rgba(255,159,26,0.1)', color: row.level === 'Critical' ? 'var(--danger)' : 'var(--amber)', border: '1px solid' }} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Box sx={{ p: 3, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(60,255,158,0.2)', borderRadius: '8px' }}>
-                    <Typography variant="caption" sx={{ color: 'var(--signal)', fontWeight: 'bold', mb: 1, display: 'block' }}>ANÁLISIS DE TÁCTICAS:</Typography>
-                    <Typography sx={{ fontSize: '12px', lineHeight: 1.8, color: 'var(--text-dim)' }}>
-                      La fase de Credential Access presenta la mayor criticidad. El sistema ha respondido bloqueando automáticamente {reportData.honeypot_intel.unique_attackers} vectores de ataque externos.
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <GlassCard title="INSTRUCTIONAL REMEDIATION" sx={{ height: '100%' }}>
-              <Stack spacing={2}>
-                {reportData.remediation_steps.map((step, i) => (
-                  <Box key={i} sx={{ p: 2, background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-                    <Typography sx={{ fontSize: '13px', fontWeight: 'bold', mb: 1 }}>{i + 1}. {step.task}</Typography>
-                    {step.action_cmd && (
-                      <Box sx={{ p: '10px', background: '#000', borderRadius: '4px', border: '1px dashed var(--amber)', color: 'var(--amber)', fontSize: '11px', fontFamily: 'var(--ff-mono)' }}>
-                        {step.action_cmd}
-                      </Box>
-                    )}
-                  </Box>
-                ))}
-              </Stack>
-            </GlassCard>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <GlassCard title="HONEYPOT INTEL & MALWARE" sx={{ height: '100%' }}>
-              <Typography variant="caption" sx={{ color: 'var(--text-dim)', mb: 2, display: 'block' }}>TOP PASSWORDS CAPTURED:</Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 4 }}>
-                {reportData.honeypot_intel.top_passwords_captured.map(p => (
-                  <Chip key={p} label={p} size="small" variant="outlined" sx={{ color: 'var(--cyan)', borderColor: 'var(--cyan)' }} />
-                ))}
-              </Box>
-              <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography variant="h4" sx={{ color: 'var(--danger)', fontWeight: 900 }}>{reportData.honeypot_intel.malware_samples_collected}</Typography>
-                  <Typography variant="caption">MALWARE SAMPLES</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="h4" sx={{ color: 'var(--cyan)', fontWeight: 900 }}>{reportData.honeypot_intel.unique_attackers}</Typography>
-                  <Typography variant="caption">UNIQUE ATTACKERS</Typography>
-                </Box>
-              </Stack>
-            </GlassCard>
-          </Grid>
-        </Grid>
-      )}
-
-      <Box sx={{ mt: 8, pt: 4, borderTop: '1px dashed rgba(255,255,255,0.1)', textAlign: 'center' }}>
-        <Typography sx={{ fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '4px' }}>
-          CONFIDENCIAL // VALHALLA SOC INFORME EJECUTIVO // {reportData?.report_metadata.generation_date}
-        </Typography>
-      </Box>
-    </Box>
+    <>
+      {error && <div className="ex-error">{error}</div>}
+      <ExecutiveView
+        detail={detail}
+        summary={summary}
+        reportId={reportId}
+        company={companyName}
+        analyst={analystName}
+        logo={logo}
+        dateStart={dateStart}
+        dateEnd={dateEnd}
+        loading={loading}
+        onPeriod={(a, b) => { setDateStart(a); setDateEnd(b); if (a && b && a <= b) load({ start: a, end: b }); }}
+        onReload={reload}
+        onExport={exportToPDF}
+        onExportTech={exportTechnicalPDF}
+        onCompany={setCompanyName}
+        onAnalyst={setAnalystName}
+        onLogo={handleLogoUpload}
+      />
+    </>
   );
 }

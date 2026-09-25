@@ -58,9 +58,8 @@ import ThreatMapView from "./ThreatMapView";
 import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
 import SocMaturityView from "./SocMaturityView";
-import HeimdallReportView from "./HeimdallReportView";
 import CveIntelView from "./CveIntelView";
-import ExecutiveReport from "./ExecutiveReport";
+import ReportsCenter from "./ReportsCenter";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
 import "./premium/premium.css";
@@ -750,8 +749,8 @@ export default function App() {
   const NAV_ICONS: Record<string, PaletteCommand['icon']> = {
     overview: LayoutDashboard, siem: Layers, assets: Monitor, incidents: Siren, monitors: Radar,
     health: Activity, audit: ScrollText, cowrie: Bug, threat: ShieldAlert, threatmap: Globe2,
-    lsamonitor: KeyRound, bifrost: BarChart3, heimdall: FileText, cveintel: ShieldCheck,
-    runbooks: BookOpen, workspace: Briefcase, 'executive-report': FileBarChart, users: Users,
+    lsamonitor: KeyRound, bifrost: BarChart3, reports: FileText, cveintel: ShieldCheck,
+    runbooks: BookOpen, workspace: Briefcase, users: Users,
   };
 
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
@@ -787,11 +786,10 @@ export default function App() {
     { id: 'threatmap', es: 'Threat Map', en: 'Threat Map', icon: Globe2, kw: 'mapa geo' },
     { id: 'lsamonitor', es: 'LSA Monitor', en: 'LSA Monitor', icon: KeyRound, admin: true, kw: 'credential guard' },
     { id: 'bifrost', es: 'Bifröst · Métricas', en: 'Bifröst · Metrics', icon: BarChart3, admin: true, kw: 'bifrost hunting madurez' },
-    { id: 'heimdall', es: 'Heimdall · Informe Intel', en: 'Heimdall · Intel report', icon: FileText, admin: true },
     { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', icon: ShieldCheck, kw: 'kev exploit vulnerabilidad' },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', icon: BookOpen, kw: 'playbooks procedimientos' },
     { id: 'workspace', es: 'Workspace de incidentes', en: 'Incident workspace', icon: Briefcase, kw: 'incidentes incidents tickets tabla kanban' },
-    { id: 'executive-report', es: 'Informe ejecutivo', en: 'Executive report', icon: FileBarChart, admin: true, kw: 'pdf' },
+    { id: 'reports', es: 'Centro de informes', en: 'Reports center', icon: FileText, kw: 'informe ejecutivo tecnico pdf heimdall inteligencia report' },
     { id: 'users', es: 'Usuarios', en: 'Users', icon: Users, admin: true },
     { id: 'profile', es: 'Mi perfil', en: 'My profile', icon: UserRound, kw: 'contraseña password avatar' },
     { id: 'settings', es: 'Ajustes globales', en: 'Global settings', icon: SlidersHorizontal, admin: true, kw: 'api keys ollama' },
@@ -1008,11 +1006,10 @@ export default function App() {
           <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
           {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
           {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
-          {user?.role === 'admin' && <NavBtn id="heimdall" label="Heimdall" sub={lang === 'es' ? 'Informe Intel' : 'Intel Report'} icon="i-metrics" />}
           <NavBtn id="cveintel" label="CVE Intel" sub={lang === 'es' ? 'KEV · Difusión IA' : 'KEV · AI outreach'} icon="i-vuln" />
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
-          {user?.role === 'admin' && <NavBtn id="executive-report" label={t('exec_report')} sub={t('exec_report_sub')} icon="i-metrics" />}
+          {user?.role !== 'viewer' && <NavBtn id="reports" label={lang === 'es' ? 'Informes' : 'Reports'} sub={lang === 'es' ? 'SOC · Ejecutivo · Intel' : 'SOC · Executive · Intel'} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="users" label={t('users')} sub={t('users_sub')} icon="i-overview" />}
 
           {/* Collapse Button */}
@@ -1059,13 +1056,13 @@ export default function App() {
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
-                {view === 'heimdall' && <HeimdallReportView lang={lang} />}
                 {view === 'cveintel' && <CveIntelView lang={lang} />}
                 {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
                 {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}
-                {view === 'executive-report' && <ExecutiveReport lang={lang} />}
+                {/* Centro de informes: integra el Informe ejecutivo (PDF) y Heimdall; se mantienen sus rutas antiguas */}
+                {(view === 'reports' || view === 'executive-report' || view === 'heimdall') && <ReportsCenter lang={lang} initialTab={view === 'heimdall' ? 'intel' : view === 'executive-report' ? 'executive' : 'soc'} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
-                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'profile'].includes(view) && (
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
