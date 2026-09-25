@@ -1322,6 +1322,25 @@ async def alert_volume(hours: int = 24, interval: str = "1h", _=Depends(get_curr
 async def mitre_coverage(hours: int = 168, _=Depends(get_current_user)):
     return await osc.get_mitre_coverage(hours)
 
+@app.get("/api/honeypot/overview")
+async def honeypot_overview(hours: int = Query(24, ge=1, le=720), _=Depends(get_current_user)):
+    """Resumen real del honeypot Cowrie (sin las alertas del bucle antiguo de la IA)."""
+    from app import honeypot
+    return await honeypot.overview(hours)
+
+
+@app.get("/api/honeypot/sessions")
+async def honeypot_sessions(hours: int = Query(24, ge=1, le=720), limit: int = Query(40, ge=1, le=100), _=Depends(get_current_user)):
+    from app import honeypot
+    return await honeypot.sessions(hours, limit)
+
+
+@app.get("/api/honeypot/sessions/{session_id}")
+async def honeypot_session_events(session_id: str = Path(..., pattern=r"^[a-f0-9]{8,32}$"), _=Depends(get_current_user)):
+    from app import honeypot
+    return await honeypot.session_events(session_id)
+
+
 @app.get("/api/wazuh/cowrie-stats")
 async def cowrie_stats(hours: int = 24, _=Depends(get_current_user)):
     return await osc.get_cowrie_stats(hours)

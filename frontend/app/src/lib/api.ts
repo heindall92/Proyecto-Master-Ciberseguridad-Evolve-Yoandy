@@ -816,3 +816,20 @@ export function setMyAbuseKey(api_key: string) {
     body: JSON.stringify({ api_key }),
   });
 }
+
+// ─── Honeypot Cowrie (sin el ruido del bucle antiguo de la IA) ──────────────
+export interface HoneypotOverview {
+  hours: number; interval: string;
+  summary: { available?: boolean; events: number; sessions: number; login_failed: number; login_success: number;
+    bruteforce_detections: number; intrusions_after_bruteforce: number;
+    top_usernames: Array<{ value: string; count: number }>; top_passwords: Array<{ value: string; count: number }>;
+    top_commands: Array<{ value: string; count: number }>; downloads: Array<{ value: string; count: number }> };
+  timeline: Array<{ t: string; events: number; failed: number; success: number }>;
+  attackers: Array<{ ip: string; events: number; sessions: number; success: number; last: string | null }>;
+  clients: Array<{ value: string; count: number }>;
+}
+export interface HoneypotSession { session: string; events: number; ip: string; start: string; end: string; duration_s: number; failed: number; success: number; commands: number; users: string[] }
+export interface HoneypotEvent { t: string; event: string; detail: string; rule: string; level: number }
+export const getHoneypotOverview = (hours = 24) => http<HoneypotOverview>(`/api/honeypot/overview?hours=${hours}`);
+export const getHoneypotSessions = (hours = 24) => http<HoneypotSession[]>(`/api/honeypot/sessions?hours=${hours}`);
+export const getHoneypotSessionEvents = (id: string) => http<HoneypotEvent[]>(`/api/honeypot/sessions/${encodeURIComponent(id)}`);
