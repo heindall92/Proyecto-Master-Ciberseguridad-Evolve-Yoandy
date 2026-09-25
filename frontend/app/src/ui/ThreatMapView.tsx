@@ -1,202 +1,121 @@
-import React, { useState, useEffect } from "react";
-import logger from "../lib/logger";
-import { getThreatMap } from "../lib/api";
+import React, { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { Crosshair, Globe2, MapPin, RefreshCw, Radar } from "lucide-react";
+import logger from "../lib/logger";
+import { getThreatMap } from "../lib/api";
+
+/**
+ * Mapa de origen de los ataques (pestaña "Mapa" de Inteligencia).
+ * Teselas de Esri sin clave (CARTO pasó a exigirla y mostraba "API KEY REQUIRED").
+ */
 
 interface AttackPoint {
-  ip: string;
-  country: string;
-  country_code: string;
-  city: string;
-  isp: string;
-  as?: string;
-  lat: number;
-  lon: number;
-  count: number;
-  is_honeypot?: boolean;
+  ip: string; country: string; country_code: string; city: string; isp: string; as?: string;
+  lat: number; lon: number; count: number; is_honeypot?: boolean;
 }
 
-export default function ThreatMapView() {
+const SOC_COORDS: [number, number] = [40.4168, -3.7038]; // Madrid
+const TILES = {
+  dark: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+  light: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+};
+const COLOR = { external: "#ef4f5f", honeypot: "#b36bff", local: "var(--signal)" };
+
+export default function ThreatMapView({ lang = "es", onAnalyze }: { lang?: string; onAnalyze?: (ip: string) => void }) {
+  const es = lang === "es";
   const [attacks, setAttacks] = useState<AttackPoint[]>([]);
-  const [countries, setCountries] = useState<{country: string; count: number}[]>([]);
+  const [countries, setCountries] = useState<{ country: string; count: number }[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hours, setHours] = useState(24);
+  const theme = typeof document !== "undefined" && document.body.dataset.theme === "light" ? "light" : "dark";
+  const names = useMemo(() => { try { return new Intl.DisplayNames([es ? "es" : "en"], { type: "region" }); } catch { return null; } }, [es]);
+  const countryName = (code: string) => { try { return (code && code !== "XX" && names?.of(code)) || code; } catch { return code; } };
 
-  const loadMap = async () => {
+  const load = async () => {
     setLoading(true);
     try {
       const data = await getThreatMap(hours);
-      setAttacks(data.attacks || []);
-      setCountries(data.countries || []);
-      setTotal(data.total_attacks || 0);
-    } catch (e) {
-      logger.error("Threat map error:", e);
-    } finally {
-      setLoading(false);
-    }
+      setAttacks(data.attacks || []); setCountries(data.countries || []); setTotal(data.total_attacks || 0);
+    } catch (e) { logger.error("Threat map error:", e); }
+    finally { setLoading(false); }
   };
+  useEffect(() => { load(); const iv = setInterval(load, 60000); return () => clearInterval(iv); }, [hours]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    loadMap();
-    const iv = setInterval(loadMap, 60000);
-    return () => clearInterval(iv);
-  }, [hours]);
-
-  const maxCount = Math.max(...attacks.map(a => a.count), 1);
-  const SOC_COORDS: [number, number] = [40.4168, -3.7038]; // Madrid, España
+  const geo = attacks.filter(a => a.lat !== 0 && a.lon !== 0);
+  const maxCount = Math.max(...geo.map(a => a.count), 1);
+  const honeypotHits = geo.filter(a => a.is_honeypot).reduce((s, a) => s + a.count, 0);
+  const foreign = countries.filter(c => c.country !== "ES" && c.country !== "XX").length;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", padding: "15px", background: "var(--bg-panel)", gap: "15px", overflow: 'hidden' }}>
-      <style>{`
-        .attack-line {
-          stroke-dasharray: 10, 10;
-          animation: dash 20s linear infinite;
-          opacity: 0.4;
-        }
-        @keyframes dash {
-          to { stroke-dashoffset: -1000; }
-        }
-        .pulse {
-          animation: mapPulse 2s ease-out infinite;
-        }
-        @keyframes mapPulse {
-          0% { r: 4; opacity: 1; stroke-width: 1; }
-          100% { r: 20; opacity: 0; stroke-width: 0.5; }
-        }
-        .leaflet-container {
-          background: #000 !important;
-        }
-        .leaflet-popup-content-wrapper {
-          background: rgba(10, 20, 15, 0.95) !important;
-          color: #fff !important;
-          border: 1px solid var(--signal) !important;
-          border-radius: 4px !important;
-        }
-        .leaflet-popup-tip {
-          background: var(--signal) !important;
-        }
-      `}</style>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-        <div>
-          <h2 className="threat-map-title" style={{ margin: 0, fontSize: "20px", color: "var(--signal)", fontFamily: "var(--mono)" }}> Cyber-Threat Intelligence Map</h2>
-          <span className="threat-map-sub" style={{ fontSize: "11px", color: "var(--text-dim)" }}>Visualización táctica de ataques en tiempo real (Pew Pew Mode)</span>
+    <div className="tm">
+      <div className="in-bar">
+        <div className="in-seg" role="group" aria-label={es ? "Ventana de tiempo" : "Time window"}>
+          {[1, 6, 24].map(h => <button key={h} type="button" aria-pressed={hours === h} onClick={() => setHours(h)}>{h} h</button>)}
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <div style={{ display: "flex", background: "rgba(0,0,0,0.3)", borderRadius: "4px", padding: "2px" }}>
-             {["Fuerza Bruta", "DDoS", "Malware", "Honeypot"].map(f => (
-               <span key={f} style={{ fontSize: '9px', padding: '4px 8px', color: 'var(--text-dim)', borderRight: '1px solid var(--line)' }}>{f}</span>
-             ))}
-          </div>
-          <select value={hours} onChange={e => setHours(Number(e.target.value))} style={{ background: "var(--bg-void)", border: "1px solid var(--line)", color: "var(--text)", padding: "6px 10px", borderRadius: "4px", fontSize: "11px" }}>
-            <option value={1}>1h</option>
-            <option value={6}>6h</option>
-            <option value={24}>24h</option>
-          </select>
-          <button onClick={loadMap} style={{ padding: "6px 10px", background: "var(--signal)", border: "none", color: "#000", borderRadius: "4px", cursor: "pointer", fontSize: "11px", fontWeight: 600 }}> REFRESH</button>
+        <div className="tm-stats">
+          <span><Crosshair size={13} /><b>{total.toLocaleString("es-ES")}</b> {es ? "ataques" : "attacks"}</span>
+          <span><MapPin size={13} /><b>{geo.length}</b> {es ? "orígenes geolocalizados" : "geolocated origins"}</span>
+          <span><Radar size={13} /><b>{honeypotHits}</b> {es ? "en el honeypot" : "on honeypot"}</span>
         </div>
+        <button type="button" className="wk-iconbtn" onClick={load} title={es ? "Actualizar" : "Refresh"} aria-label={es ? "Actualizar" : "Refresh"}><RefreshCw size={15} className={loading ? "ex-spin" : ""} /></button>
       </div>
 
-      <div style={{ flex: 1, display: "flex", gap: "15px", overflow: "hidden" }}>
-        {/* Left: Map */}
-        <div style={{ flex: 1, borderRadius: "8px", overflow: "hidden", border: "1px solid var(--line)", position: 'relative' }}>
-          <MapContainer center={[20, 0]} zoom={2.5} style={{ height: "100%", width: "100%" }} preferCanvas>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
-
-            {attacks.filter(a => a.lat !== 0 && a.lon !== 0).map((attack, i) => {
-              const radius = Math.max(4, (attack.count / maxCount) * 15);
-              const isSpain = attack.country_code === "ES";
-              const color = attack.is_honeypot ? "#FF00FF" : (isSpain ? "var(--signal)" : "var(--danger)");
-
+      <div className="tm-grid">
+        <div className="tm-map in-panel">
+          <MapContainer center={[25, 5]} zoom={2} minZoom={2} worldCopyJump style={{ height: "100%", width: "100%" }} preferCanvas>
+            <TileLayer key={theme} url={TILES[theme]} attribution="Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap" />
+            {geo.map((a, i) => {
+              const radius = Math.max(4, (a.count / maxCount) * 15);
+              const color = a.is_honeypot ? COLOR.honeypot : a.country_code === "ES" ? COLOR.local : COLOR.external;
               return (
-                <React.Fragment key={i}>
-                  <Polyline
-                    positions={[[attack.lat, attack.lon], SOC_COORDS]}
-                    pathOptions={{ color, weight: 1, className: 'attack-line' }}
-                  />
-                  <CircleMarker
-                    center={[attack.lat, attack.lon]}
-                    radius={radius}
-                    pathOptions={{ color, fillColor: color, fillOpacity: 0.6, weight: 1 }}
-                  >
+                <React.Fragment key={`${a.ip}-${i}`}>
+                  <Polyline positions={[[a.lat, a.lon], SOC_COORDS]} pathOptions={{ color, weight: 1, className: "tm-line" }} />
+                  <CircleMarker center={[a.lat, a.lon]} radius={radius} pathOptions={{ color, fillColor: color, fillOpacity: 0.55, weight: 1 }}>
                     <Popup>
-                      <div style={{ fontFamily: "var(--mono)", fontSize: "11px", minWidth: '180px' }}>
-                        <div style={{ color: color, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px', marginBottom: '4px' }}>
-                            {attack.is_honeypot ? 'HONEYPOT HIT' : 'INBOUND ATTACK'}
-                        </div>
-                        <strong>{attack.city}, {attack.country}</strong><br />
-                        <span style={{ color: 'var(--text-dim)' }}>IP:</span> {attack.ip}<br />
-                        <span style={{ color: 'var(--text-dim)' }}>ASN:</span> {attack.as || attack.isp}<br />
-                        <span style={{ color: 'var(--text-dim)' }}>VOL:</span> {attack.count} events<br />
+                      <div className="tm-pop">
+                        <b style={{ color }}>{a.is_honeypot ? (es ? "Ataque al honeypot" : "Honeypot hit") : (es ? "Ataque entrante" : "Inbound attack")}</b>
+                        <span>{[a.city, countryName(a.country_code || a.country)].filter(Boolean).join(", ")}</span>
+                        <span><i>IP</i>{a.ip}</span>
+                        <span><i>ASN</i>{a.as || a.isp || "—"}</span>
+                        <span><i>{es ? "Eventos" : "Events"}</i>{a.count}</span>
+                        {onAnalyze && <button type="button" onClick={() => onAnalyze(a.ip)}>{es ? "Analizar IP" : "Analyze IP"}</button>}
                       </div>
                     </Popup>
                   </CircleMarker>
-                  <CircleMarker
-                    center={[attack.lat, attack.lon]}
-                    radius={radius * 2}
-                    pathOptions={{ color, fillColor: 'none', weight: 1, className: 'pulse' }}
-                  />
+                  <CircleMarker center={[a.lat, a.lon]} radius={radius * 2} pathOptions={{ color, fillColor: "none", weight: 1, className: "tm-pulse" }} />
                 </React.Fragment>
               );
             })}
           </MapContainer>
-
-          <div className="threat-map-legend" style={{ position: 'absolute', bottom: '20px', left: '20px', zIndex: 1000, background: 'rgba(0,0,0,0.7)', padding: '10px', borderRadius: '4px', border: '1px solid var(--line)', fontSize: '10px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--danger)' }}></span> Web Attack / Brute Force
-             </div>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#FF00FF' }}></span> Honeypot Activity
-             </div>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--signal)' }}></span> Internal / Authorized
-             </div>
+          <div className="tm-legend">
+            <span><i style={{ background: COLOR.external }} />{es ? "Externo" : "External"}</span>
+            <span><i style={{ background: COLOR.honeypot }} />Honeypot</span>
+            <span><i style={{ background: "var(--signal)" }} />{es ? "España" : "Spain"}</span>
           </div>
         </div>
 
-        {/* Right: Intel Panel */}
-        <div className="threat-map-sidebar" style={{ width: "320px", background: "var(--bg-void)", border: "1px solid var(--line)", borderRadius: "8px", display: "flex", flexDirection: "column", padding: '15px' }}>
-          <h3 style={{ margin: "0 0 15px", fontSize: "12px", color: "var(--signal)", fontFamily: "var(--mono)", borderBottom: '1px solid var(--line)', paddingBottom: '8px' }}>
-             GEOPOLITICAL ORIGINS
-          </h3>
-          <div style={{ flex: 1, overflow: "auto" }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {countries.map((c, idx) => (
-                <div key={idx} className="threat-country-row" style={{ padding: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                         <span style={{ fontSize: '16px' }}>{getFlagEmoji(c.country)}</span>
-                         <span style={{ fontSize: '12px', fontWeight: 600 }}>{c.country}</span>
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--signal)', fontWeight: 'bold' }}>{c.count.toLocaleString()}</span>
-                   </div>
-                   <div style={{ marginTop: '5px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px' }}>
-                      <div style={{ height: '100%', width: `${(c.count / total) * 100}%`, background: 'var(--signal)', borderRadius: '2px' }}></div>
-                   </div>
-                </div>
+        <aside className="tm-side in-panel">
+          <header className="in-watch__head"><Globe2 size={15} /><h3>{es ? "Países de origen" : "Origin countries"}</h3><span className="in-count">{countries.length}</span></header>
+          {countries.length ? (
+            <ul className="ex-bars tm-countries">
+              {countries.map(c => (
+                <li key={c.country}>
+                  <span className="ex-bars__label">{countryName(c.country)}<small>{c.country}</small></span>
+                  <span className="ex-bars__track"><i style={{ width: `${(c.count * 100) / Math.max(total, 1)}%` }} /></span>
+                  <b>{c.count.toLocaleString("es-ES")}</b>
+                </li>
               ))}
-            </div>
-          </div>
-
-          <div className="threat-geofence-box" style={{ marginTop: '15px', padding: '10px', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: '6px' }}>
-             <div style={{ fontSize: '10px', color: 'var(--danger)', fontWeight: 'bold', marginBottom: '5px' }}>GEOFENCING ALERT</div>
-             <div style={{ fontSize: '11px' }}>
-                Detected <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>{countries.filter(c => c.country !== 'ES').length}</span> international origins targeting Spain infrastructure.
-             </div>
-          </div>
-        </div>
+            </ul>
+          ) : (
+            <p className="in-empty">{loading ? (es ? "Cargando…" : "Loading…") : (es
+              ? "Sin orígenes geolocalizados en esta ventana. En el laboratorio las IP atacantes son privadas (172.18.x.x) y no tienen ubicación."
+              : "No geolocated origins in this window.")}</p>
+          )}
+          {foreign > 0 && <p className="tm-alert">{es ? `${foreign} países extranjeros atacando la infraestructura.` : `${foreign} foreign countries attacking.`}</p>}
+        </aside>
       </div>
     </div>
   );
-}
-
-function getFlagEmoji(countryCode: string) {
-  if (countryCode === 'XX') return '';
-  const codePoints = countryCode
-    .toUpperCase()
-    .split('')
-    .map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
 }

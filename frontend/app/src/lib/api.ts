@@ -760,3 +760,40 @@ export function getReport(reportId: string) {
 export function verifyReport(reportId: string) {
   return http<{ ok: boolean; stored: string; current: string }>(`/api/reports/${encodeURIComponent(reportId)}/verify`);
 }
+
+// ─── Inteligencia: enriquecimiento de CVE y AbuseIPDB ───────────────────────
+export interface CveEnrichment {
+  cve: string;
+  cvss: { score: number; severity: string; vector: string; version: string } | null;
+  github: { count: number; top: Array<{ repo: string; stars: number; url: string; updated: string }> } | null;
+  exploitdb: { count: number; items: Array<{ title: string; path: string }> } | null;
+  priority: { score: number; label: string; reasons: string[] };
+  sources: { nvd: boolean; github: boolean; exploitdb: boolean };
+  error?: string;
+}
+
+export function getCveEnrichment(id: string) {
+  return http<CveEnrichment>(`/api/cve/${encodeURIComponent(id)}/enrich`);
+}
+
+export interface AbuseIpResult {
+  found: boolean; ip: string; error?: string;
+  abuse_confidence_score?: number; country?: string; country_name?: string; isp?: string; domain?: string;
+  usage_type?: string; total_reports?: number; num_distinct_users?: number; last_reported_at?: string;
+  is_whitelisted?: boolean; is_tor?: boolean;
+}
+
+export function abuseCheckIp(ip: string) {
+  return http<AbuseIpResult>(`/api/abuseipdb/ip/${encodeURIComponent(ip)}`);
+}
+
+export function getAbuseKeyStatus() {
+  return http<{ configured: boolean }>("/api/users/me/abuseipdb-api-key");
+}
+
+export function setMyAbuseKey(api_key: string) {
+  return http<{ status: string; configured: boolean }>("/api/users/me/abuseipdb-api-key", {
+    method: "PUT",
+    body: JSON.stringify({ api_key }),
+  });
+}

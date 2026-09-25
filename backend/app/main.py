@@ -2895,6 +2895,14 @@ async def cve_latest(limit: int = Query(15, ge=1, le=50), _=Depends(get_current_
     return await cve_feed.get_latest_cves(limit)
 
 
+@app.get("/api/cve/{cve_id}/enrich")
+async def cve_enrich_one(cve_id: str = Path(..., pattern=r"^CVE-\d{4}-\d{4,7}$"), _=Depends(get_current_user)):
+    """CVSS (NVD), PoC públicos (GitHub), Exploit-DB y prioridad de parcheo para una CVE."""
+    from app import cve_enrich
+    kev = next((c for c in cve_feed._CACHE.get("data", []) if c.get("id") == cve_id), None)
+    return await cve_enrich.enrich(cve_id, kev)
+
+
 @app.get("/api/cve/{cve_id}/exploits")
 async def cve_exploits(cve_id: str, _=Depends(get_current_user)):
     """Exploits públicos (Exploit-DB / searchsploit en Kali) para una CVE."""

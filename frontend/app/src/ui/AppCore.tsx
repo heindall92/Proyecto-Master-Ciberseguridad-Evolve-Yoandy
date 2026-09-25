@@ -52,14 +52,12 @@ import SystemSettingsView from "./SystemSettingsView";
 import IntegrationsHealthView from "./IntegrationsHealthView";
 import MonitorsView from "./MonitorsView";
 import SiemView from "./SiemView";
-import ThreatIntelView from "./ThreatIntelView";
+import IntelHub from "./intel/IntelHub";
 import CowrieView from "./CowrieView";
 import AnalystWorkspace from "./AnalystWorkspace";
-import ThreatMapView from "./ThreatMapView";
 import RunbooksView from "./RunbooksView";
 import LSAMonitorView from "./LSAMonitorView";
 import SocMaturityView from "./SocMaturityView";
-import CveIntelView from "./CveIntelView";
 import ReportsCenter from "./ReportsCenter";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
@@ -800,12 +798,15 @@ export default function App() {
   const NAV_ICONS: Record<string, PaletteCommand['icon']> = {
     overview: LayoutDashboard, siem: Layers, assets: Monitor, incidents: Siren, monitors: Radar,
     health: Activity, audit: ScrollText, cowrie: Bug, threat: ShieldAlert, threatmap: Globe2,
-    lsamonitor: KeyRound, bifrost: BarChart3, reports: FileText, cveintel: ShieldCheck,
+    lsamonitor: KeyRound, bifrost: BarChart3, reports: FileText, cveintel: ShieldCheck, intel: ShieldAlert,
     runbooks: BookOpen, workspace: Briefcase, users: Users,
   };
 
+  // Threat Intel, CVE Intel y Threat Map viven ahora en "Inteligencia" (sus rutas antiguas siguen funcionando)
+  const INTEL_VIEWS = ['intel', 'threat', 'cveintel', 'threatmap'];
+  const navView = INTEL_VIEWS.includes(view) ? 'intel' : view;
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
-    <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
+    <button className={`navbtn ${navView === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__edge" aria-hidden="true" />
       <span className="navbtn__icon-wrap">
         {(() => { const Icon = NAV_ICONS[id]; return Icon ? <Icon className="navbtn__icon" aria-hidden="true" /> : <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>; })()}
@@ -827,16 +828,14 @@ export default function App() {
     { id: 'health', es: 'Estado', en: 'Health', show: isAdminRole },
     { id: 'audit', es: 'Auditoría', en: 'Audit', show: isAdminRole },
     { id: 'cowrie', es: 'Honeypots', en: 'Honeypots', show: isAdminRole },
-    { id: 'threat', es: 'Threat Intel', en: 'Threat Intel', show: true },
-    { id: 'threatmap', es: 'Threat Map', en: 'Threat Map', show: true },
+    { id: 'intel', es: 'Inteligencia', en: 'Intelligence', show: true },
     { id: 'lsamonitor', es: 'LSA Monitor', en: 'LSA Monitor', show: isAdminRole },
     { id: 'bifrost', es: 'Bifröst', en: 'Bifröst', show: isAdminRole },
-    { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', show: true },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', show: true },
     { id: 'users', es: 'Usuarios', en: 'Users', show: isAdminRole },
   ];
   const MOBILE_LABEL: Record<string, [string, string]> = { overview: ['Inicio', 'Home'], workspace: ['Casos', 'Cases'] };
-  const TAB_IDS = ['overview', 'siem', 'workspace', user?.role !== 'viewer' ? 'reports' : 'threat'];
+  const TAB_IDS = ['overview', 'siem', 'workspace', user?.role !== 'viewer' ? 'reports' : 'intel'];
   const goTo = (id: string) => { dispatch(setView(id)); setMoreOpen(false); };
 
   const incidentCount = stats?.metrics?.tickets_open || 0;
@@ -1077,11 +1076,9 @@ export default function App() {
           {user?.role === 'admin' && <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />}
-          <NavBtn id="threat" label={t('threat_intel')} sub={t('threat_intel_sub')} icon="i-threat" badge="IOCs" />
-          <NavBtn id="threatmap" label={t('threat_map')} sub={t('threat_map_sub')} icon="i-map" />
+          <NavBtn id="intel" label={lang === 'es' ? 'Inteligencia' : 'Intelligence'} sub={lang === 'es' ? 'IOCs · CVE · Mapa' : 'IOCs · CVE · Map'} icon="i-threat" />
           {user?.role === 'admin' && <NavBtn id="lsamonitor" label={t('lsa_monitor')} sub={t('lsa_monitor_sub')} icon="i-overview" />}
           {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
-          <NavBtn id="cveintel" label="CVE Intel" sub={lang === 'es' ? 'KEV · Difusión IA' : 'KEV · AI outreach'} icon="i-vuln" />
           <NavBtn id="runbooks" label={t('runbooks')} sub={t('runbooks_sub')} icon="i-playbook" />
           <NavBtn id="workspace" label={t('workspace')} sub={t('workspace_sub')} icon="i-workspace" />
           {user?.role !== 'viewer' && <NavBtn id="reports" label={lang === 'es' ? 'Informes' : 'Reports'} sub={lang === 'es' ? 'SOC · Ejecutivo · GRC' : 'SOC · Executive · GRC'} icon="i-metrics" />}
@@ -1113,14 +1110,14 @@ export default function App() {
               const Icon = NAV_ICONS[id];
               const badge = id === 'workspace' ? incidentCount : 0;
               return (
-                <button key={id} type="button" className="mnav__btn" aria-current={view === id ? 'page' : undefined} onClick={() => goTo(id)}>
+                <button key={id} type="button" className="mnav__btn" aria-current={navView === id ? 'page' : undefined} onClick={() => goTo(id)}>
                   <Icon size={19} aria-hidden="true" />
                   <span>{MOBILE_LABEL[id]?.[es ? 0 : 1] ?? (es ? item.es : item.en)}</span>
                   {badge > 0 && <b className="mnav__badge">{badge > 99 ? '99+' : badge}</b>}
                 </button>
               );
             })}
-            <button type="button" className="mnav__btn" aria-expanded={moreOpen} aria-current={!TAB_IDS.includes(view) && view !== 'profile' && view !== 'settings' ? 'page' : undefined} onClick={() => setMoreOpen(o => !o)}>
+            <button type="button" className="mnav__btn" aria-expanded={moreOpen} aria-current={!TAB_IDS.includes(navView) && view !== 'profile' && view !== 'settings' ? 'page' : undefined} onClick={() => setMoreOpen(o => !o)}>
               <LayoutGrid size={19} aria-hidden="true" />
               <span>{es ? 'Más' : 'More'}</span>
             </button>
@@ -1137,7 +1134,7 @@ export default function App() {
                 {NAV_ITEMS.filter(n => n.show).map(n => {
                   const Icon = NAV_ICONS[n.id];
                   return (
-                    <button key={n.id} type="button" className="msheet__item" aria-current={view === n.id ? 'page' : undefined} onClick={() => goTo(n.id)}>
+                    <button key={n.id} type="button" className="msheet__item" aria-current={navView === n.id ? 'page' : undefined} onClick={() => goTo(n.id)}>
                       <span className="msheet__icon"><Icon size={20} aria-hidden="true" /></span>
                       <span>{es ? n.es : n.en}</span>
                     </button>
@@ -1168,19 +1165,17 @@ export default function App() {
                 {view === 'health' && <IntegrationsHealthView lang={lang} />}
                 {view === 'monitors' && <MonitorsView lang={lang} />}
                 {view === 'siem' && <SiemView lang={lang} />}
-                {view === 'threat' && <ThreatIntelView lang={lang} initialIp={intelIp} />}
+                {INTEL_VIEWS.includes(view) && <IntelHub lang={lang} initialIp={intelIp} initialTab={view === 'cveintel' ? 'vulns' : view === 'threatmap' ? 'map' : 'iocs'} />}
                 {view === 'cowrie' && <CowrieView lang={lang} />}
-                {view === 'threatmap' && <ThreatMapView lang={lang} />}
                 {view === 'runbooks' && <RunbooksView lang={lang} />}
                 {view === 'lsamonitor' && <LSAMonitorView lang={lang} />}
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
-                {view === 'cveintel' && <CveIntelView lang={lang} />}
                 {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
                 {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}
                 {/* Centro de informes: SOC, ejecutivo y GRC (sustituye a Heimdall); se mantienen las rutas antiguas */}
                 {(view === 'reports' || view === 'executive-report' || view === 'heimdall') && <ReportsCenter lang={lang} initialTab={view === 'heimdall' ? 'grc' : view === 'executive-report' ? 'executive' : 'soc'} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
-                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'intel', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>
