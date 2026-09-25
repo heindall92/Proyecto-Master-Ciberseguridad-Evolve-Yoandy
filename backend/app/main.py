@@ -723,19 +723,39 @@ async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depe
     rows = (await db.execute(select(User))).scalars().all()
     return rows
 
+# Roles que entiende el control de acceso (antes el rol era texto libre)
+VALID_ROLES = {"admin", "analista", "analyst", "reporter", "viewer"}
+SYSTEM_USERS = {"valhalla-ia"}
+
+
+def _check_role(role: str) -> str:
+    r = (role or "").strip().lower()
+    if r not in VALID_ROLES:
+        raise HTTPException(422, f"Rol no válido. Permitidos: {', '.join(sorted(VALID_ROLES))}")
+    return r
+
+
+async def _admins_left(db: AsyncSession, excluding: int) -> int:
+    return (await db.execute(select(func.count(User.id)).where(User.role == "admin", User.id != excluding))).scalar() or 0
+
+
 @app.post("/api/users", response_model=UserOut)
 async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     if current.role != "admin": raise HTTPException(403, "Forbidden")
-    # Check if exists
-    existing = (await db.execute(select(User).where(User.username == req.username))).scalar_one_or_none()
-    if existing: raise HTTPException(400, "Username already exists")
-    
+    # Antes no se aplicaba la política de contraseñas ni se validaban usuario, email ni rol al crear
+    username = InputValidator.validate_username(req.username)
+    InputValidator.validate_password(req.password)
+    email = InputValidator.validate_email(req.email)
+    role = _check_role(req.role)
+    existing = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
+    if existing: raise HTTPException(409, "Ya existe un usuario con ese nombre")
+
     new_user = User(
-        username=req.username,
-        email=req.email,
+        username=username,
+        email=email,
         password_hash=get_password_hash(req.password),
-        role=req.role,
-        security_rank=req.security_rank
+        role=role,
+        security_rank=(req.security_rank or "")[:64] or "L1 Analyst",
     )
     db.add(new_user)
     await db.commit()
@@ -754,7 +774,12 @@ async def update_user_ep(user_id: int, req: UserUpdate, db: AsyncSession = Depen
     if (req.username or req.role or req.security_rank) and not is_admin:
         raise HTTPException(403, "Solo un administrador puede cambiar usuario, rol o rango")
     if req.username: u.username = InputValidator.validate_username(req.username)
-    if req.role: u.role = req.role
+    if req.role:
+        new_role = _check_role(req.role)
+        # No dejar la plataforma sin ningún administrador
+        if u.role == "admin" and new_role != "admin" and await _admins_left(db, u.id) == 0:
+            raise HTTPException(409, "No se puede quitar el rol de administrador al último administrador")
+        u.role = new_role
     if req.security_rank: u.security_rank = req.security_rank
     if req.email: u.email = InputValidator.validate_email(req.email)
 
@@ -822,6 +847,12 @@ async def delete_user_ep(user_id: int, db: AsyncSession = Depends(get_db), curre
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if not u: raise HTTPException(404, "User not found")
+    if u.id == current.id:
+        raise HTTPException(409, "No puedes eliminar tu propio usuario")
+    if u.username.lower() in SYSTEM_USERS:
+        raise HTTPException(409, "Es un usuario de sistema (asistente IA del chat) y no se puede eliminar")
+    if u.role == "admin" and await _admins_left(db, u.id) == 0:
+        raise HTTPException(409, "No se puede eliminar al último administrador")
     await db.delete(u)
     await db.commit()
     return {"ok": True}
