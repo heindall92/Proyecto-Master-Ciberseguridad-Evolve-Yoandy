@@ -44,13 +44,11 @@ import {
 } from "../store/chatSlice";
 
 import AssetsView from "./AssetsView";
+import SystemView from "./SystemView";
 import UsersView from "./UsersView";
 import DashboardSuperFinal from "./DashboardSuperFinal";
 import { translations } from "./translations";
-import AuditLogView from "./AuditLogView";
 import SystemSettingsView from "./SystemSettingsView";
-import IntegrationsHealthView from "./IntegrationsHealthView";
-import MonitorsView from "./MonitorsView";
 import SiemView from "./SiemView";
 import IntelHub from "./intel/IntelHub";
 import CowrieView from "./CowrieView";
@@ -797,13 +795,14 @@ export default function App() {
   const NAV_ICONS: Record<string, PaletteCommand['icon']> = {
     overview: LayoutDashboard, siem: Layers, assets: Monitor, incidents: Siren, monitors: Radar,
     health: Activity, audit: ScrollText, cowrie: Bug, threat: ShieldAlert, threatmap: Globe2,
-    lsamonitor: KeyRound, bifrost: BarChart3, reports: FileText, cveintel: ShieldCheck, intel: ShieldAlert,
+    lsamonitor: KeyRound, system: Activity, bifrost: BarChart3, reports: FileText, cveintel: ShieldCheck, intel: ShieldAlert,
     runbooks: BookOpen, workspace: Briefcase, users: Users,
   };
 
   // Threat Intel, CVE Intel y Threat Map viven ahora en "Inteligencia" (sus rutas antiguas siguen funcionando)
   const INTEL_VIEWS = ['intel', 'threat', 'cveintel', 'threatmap'];
-  const navView = INTEL_VIEWS.includes(view) ? 'intel' : view === 'lsamonitor' ? 'assets' : view;
+  const SYSTEM_VIEWS = ['system', 'health', 'monitors', 'audit'];
+  const navView = INTEL_VIEWS.includes(view) ? 'intel' : view === 'lsamonitor' ? 'assets' : SYSTEM_VIEWS.includes(view) ? 'system' : view;
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
     <button className={`navbtn ${navView === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
       <span className="navbtn__edge" aria-hidden="true" />
@@ -823,9 +822,7 @@ export default function App() {
     { id: 'workspace', es: 'Workspace', en: 'Workspace', show: true },
     { id: 'reports', es: 'Informes', en: 'Reports', show: user?.role !== 'viewer' },
     { id: 'assets', es: 'Activos', en: 'Assets', show: isAdminRole },
-    { id: 'monitors', es: 'Monitores', en: 'Monitors', show: isAdminRole },
-    { id: 'health', es: 'Estado', en: 'Health', show: isAdminRole },
-    { id: 'audit', es: 'Auditoría', en: 'Audit', show: isAdminRole },
+    { id: 'system', es: 'Sistema', en: 'System', show: isAdminRole },
     { id: 'cowrie', es: 'Honeypots', en: 'Honeypots', show: isAdminRole },
     { id: 'intel', es: 'Inteligencia', en: 'Intelligence', show: true },
     { id: 'bifrost', es: 'Bifröst', en: 'Bifröst', show: isAdminRole },
@@ -1070,9 +1067,7 @@ export default function App() {
           <NavBtn id="overview" label={t('overview')} sub={t('overview_sub')} icon="i-overview" />
           <NavBtn id="siem" label={t('siem')} sub={t('siem_sub')} icon="i-siem" badge={stats?.metrics?.total_alerts_24h?.toLocaleString()} color="danger" />
           {user?.role === 'admin' && <NavBtn id="assets" label={t('assets')} sub={t('assets_sub')} icon="i-assets" badge={stats?.metrics?.unique_agents} />}
-          {user?.role === 'admin' && <NavBtn id="monitors" label={lang === 'es' ? 'Monitores' : 'Monitors'} sub="Config SIEM" icon="i-threat" />}
-          {user?.role === 'admin' && <NavBtn id="health" label={lang === 'es' ? 'Estado' : 'Health'} sub="Integraciones" icon="i-metrics" />}
-          {user?.role === 'admin' && <NavBtn id="audit" label={lang === 'es' ? 'Auditoría' : 'Audit'} sub="Log del Sistema" icon="i-metrics" />}
+          {user?.role === 'admin' && <NavBtn id="system" label={lang === 'es' ? 'Sistema' : 'System'} sub={lang === 'es' ? 'Estado · Monitores · Auditoría' : 'Health · Monitors · Audit'} icon="i-metrics" />}
           {user?.role === 'admin' && <NavBtn id="cowrie" label={t('cowrie')} sub={t('cowrie_sub')} icon="i-threat" badge="Ssh/Tel" color="amber" />}
           <NavBtn id="intel" label={lang === 'es' ? 'Inteligencia' : 'Intelligence'} sub={lang === 'es' ? 'IOCs · CVE · Mapa' : 'IOCs · CVE · Map'} icon="i-threat" />
           {user?.role === 'admin' && <NavBtn id="bifrost" label="Bifröst" sub={lang === 'es' ? 'Métricas · Hunting' : 'Metrics · Hunting'} icon="i-metrics" />}
@@ -1157,10 +1152,8 @@ export default function App() {
                 {view === 'overview' && <DashboardSuperFinal isLockedProp={isLocked} showWidgetCatalog={showWidgetCatalog} setShowWidgetCatalog={setShowWidgetCatalog} lang={lang} />}
                 {(view === 'assets' || view === 'lsamonitor') && <AssetsView lang={lang} initialTab={view === 'lsamonitor' ? 'lsa' : 'hosts'} />}
                 {view === 'users' && <UsersView lang={lang} />}
-                {view === 'audit' && <AuditLogView lang={lang} />}
+                {SYSTEM_VIEWS.includes(view) && <SystemView initialTab={view === 'audit' ? 'audit' : view === 'monitors' ? 'monitors' : 'health'} />}
                 {view === 'settings' && <SystemSettingsView lang={lang} />}
-                {view === 'health' && <IntegrationsHealthView lang={lang} />}
-                {view === 'monitors' && <MonitorsView lang={lang} />}
                 {view === 'siem' && <SiemView lang={lang} />}
                 {INTEL_VIEWS.includes(view) && <IntelHub lang={lang} initialIp={intelIp} initialTab={view === 'cveintel' ? 'vulns' : view === 'threatmap' ? 'map' : 'iocs'} />}
                 {view === 'cowrie' && <CowrieView lang={lang} />}
@@ -1171,7 +1164,7 @@ export default function App() {
                 {/* Centro de informes: SOC, ejecutivo y GRC (sustituye a Heimdall); se mantienen las rutas antiguas */}
                 {(view === 'reports' || view === 'executive-report' || view === 'heimdall') && <ReportsCenter lang={lang} initialTab={view === 'heimdall' ? 'grc' : view === 'executive-report' ? 'executive' : 'soc'} />}
                 {view === 'profile' && <ProfileView user={user} lang={lang} onUpdate={(u) => dispatch(setUser(u))} profilePic={profilePic} setProfilePic={(p) => dispatch(setProfilePic(p))} />}
-                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'siem', 'threat', 'intel', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
+                {!['overview', 'assets', 'users', 'incidents', 'audit', 'settings', 'health', 'monitors', 'system', 'siem', 'threat', 'intel', 'cowrie', 'threatmap', 'lsamonitor', 'bifrost', 'heimdall', 'cveintel', 'runbooks', 'workspace', 'executive-report', 'reports', 'profile'].includes(view) && (
                   <div className="panel" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ fontSize: '48px', opacity: 0.3 }}>404</div>
                     <div style={{ color: 'var(--text-dim)', letterSpacing: '2px', fontSize: '13px' }}>MÓDULO NO ENCONTRADO</div>

@@ -161,6 +161,7 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     route: Mapped[str] = mapped_column(String(255), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)  # resultado (401/403 repetidos = abuso)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class SystemSetting(Base):

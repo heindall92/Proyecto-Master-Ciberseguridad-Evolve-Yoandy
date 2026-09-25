@@ -114,7 +114,7 @@ export default function IntelVulns({ es }: { es: boolean }) {
         </span>
       </div>
 
-      <div className="in-list" role="table" aria-label={es ? "Vulnerabilidades explotadas" : "Exploited vulnerabilities"}>
+      <div className="in-list in-list--cve" role="table" aria-label={es ? "Vulnerabilidades explotadas" : "Exploited vulnerabilities"}>
         <div className="in-row in-row--head" role="row">
           <span /><span>CVE</span><span>{es ? "Producto" : "Product"}</span><span>CVSS</span><span>{es ? "Exploits" : "Exploits"}</span><span>{es ? "Límite CISA" : "CISA due"}</span><span>{es ? "Prioridad" : "Priority"}</span>
         </div>

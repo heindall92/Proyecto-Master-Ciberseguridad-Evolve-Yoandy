@@ -92,16 +92,20 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if request.method in ["POST", "PUT", "DELETE", "PATCH"] and request.url.path.startswith("/api/"):
             user = getattr(request.state, "user", None)
             async def log_action():
-                async with SessionLocal() as db:
-                    al = AuditLog(
-                        user_id=user.id if user else None,
-                        username=user.username if user else "anonymous",
-                        action=request.method,
-                        route=request.url.path,
-                        ip_address=request.client.host if request.client else None
-                    )
-                    db.add(al)
-                    await db.commit()
+                # Un fallo aquí no debe perderse en silencio: la auditoría es obligatoria
+                try:
+                    async with SessionLocal() as db:
+                        db.add(AuditLog(
+                            user_id=user.id if user else None,
+                            username=user.username if user else "anonymous",
+                            action=request.method,
+                            route=request.url.path,
+                            ip_address=request.client.host if request.client else None,
+                            status_code=response.status_code,  # nunca se guarda el cuerpo (contraseñas, claves)
+                        ))
+                        await db.commit()
+                except Exception as e:  # noqa: BLE001
+                    logger.error("No se pudo registrar la auditoría de %s %s: %s", request.method, request.url.path, e)
             asyncio.create_task(log_action())
         return response
 
@@ -146,21 +150,54 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 # --- BACKGROUND TASKS ---
 
+def _monitor_tokens(m: "Monitor") -> set[str]:
+    return {t.strip().lower() for t in (m.rule_id_pattern or "").split(",") if t.strip()}
+
+
+def _monitor_matches(m: "Monitor", alert: dict[str, Any]) -> bool:
+    """Coincide si el ID de regla o alguno de los grupos de la alerta está en el patrón del monitor."""
+    tokens = _monitor_tokens(m)
+    if not tokens:
+        return False
+    return str(alert.get("rule_id", "")).lower() in tokens or any(str(g).lower() in tokens for g in alert.get("groups") or [])
+
+
 async def _sync_wazuh_alerts_to_tickets(hours: int = 1) -> dict[str, Any]:
-    """Escala a incidente las alertas Wazuh high/critical, correlacionándolas con incidentes activos."""
-    alerts = await osc.get_recent_alerts(limit=100, hours=hours)
+    """Escala alertas de Wazuh a incidentes aplicando los monitores.
+
+    - Alerta que coincide con un monitor activo: se escala solo si su severidad alcanza la
+      mínima del monitor y el monitor acumula al menos `threshold` alertas en la ventana.
+      (Antes los monitores se guardaban pero no se aplicaban.)
+    - Alerta sin monitor: se escala si es de severidad alta o crítica (comportamiento anterior).
+    """
+    alerts = await osc.get_recent_alerts(limit=500, hours=hours)
     created = linked = skipped = 0
     error: str | None = None
     try:
         async with SessionLocal() as db:
             admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one_or_none()
+            monitors = (await db.execute(select(Monitor).where(Monitor.enabled.is_(True)))).scalars().all()
+            hits = {m.id: sum(1 for a in alerts if _monitor_matches(m, a)) for m in monitors}
             for alert in alerts:
-                if not alert.get("id") or alert.get("severity") not in ("high", "critical"):
+                if not alert.get("id"):
                     skipped += 1
                     continue
-                _, outcome = await _ingest_alert(db, {**alert, "alert_id": alert["id"]}, admin)
+                sev = alert.get("severity") or "low"
+                matched = [m for m in monitors if _monitor_matches(m, alert)]
+                trigger = next((m for m in matched if SEVERITY_RANK.get(sev, 0) >= SEVERITY_RANK.get(m.severity_floor, 0)
+                                and hits[m.id] >= m.threshold), None)
+                if matched and not trigger:
+                    skipped += 1
+                    continue
+                if not matched and sev not in ("high", "critical"):
+                    skipped += 1
+                    continue
+                ticket, outcome = await _ingest_alert(db, {**alert, "alert_id": alert["id"]}, admin)
                 if outcome == "created":
                     created += 1
+                    if trigger:
+                        _log_event(db, ticket.id, admin, "monitor",
+                                   f"Escalado por el monitor «{trigger.name}»: {hits[trigger.id]} alertas en {hours} h (umbral {trigger.threshold}, severidad mínima {trigger.severity_floor})")
                 elif outcome == "linked":
                     linked += 1
                 else:
@@ -302,6 +339,7 @@ def _migrate_tickets_resolved_at(sync_conn) -> None:
 
 # Columnas añadidas después de la primera versión (create_all no altera tablas existentes).
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "audit_logs": {"status_code": "INTEGER"},
     "tickets": {"classification": "VARCHAR(32)"},
     "evidence": {
         "sha256": "VARCHAR(64)",
@@ -1420,6 +1458,20 @@ async def list_monitors(db: AsyncSession = Depends(get_db), current: User = Depe
     if current.role != "admin":
         raise HTTPException(403, "Solo admin puede ver monitores")
     return (await db.execute(select(Monitor).order_by(Monitor.name))).scalars().all()
+
+@app.get("/api/monitors/activity")
+async def monitors_activity(hours: int = Query(24, ge=1, le=168), db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Alertas reales que ha coincidido cada monitor en la ventana y si alcanzaría su umbral."""
+    alerts = await osc.get_recent_alerts(limit=500, hours=hours)
+    monitors = (await db.execute(select(Monitor))).scalars().all()
+    out = {}
+    for m in monitors:
+        matched = [a for a in alerts if _monitor_matches(m, a)]
+        eligible = [a for a in matched if SEVERITY_RANK.get(a.get("severity") or "low", 0) >= SEVERITY_RANK.get(m.severity_floor, 0)]
+        out[m.id] = {"matches": len(matched), "eligible": len(eligible), "would_trigger": bool(m.enabled and eligible and len(matched) >= m.threshold),
+                     "last": matched[0].get("timestamp") if matched else None}
+    return {"hours": hours, "sampled": len(alerts), "monitors": out}
+
 
 @app.put("/api/monitors/{monitor_id}", response_model=MonitorOut)
 async def update_monitor_ep(

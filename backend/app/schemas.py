@@ -409,9 +409,10 @@ class MonitorOut(BaseModel):
     updated_at: datetime
 
 class MonitorUpdate(BaseModel):
+    # Validado: los monitores deciden qué alertas se escalan a incidente
     enabled: bool | None = None
-    threshold: int | None = None
-    severity_floor: str | None = None
+    threshold: int | None = Field(default=None, ge=1, le=10000)
+    severity_floor: Severity | None = None
 
 
 # --- IOC / Threat Intel ---
