@@ -578,8 +578,10 @@ export interface SocMetrics {
   dwell_open_avg_minutes: number;
   by_severity: Record<string, number>;
   tickets_by_analyst: Array<{ analyst: string; closed: number }>;
-  attack_coverage_pct: number;
+  attack_coverage_pct: number | null;
   techniques_seen: string[];
+  techniques_covered: number | null;
+  techniques_total: number | null;
   alerts_24h: number;
   generated_at: string;
 }

@@ -65,7 +65,7 @@ from app import virustotal_client as vt
 from app import report_builder as rb
 from app import grc_builder
 from app import abuseipdb_client as abuse
-from app.rag import build_knowledge, MITRE_TECHNIQUES
+from app.rag import build_knowledge
 from app import hunting
 from app.lsa_monitor import router as lsa_router
 from app.health import router as health_router
@@ -2887,7 +2887,7 @@ async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depend
         raise HTTPException(403, "Solo admin o analista puede ver métricas del SOC")
 
     rows = (await db.execute(
-        select(Ticket.created_at, Ticket.updated_at, Ticket.status, Ticket.severity, Ticket.assigned_to_id)
+        select(Ticket.created_at, Ticket.resolved_at, Ticket.status, Ticket.severity, Ticket.assigned_to_id)
     )).all()
     closed_states = {"closed", "resolved"}
     open_states = {"open", "in_progress", "escalated"}
@@ -2898,13 +2898,14 @@ async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depend
     by_analyst: dict[int | None, int] = {}
     total = len(rows)
     closed = 0
-    for created, updated, status, severity, assignee in rows:
+    for created, resolved, status, severity, assignee in rows:
         st = (status or "").lower()
         by_sev[severity or "unknown"] = by_sev.get(severity or "unknown", 0) + 1
         if st in closed_states:
             closed += 1
-            if created and updated and updated >= created:
-                mttr_samples.append((updated - created).total_seconds() / 60)
+            # MTTR con la fecha real de resolución (antes updated_at: un comentario posterior lo alteraba)
+            if created and resolved and resolved >= created:
+                mttr_samples.append((resolved - created).total_seconds() / 60)
             by_analyst[assignee] = by_analyst.get(assignee, 0) + 1
         elif st in open_states and created:
             dwell_samples.append((now - created).total_seconds() / 60)
@@ -2916,14 +2917,15 @@ async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depend
         for aid, n in sorted(by_analyst.items(), key=lambda x: x[1], reverse=True)
     ]
 
-    # Cobertura ATT&CK: técnicas base vistas / definidas en el ruleset
+    # Cobertura ATT&CK: la misma que el Informe GRC (reglas cargadas en Wazuh); antes se medía
+    # contra una lista corta fija y no coincidía con el informe.
     try:
         cov = await osc.get_mitre_coverage(168)
     except Exception:
         cov = []
     seen_base = {c.get("technique_id", "").split(".")[0] for c in cov if c.get("technique_id")}
-    defined_base = {t.split(".")[0] for t in MITRE_TECHNIQUES}
-    coverage_pct = round(100 * len(seen_base & defined_base) / max(1, len(defined_base)))
+    ruleset = await grc_builder.attack_coverage()
+    coverage_pct = round(ruleset["coverage_pct"]) if ruleset else None
 
     try:
         stats = await osc.get_dashboard_stats(24)
@@ -2941,7 +2943,9 @@ async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depend
         "by_severity": by_sev,
         "tickets_by_analyst": tickets_by_analyst,
         "attack_coverage_pct": coverage_pct,
-        "techniques_seen": sorted(seen_base & defined_base),
+        "techniques_seen": sorted(seen_base),
+        "techniques_covered": ruleset["techniques_covered"] if ruleset else None,
+        "techniques_total": ruleset["techniques_total"] if ruleset else None,
         "alerts_24h": stats.get("total_alerts_24h", stats.get("total_alerts", 0)),
         "generated_at": now.isoformat(),
     }
@@ -2976,7 +2980,7 @@ async def hunting_queries(current: User = Depends(get_current_user)):
 
 
 @app.get("/api/hunting/run/{query_id}")
-async def hunting_run(query_id: str, hours: int = 168, current: User = Depends(get_current_user)):
+async def hunting_run(query_id: str = Path(..., pattern=r"^[a-z_]{3,40}$"), hours: int = Query(168, ge=1, le=720), current: User = Depends(get_current_user)):
     if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista puede ejecutar threat hunting")
     return await hunting.run_query(query_id, hours=hours)
