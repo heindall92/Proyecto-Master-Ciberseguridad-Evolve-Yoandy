@@ -1,551 +1,189 @@
-import { useState, useEffect } from "react";
-import logger from "../lib/logger";
-import { X } from "lucide-react";
-import { listRunbooks, createRunbook, updateRunbook, deleteRunbook } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  ArrowDown, ArrowUp, BookOpen, Bug, Copy, Database, Fish, Lock, Pencil, Plus, Save, Search, ServerCrash, ShieldAlert,
+  Trash2, UserX, Waves, X, Info, CircleDot,
+} from "lucide-react";
+import { listRunbooks, createRunbook, updateRunbook, deleteRunbook, type Runbook, type RunbookStep } from "../lib/api";
+import { useAppSelector } from "../store/hooks";
+import { HoldButton, toast } from "./premium/widgets";
+import "./premium/dashboard.css";
+import "./premium/workspace.css";
+import "./premium/executive.css";
+import "./intel/intel.css";
 
-interface RunbookStep {
-  text: string;
-  command?: string;
+/** Runbooks: procedimientos de respuesta por tipo de incidente, con las 5 fases de NIST SP 800-61. */
+
+const PHASES = [
+  ["identification_steps", "Identificación", "Confirmar el incidente y su alcance"],
+  ["containment_steps", "Contención", "Limitar el daño y cortar al atacante"],
+  ["eradication_steps", "Erradicación", "Eliminar la causa y los artefactos"],
+  ["recovery_steps", "Recuperación", "Volver a la operación normal vigilando"],
+  ["post_mortem_steps", "Lecciones aprendidas", "Qué mejorar para la próxima vez"],
+] as const;
+type PhaseKey = typeof PHASES[number][0];
+const CATS: Record<string, [string, typeof Bug]> = {
+  intrusion: ["Intrusión", ShieldAlert], malware: ["Malware", Bug], phishing: ["Phishing", Fish], ransomware: ["Ransomware", Lock],
+  ddos: ["DDoS", Waves], data_breach: ["Fuga de datos", Database], insider_threat: ["Amenaza interna", UserX], other: ["Otros", ServerCrash],
+};
+const SEV_ES: Record<string, string> = { all: "Todas", low: "Baja", medium: "Media", high: "Alta", critical: "Crítica" };
+const norm = (s: RunbookStep): { text: string; command?: string } => (typeof s === "string" ? { text: s } : s);
+const EMPTY: Omit<Runbook, "id"> = { name: "", category: "intrusion", description: "", identification_steps: [], containment_steps: [], eradication_steps: [], recovery_steps: [], post_mortem_steps: [], severity_applicable: "all", is_active: true };
+
+function Editor({ initial, onClose, onSaved }: { initial: Omit<Runbook, "id"> & { id?: number }; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState(() => ({ ...initial, ...Object.fromEntries(PHASES.map(([k]) => [k, (initial[k] ?? []).map(norm)])) }) as typeof initial);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const steps = (k: PhaseKey) => f[k] as { text: string; command?: string }[];
+  const setSteps = (k: PhaseKey, v: { text: string; command?: string }[]) => setF(p => ({ ...p, [k]: v }));
+  const save = async () => {
+    setErr(null); setBusy(true);
+    const payload = { ...f, ...Object.fromEntries(PHASES.map(([k]) => [k, steps(k).filter(s => s.text.trim()).map(s => ({ text: s.text.trim(), ...(s.command?.trim() ? { command: s.command.trim() } : {}) }))])) };
+    try {
+      if (initial.id) await updateRunbook(initial.id, payload); else await createRunbook(payload as Omit<Runbook, "id">);
+      toast(initial.id ? "Runbook actualizado." : "Runbook creado.", "ok"); onSaved(); onClose();
+    } catch (e) { setErr(e instanceof Error ? e.message.replace(/^HTTP \d+:\s*/, "") : String(e)); }
+    finally { setBusy(false); }
+  };
+  return createPortal(<>
+    <div className="wk-drawer-backdrop" onClick={onClose} aria-hidden="true" />
+    <aside className="wk-drawer rb-drawer" role="dialog" aria-modal="true" aria-label={initial.id ? "Editar runbook" : "Nuevo runbook"}>
+      <div className="wk-drawer__head"><Pencil size={15} /><span className="wk-drawer__id">{initial.id ? "Editar runbook" : "Nuevo runbook"}</span>
+        <button className="vx-iconbtn" style={{ marginLeft: "auto" }} onClick={onClose} aria-label="Cerrar"><X size={16} /></button></div>
+      <div className="wk-drawer__scroll">
+        <div className="rb-form">
+          <label className="rb-full">Nombre<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} maxLength={128} /></label>
+          <label>Categoría<select value={f.category} onChange={e => setF({ ...f, category: e.target.value })}>{Object.entries(CATS).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <label>Severidad aplicable<select value={f.severity_applicable} onChange={e => setF({ ...f, severity_applicable: e.target.value })}>{Object.entries(SEV_ES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <label className="rb-full">Descripción<textarea rows={3} value={f.description} onChange={e => setF({ ...f, description: e.target.value })} maxLength={2000} /></label>
+        </div>
+        {PHASES.map(([k, label]) => (
+          <section key={k} className="wk-section">
+            <div className="wk-section__head"><CircleDot size={13} />{label}<span className="wk-sec-tools in-muted">{steps(k).length}</span></div>
+            <div className="wk-section__body rb-steps-edit">
+              {steps(k).map((s, i) => (
+                <div key={i} className="rb-step-edit">
+                  <span className="rb-num">{i + 1}</span>
+                  <div>
+                    <input value={s.text} onChange={e => setSteps(k, steps(k).map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} placeholder="Qué hay que hacer" maxLength={600} />
+                    <input className="rb-cmd-in" value={s.command ?? ""} onChange={e => setSteps(k, steps(k).map((x, j) => (j === i ? { ...x, command: e.target.value } : x)))} placeholder="Comando o referencia (opcional)" maxLength={600} />
+                  </div>
+                  <div className="rb-step-tools">
+                    <button type="button" className="vx-iconbtn" disabled={i === 0} onClick={() => { const a = [...steps(k)]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setSteps(k, a); }} aria-label="Subir"><ArrowUp size={12} /></button>
+                    <button type="button" className="vx-iconbtn" disabled={i === steps(k).length - 1} onClick={() => { const a = [...steps(k)]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setSteps(k, a); }} aria-label="Bajar"><ArrowDown size={12} /></button>
+                    <button type="button" className="vx-iconbtn" onClick={() => setSteps(k, steps(k).filter((_, j) => j !== i))} aria-label="Quitar paso"><X size={12} /></button>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="vp-btn rb-add" onClick={() => setSteps(k, [...steps(k), { text: "" }])} disabled={steps(k).length >= 30}><Plus size={13} />Añadir paso</button>
+            </div>
+          </section>
+        ))}
+        {err && <p className="wk-form__err">{err}</p>}
+      </div>
+      <div className="wk-drawer__foot">
+        <button className="vp-btn" onClick={onClose}>Cancelar</button>
+        <button className="vp-btn vp-btn--primary" onClick={save} disabled={busy || f.name.trim().length < 3 || !f.description.trim()}><Save size={13} />{busy ? "Guardando…" : "Guardar"}</button>
+      </div>
+    </aside>
+  </>, document.body);
 }
-
-interface Runbook {
-  id: number;
-  name: string;
-  category: string;
-  description: string;
-  identification_steps: RunbookStep[];
-  containment_steps: RunbookStep[];
-  eradication_steps: RunbookStep[];
-  recovery_steps: RunbookStep[];
-  post_mortem_steps: RunbookStep[];
-  severity_applicable: string;
-  is_active: boolean;
-}
-
-const CATEGORIES = ["intrusion", "malware", "phishing", "ransomware", "ddos", "data_breach", "insider_threat", "other"];
-const SEVERITIES = ["low", "medium", "high", "critical", "all"];
-
 
 export default function RunbooksView() {
-  const [runbooks, setRunbooks] = useState<Runbook[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Runbook | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [filter, setFilter] = useState("all");
+  const role = (useAppSelector(s => s.auth.user?.role) ?? "").toLowerCase();
+  const canEdit = ["admin", "analyst", "analista"].includes(role);
+  const [list, setList] = useState<Runbook[] | null>(null);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+  const [open, setOpen] = useState<Runbook | null>(null);
+  const [edit, setEdit] = useState<(Omit<Runbook, "id"> & { id?: number }) | null>(null);
 
-  const loadRunbooks = async () => {
-    setLoading(true);
-    try {
-      const data = await listRunbooks();
-      setRunbooks(data || []);
-    } catch (e) {
-      logger.error("Load runbooks error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = () => listRunbooks().then(l => setList(l.filter(r => r.is_active))).catch(() => setList([]));
+  useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    loadRunbooks();
-  }, []);
-
-  const filtered = filter === "all" ? runbooks : runbooks.filter(r => r.category === filter);
-
-  const handleSave = async (rb: Partial<Runbook>) => {
-    try {
-      if (selected && rb.id) {
-        await updateRunbook(rb.id, rb);
-      } else {
-        await createRunbook(rb as any);
-      }
-      await loadRunbooks();
-      setEditing(false);
-      setSelected(null);
-    } catch (e) {
-      alert("Error guardando runbook");
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Eliminar este runbook?")) return;
-    try {
-      await deleteRunbook(id);
-      await loadRunbooks();
-      setSelected(null);
-    } catch (e) {
-      alert("Error eliminando runbook");
-    }
-  };
-
-  const newRunbook = () => ({
-    id: 0,
-    name: "NUEVO PROCEDIMIENTO OPERATIVO",
-    category: "malware",
-    description: "Procedimiento estándar basado en NIST 800-61 r2",
-    identification_steps: [
-      { text: "Verificar alerta en Wazuh SIEM y cruzar con logs de Sysmon", command: "Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational'; Id=1}" },
-      { text: "Validar hash del archivo malicioso en VirusTotal", command: "Get-FileHash -Path C:\\path\\to\\malware.exe -Algorithm SHA256" }
-    ],
-    containment_steps: [
-      { text: "Aislar host de la red (VLAN de Cuarentena)", command: "Set-NetAdapter -Name 'Ethernet' -VlanID 999" },
-      { text: "Bloquear IP de C2 en el Firewall perimetral", command: "New-NetFirewallRule -DisplayName 'Block C2' -Direction Outbound -RemoteAddress '{{ip}}' -Action Block" }
-    ],
-    eradication_steps: [
-      { text: "Preservar evidencia: Volcado de memoria RAM", command: "procdump.exe -ma lsass.exe memory_dump.dmp" },
-      { text: "Eliminar persistencia (Tareas programadas / Registro)", command: "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'Malware'" }
-    ],
-    recovery_steps: [
-      { text: "Restaurar sistema desde backup verificado", command: "" },
-      { text: "Forzar cambio de contraseñas de cuentas comprometidas", command: "Update-LocalUser -Name '{{user}}' -Password $newPass" }
-    ],
-    post_mortem_steps: [
-      { text: "Documentar cronología del incidente y vectores de entrada", command: "" },
-      { text: "Identificar brechas en controles preventivos y actualizar reglas EDR", command: "" }
-    ],
-    severity_applicable: "high",
-    is_active: true,
-  });
-
-  return (
-    <div style={{ flex: 1, padding: '15px', display: 'flex', flexDirection: 'column', gap: '15px', overflow: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', color: 'var(--signal)', fontFamily: 'var(--mono)' }}>Runbooks</h1>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Procedimientos operativos del SOC</span>
-        </div>
-        <button onClick={() => { setSelected(newRunbook() as Runbook); setEditing(true); }} style={{ padding: '6px 12px', background: 'var(--signal)', border: 'none', color: '#000', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>+ Nuevo Runbook</button>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setFilter("all")}
-          style={{
-            padding: '6px 14px',
-            background: filter === "all" ? 'var(--signal)' : 'rgba(60,255,158,0.1)',
-            color: filter === "all" ? '#000' : 'var(--signal)',
-            border: filter === "all" ? '1px solid var(--signal)' : '1px solid var(--signal-dim)',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontFamily: 'var(--mono)',
-            textTransform: 'uppercase',
-            letterSpacing: '1px'
-          }}
-        >
-         Todo
-        </button>
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setFilter(cat)}
-            style={{
-              padding: '6px 14px',
-              background: filter === cat ? 'var(--signal)' : 'rgba(60,255,158,0.1)',
-              color: filter === cat ? '#000' : 'var(--signal)',
-              border: filter === cat ? '1px solid var(--signal)' : '1px solid var(--signal-dim)',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontFamily: 'var(--mono)',
-              textTransform: 'uppercase',
-              letterSpacing: '1px'
-            }}
-          >
-            {cat.replace("_", " ")}
-          </button>
-        ))}
-      </div>
-
-      {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', gap: '20px', overflow: 'hidden' }}>
-        {/* List */}
-        <div style={{
-          width: '350px',
-          overflow: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px'
-        }}>
-          {loading && <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '20px' }}>CARGANDO...</div>}
-          {!loading && filtered.length === 0 && (
-            <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '40px' }}>
-              No hay runbooks disponibles
-            </div>
-          )}
-          {filtered.map(rb => (
-            <div
-              key={rb.id}
-              onClick={() => setSelected(rb)}
-              style={{
-                padding: '15px',
-                background: selected?.id === rb.id ? 'rgba(60,255,158,0.15)' : 'rgba(0,0,0,0.3)',
-                border: `1px solid ${selected?.id === rb.id ? 'var(--signal)' : 'var(--line)'}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: '14px',
-                  color: 'var(--text)',
-                  fontWeight: 600
-                }}>
-                  {rb.name}
-                </span>
-                <span style={{
-                  padding: '2px 8px',
-                  background: rb.severity_applicable === 'critical' ? 'var(--danger)' :
-                             rb.severity_applicable === 'high' ? 'orange' :
-                             rb.severity_applicable === 'medium' ? 'yellow' : 'var(--signal)',
-                  color: '#000',
-                  borderRadius: '4px',
-                  fontSize: '10px',
-                  fontFamily: 'var(--mono)'
-                }}>
-                  {rb.severity_applicable.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>
-                {rb.description.substring(0, 80)}...
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--text-faint)', textTransform: 'uppercase' }}>
-                {rb.category} · {rb.containment_steps.length + rb.eradication_steps.length + rb.recovery_steps.length} pasos
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Detail/Edit panel */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {!selected && !editing && (
-            <div style={{
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-dim)'
-            }}>
-              Selecciona un runbook para ver detalles
-            </div>
-          )}
-
-          {(selected || editing) && (
-            <RunbookDetail
-              runbook={selected!}
-              editing={editing}
-              onEdit={() => setEditing(true)}
-              onSave={handleSave}
-              onDelete={() => handleDelete(selected!.id)}
-              onCancel={() => { setEditing(false); setSelected(null); }}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RunbookDetail({
-  runbook,
-  editing,
-  onEdit,
-  onSave,
-  onDelete,
-  onCancel
-}: {
-  runbook: Runbook;
-  editing: boolean;
-  onEdit: () => void;
-  onSave: (rb: Partial<Runbook>) => void;
-  onDelete: () => void;
-  onCancel: () => void;
-}) {
-  const [form, setForm] = useState(runbook);
-
-  const updateField = (field: string, value: any) => {
-    setForm(f => ({ ...f, [field]: value }));
-  };
-
-  const updateStep = (section: string, index: number, value: Partial<RunbookStep>) => {
-    const sectionKey = section as keyof Runbook;
-    const steps = [...(form[sectionKey] as RunbookStep[] || [])];
-    steps[index] = { ...steps[index], ...value };
-    setForm(f => ({ ...f, [section]: steps }));
-  };
-
-  const addStep = (section: string) => {
-    const sectionKey = section as keyof Runbook;
-    const steps = [...(form[sectionKey] as RunbookStep[] || []), { text: "", command: "" }];
-    setForm(f => ({ ...f, [section]: steps }));
-  };
-
-  const removeStep = (section: string, index: number) => {
-    const sectionKey = section as keyof Runbook;
-    const steps = (form[sectionKey] as RunbookStep[] || []).filter((_, i) => i !== index);
-    setForm(f => ({ ...f, [section]: steps }));
+  const rows = useMemo(() => (list ?? []).filter(r => (cat === "all" || r.category === cat) && (!q || `${r.name} ${r.description}`.toLowerCase().includes(q.toLowerCase()))), [list, q, cat]);
+  const copy = (c: string) => { navigator.clipboard.writeText(c); toast("Copiado.", "ok"); };
+  const remove = async (r: Runbook) => {
+    try { await deleteRunbook(r.id); toast("Runbook archivado.", "ok"); setOpen(null); load(); }
+    catch (e) { toast(`No se pudo archivar: ${e instanceof Error ? e.message : e}`, "err"); }
   };
 
   return (
-    <div style={{ flex: 1, padding: '15px', background: 'var(--bg-panel)', border: '1px solid var(--line)', borderRadius: '8px', overflow: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-        <h2 style={{ margin: 0, color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '18px' }}>
-          {editing ? (runbook.id ? "Editar" : "Nuevo") : runbook.name}
-        </h2>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {!editing ? (
-            <>
-              <button onClick={onEdit} style={{ padding: '6px 12px', background: 'var(--signal)', border: 'none', color: '#000', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>Editar</button>
-              <button onClick={onDelete} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => onSave(form)} style={{ padding: '6px 12px', background: 'var(--signal)', border: 'none', color: '#000', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>Guardar</button>
-              <button onClick={onCancel} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--line)', color: 'var(--text)', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancelar</button>
-            </>
-          )}
+    <div className="view in rb">
+      <div className="wk-head">
+        <div><h1>Runbooks</h1><p>Procedimientos de respuesta por tipo de incidente (NIST SP 800-61)</p></div>
+        <div className="in-bar">
+          <label className="wk-search"><Search size={15} /><input className="vp-bare-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar procedimiento…" />
+            {q && <button className="wk-search__clear" onClick={() => setQ("")} aria-label="Borrar"><X size={13} /></button>}</label>
+          {canEdit && <button type="button" className="vp-btn vp-btn--primary" onClick={() => setEdit({ ...EMPTY })}><Plus size={14} />Nuevo</button>}
         </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Basic info */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Nombre</label>
-            {editing ? (
-              <input
-                value={form.name}
-                onChange={e => updateField("name", e.target.value)}
-                style={inputStyle}
-              />
-            ) : (
-              <div style={valueStyle}>{form.name}</div>
-            )}
+      <div className="in-body">
+        <div className="in-vulns">
+          <div className="wk-chipset rb-cats">
+            <button type="button" aria-pressed={cat === "all"} onClick={() => setCat("all")}>Todos <small>{list?.length ?? 0}</small></button>
+            {Object.entries(CATS).filter(([k]) => (list ?? []).some(r => r.category === k)).map(([k, [l, I]]) => (
+              <button key={k} type="button" aria-pressed={cat === k} onClick={() => setCat(k)}><I size={12} /> {l} <small>{(list ?? []).filter(r => r.category === k).length}</small></button>
+            ))}
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Categoría</label>
-            {editing ? (
-              <select
-                value={form.category}
-                onChange={e => updateField("category", e.target.value)}
-                style={inputStyle}
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c}>{c.replace("_", " ")}</option>
-                ))}
-              </select>
-            ) : (
-              <div style={valueStyle}>{form.category}</div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Descripción</label>
-          {editing ? (
-            <textarea
-              value={form.description}
-              onChange={e => updateField("description", e.target.value)}
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          ) : (
-            <div style={valueStyle}>{form.description}</div>
-          )}
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '5px' }}>Severidad aplicable</label>
-          {editing ? (
-            <select
-              value={form.severity_applicable}
-              onChange={e => updateField("severity_applicable", e.target.value)}
-              style={inputStyle}
-            >
-              {SEVERITIES.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          ) : (
-            <div style={valueStyle}>{form.severity_applicable}</div>
-          )}
-        </div>
-
-        {/* Identification */}
-        <StepsSection
-          title="Identification & Analysis (Identificación)"
-          steps={form.identification_steps || []}
-          editing={editing}
-          onUpdate={(i, v) => updateStep("identification_steps", i, v)}
-          onAdd={() => addStep("identification_steps")}
-          onRemove={(i) => removeStep("identification_steps", i)}
-          icon=""
-        />
-
-        {/* Containment */}
-        <StepsSection
-          title="Containment (Contención)"
-          steps={form.containment_steps || []}
-          editing={editing}
-          onUpdate={(i, v) => updateStep("containment_steps", i, v)}
-          onAdd={() => addStep("containment_steps")}
-          onRemove={(i) => removeStep("containment_steps", i)}
-          icon=""
-        />
-
-        {/* Eradication */}
-        <StepsSection
-          title="Eradication (Erradicación)"
-          steps={form.eradication_steps || []}
-          editing={editing}
-          onUpdate={(i, v) => updateStep("eradication_steps", i, v)}
-          onAdd={() => addStep("eradication_steps")}
-          onRemove={(i) => removeStep("eradication_steps", i)}
-          icon=""
-        />
-
-        {/* Recovery */}
-        <StepsSection
-          title="Recovery (Recuperación)"
-          steps={form.recovery_steps || []}
-          editing={editing}
-          onUpdate={(i, v) => updateStep("recovery_steps", i, v)}
-          onAdd={() => addStep("recovery_steps")}
-          onRemove={(i) => removeStep("recovery_steps", i)}
-          icon=""
-        />
-
-        {/* Post Mortem */}
-        <StepsSection
-          title="Lessons Learned (Lecciones Aprendidas)"
-          steps={form.post_mortem_steps || []}
-          editing={editing}
-          onUpdate={(i, v) => updateStep("post_mortem_steps", i, v)}
-          onAdd={() => addStep("post_mortem_steps")}
-          onRemove={(i) => removeStep("post_mortem_steps", i)}
-          icon=""
-        />
-      </div>
-    </div>
-  );
-}
-
-function StepsSection({
-  title,
-  steps,
-  editing,
-  onUpdate,
-  onAdd,
-  onRemove,
-  icon
-}: {
-  title: string;
-  steps: RunbookStep[];
-  editing: boolean;
-  onUpdate: (i: number, v: Partial<RunbookStep>) => void;
-  onAdd: () => void;
-  onRemove: (i: number) => void;
-  icon: string;
-}) {
-  return (
-    <div style={{ marginBottom: '15px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ color: 'var(--signal)', fontFamily: 'var(--mono)', fontSize: '13px' }}>
-          {icon} {title}
-        </span>
-        {editing && (
-          <button onClick={onAdd} style={addBtnStyle}>+ Añadir paso</button>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {steps.map((step, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600 }}>#{i + 1}</span>
-              {editing ? (
-                <>
-                  <input
-                    value={step.text}
-                    onChange={e => onUpdate(i, { text: e.target.value })}
-                    placeholder="Descripción de la acción..."
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button onClick={() => onRemove(i)} title="Quitar" aria-label="Quitar" style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex' }}><X size={14} /></button>
-                </>
-              ) : (
-                <div style={{ flex: 1, color: 'var(--text)', fontSize: '12px', fontWeight: 500 }}>
-                  {step.text || "(vacío)"}
-                </div>
-              )}
+          {!list ? <p className="in-empty">Cargando…</p> : !rows.length ? <p className="in-empty">Ningún runbook con este filtro.</p> : (
+            <div className="rb-grid">
+              {rows.map(r => {
+                const [label, I] = CATS[r.category] ?? CATS.other;
+                const counts = PHASES.map(([k]) => (r[k] ?? []).length);
+                return (
+                  <button key={r.id} type="button" className="in-panel rb-card" onClick={() => setOpen(r)}>
+                    <div className="rb-card__top"><span className="sy-icon rb-icon"><I size={17} /></span><span className="in-muted">{label}</span>{r.severity_applicable !== "all" && <span className="in-tag">{SEV_ES[r.severity_applicable]}</span>}</div>
+                    <b>{r.name}</b>
+                    <p>{r.description}</p>
+                    <div className="rb-phases" title={PHASES.map(([, l], i) => `${l}: ${counts[i]}`).join(" · ")}>
+                      {PHASES.map(([k], i) => <i key={k} style={{ flexGrow: Math.max(counts[i], 0.4) }} className={counts[i] ? "" : "is-empty"} />)}
+                    </div>
+                    <small className="in-muted">{counts.reduce((a, b) => a + b, 0)} pasos en {counts.filter(Boolean).length} fases</small>
+                  </button>
+                );
+              })}
             </div>
-
-            {/* Command Area */}
-            {(editing || step.command) && (
-              <div style={{ paddingLeft: '24px' }}>
-                {editing ? (
-                  <input
-                    value={step.command || ""}
-                    onChange={e => onUpdate(i, { command: e.target.value })}
-                    placeholder="Comando opcional (ej: rm -rf /tmp/malware)..."
-                    style={{ ...inputStyle, fontSize: '11px', fontFamily: 'var(--mono)', background: 'rgba(0,255,136,0.05)', borderColor: 'rgba(0,255,136,0.2)' }}
-                  />
-                ) : (
-                  <div style={{
-                    padding: '8px 12px',
-                    background: '#000',
-                    border: '1px solid rgba(0,255,136,0.2)',
-                    borderRadius: '4px',
-                    fontFamily: 'var(--mono)',
-                    fontSize: '11px',
-                    color: 'var(--signal)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <code>{step.command}</code>
-                    <button style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '9px', cursor: 'pointer' }} onClick={() => navigator.clipboard.writeText(step.command || "")}>COPY</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {steps.length === 0 && (
-          <div style={{ color: 'var(--text-faint)', fontSize: '11px', padding: '10px', textAlign: 'center' }}>
-            No hay pasos definidos en esta fase
-          </div>
-        )}
+          )}
+          <p className="in-foot"><Info size={12} />El Workspace sugiere automáticamente el runbook de cada incidente según su categoría. Archivar un runbook lo oculta sin borrar su historial.</p>
+        </div>
       </div>
+
+      {open && createPortal(<>
+        <div className="wk-drawer-backdrop" onClick={() => setOpen(null)} aria-hidden="true" />
+        <aside className="wk-drawer" role="dialog" aria-modal="true" aria-label={open.name}>
+          <div className="wk-drawer__head"><BookOpen size={15} /><span className="wk-drawer__id">{CATS[open.category]?.[0] ?? open.category}</span>
+            <button className="vx-iconbtn" style={{ marginLeft: "auto" }} onClick={() => setOpen(null)} aria-label="Cerrar"><X size={16} /></button></div>
+          <div className="wk-drawer__scroll">
+            <h2 className="wk-drawer__title">{open.name}</h2>
+            <p className="in-text">{open.description}</p>
+            <ol className="rb-flow">
+              {PHASES.map(([k, label, hint], pi) => {
+                const st = (open[k] ?? []).map(norm);
+                return (
+                  <li key={k} className={st.length ? "" : "is-empty"}>
+                    <div className="rb-flow__head"><span className="rb-num">{pi + 1}</span><b>{label}</b><small>{hint}</small></div>
+                    {st.length ? (
+                      <ul>{st.map((s, i) => (
+                        <li key={i}><span>{s.text}</span>
+                          {s.command && <div className="rb-cmd"><code>{s.command}</code><button type="button" className="vx-iconbtn" onClick={() => copy(s.command!)} aria-label="Copiar comando"><Copy size={12} /></button></div>}
+                        </li>
+                      ))}</ul>
+                    ) : <p className="in-muted">Sin pasos definidos.</p>}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          {canEdit && (
+            <div className="wk-drawer__foot">
+              {role === "admin" && <HoldButton className="hp-block hp-block--wide" onConfirm={() => remove(open)} title="Mantén pulsado para archivar"><Trash2 size={13} />Archivar</HoldButton>}
+              <button className="vp-btn vp-btn--primary" onClick={() => { setEdit(open); setOpen(null); }}><Pencil size={13} />Editar</button>
+            </div>
+          )}
+        </aside>
+      </>, document.body)}
+      {edit && <Editor initial={edit} onClose={() => setEdit(null)} onSaved={load} />}
     </div>
   );
 }
-
-const inputStyle = {
-  width: '100%',
-  padding: '10px 12px',
-  background: 'rgba(0,0,0,0.4)',
-  border: '1px solid var(--line)',
-  borderRadius: '6px',
-  color: 'var(--text)',
-  fontSize: '13px',
-  fontFamily: 'var(--sans)'
-};
-
-const valueStyle = {
-  padding: '10px 12px',
-  background: 'rgba(0,0,0,0.2)',
-  border: '1px solid var(--line)',
-  borderRadius: '6px',
-  color: 'var(--text)',
-  fontSize: '13px'
-};
-
-const addBtnStyle = {
-  padding: '4px 10px',
-  background: 'transparent',
-  border: '1px solid var(--signal)',
-  color: 'var(--signal)',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '11px'
-};

@@ -347,3 +347,43 @@ body[data-theme="light"] .hp-tty code, body[data-theme="light"] .hp-tty time { c
   .bf-queries li { flex: 0 0 200px; }
   .bf .wk-head .in-bar { justify-content: flex-start; }
 }
+
+/* ---------- Runbooks (prefijo rb-) ---------- */
+.rb .wk-head .in-bar { justify-content: flex-end; }
+.rb-cats { padding: 0; }
+.rb-cats button { display: inline-flex; align-items: center; gap: 5px; }
+.rb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.rb-card { display: flex; flex-direction: column; gap: 6px; padding: 14px; text-align: left; cursor: pointer; color: var(--text); font: inherit; transition: border-color .15s, transform .15s; }
+.rb-card:hover { border-color: color-mix(in srgb, var(--signal) 50%, var(--line)); transform: translateY(-1px); }
+.rb-card__top { display: flex; align-items: center; gap: 8px; }
+.rb-icon { --st: var(--signal); }
+.rb-card b { font: 700 13.5px var(--sans); color: var(--text-bright); }
+.rb-card p { margin: 0; font-size: 12px; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rb-phases { display: flex; gap: 3px; height: 6px; margin-top: auto; }
+.rb-phases i { border-radius: 3px; background: var(--signal); opacity: .85; }
+.rb-phases i:nth-child(2) { opacity: .7; } .rb-phases i:nth-child(3) { opacity: .55; } .rb-phases i:nth-child(4) { opacity: .45; } .rb-phases i:nth-child(5) { opacity: .35; }
+.rb-phases i.is-empty { background: var(--line); opacity: 1; }
+.rb-num { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--mono); color: var(--signal); border: 1px solid color-mix(in srgb, var(--signal) 45%, transparent); background: color-mix(in srgb, var(--signal) 10%, transparent); }
+.rb-flow { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; }
+.rb-flow > li { position: relative; padding: 0 0 16px 32px; }
+.rb-flow > li::before { content: ""; position: absolute; left: 10px; top: 24px; bottom: 0; width: 2px; background: color-mix(in srgb, var(--signal) 30%, var(--line)); }
+.rb-flow > li:last-child::before { display: none; }
+.rb-flow__head { display: flex; align-items: baseline; gap: 8px; margin-left: -32px; }
+.rb-flow__head b { font: 700 13px var(--sans); color: var(--text-bright); }
+.rb-flow__head small { font-size: 11px; color: var(--text-faint); }
+.rb-flow ul { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--text); }
+.rb-flow li.is-empty .rb-num { color: var(--text-faint); border-color: var(--line); background: none; }
+.rb-cmd { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.rb-cmd code { flex: 1; min-width: 0; padding: 4px 8px; border-radius: 7px; border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 4%, transparent); font: 500 11px var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.rb-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.rb-form label { display: flex; flex-direction: column; gap: 4px; font: 700 9px var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--text-faint); }
+.rb-full { grid-column: 1 / -1; }
+.rb-form input, .rb-form select, .rb-form textarea, .rb-step-edit input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--vp-surface); color: var(--text); font: 500 12.5px var(--sans); text-transform: none; letter-spacing: 0; }
+.rb-form textarea { resize: vertical; }
+.rb-steps-edit { display: flex; flex-direction: column; gap: 8px; }
+.rb-step-edit { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.rb-step-edit > div:nth-child(2) { display: flex; flex-direction: column; gap: 4px; }
+.rb-cmd-in { font-family: var(--mono) !important; font-size: 11.5px !important; }
+.rb-step-tools { display: flex; gap: 2px; }
+.rb-add { align-self: flex-start; height: 30px; font-size: 11px; }
+@container intel (max-width: 640px) { .rb .wk-head .in-bar { justify-content: flex-start; } .rb-form { grid-template-columns: 1fr; } }
