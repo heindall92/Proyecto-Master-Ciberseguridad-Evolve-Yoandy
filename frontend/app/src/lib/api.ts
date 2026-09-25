@@ -309,6 +309,8 @@ export type TicketOut = {
   evidence: EvidenceOut[];
 };
 
+export type RunbookOut = Runbook;
+
 export interface EvidenceOut {
   id: number;
   ticket_id: number;
@@ -580,14 +582,19 @@ export function generateCveSocialPost(cveIds: string[] = []) {
 // RUNBOOKS - Procedimientos operativos estandar
 
 
+/** Un paso de runbook: texto plano o {text, command}. */
+export type RunbookStep = string | { text: string; command?: string };
+
 export interface Runbook {
   id: number;
   name: string;
   category: string;
   description: string;
-  containment_steps: string[];
-  eradication_steps: string[];
-  recovery_steps: string[];
+  identification_steps: RunbookStep[];
+  containment_steps: RunbookStep[];
+  eradication_steps: RunbookStep[];
+  recovery_steps: RunbookStep[];
+  post_mortem_steps: RunbookStep[];
   severity_applicable: string;
   is_active: boolean;
   created_at?: string;

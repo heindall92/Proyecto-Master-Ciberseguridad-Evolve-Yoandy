@@ -39,7 +39,7 @@ const CONTENT: Record<Lang, Group[]> = {
       blurb: "Crear, asignar y cerrar incidentes; runbooks e informes.",
       faqs: [
         { q: "¿Cómo convierto una alerta en incidente?", a: "En la tabla de alertas pulsa **+INC**. Se crea un ticket con la alerta asociada, que aparece en **Incidentes**, en las notificaciones y en el contador superior." },
-        { q: "¿Cómo me asigno un incidente?", a: "Desde el panel de **notificaciones** (campana) → **Asignarme**, o desde el propio incidente en el **Workspace**, donde también puedes adjuntar evidencias (máx. 10 MB, tipos permitidos: texto, PDF, imágenes, Excel y CSV)." },
+        { q: "¿Cómo me asigno un incidente?", a: "Desde el panel de **notificaciones** (campana) → **Asignarme**, o desde el propio incidente en el **Workspace**, donde también puedes adjuntar evidencias (máx. 10 MB: imágenes, PDF, TXT/LOG, JSON, CSV, PCAP y ZIP)." },
         { q: "¿Qué son los runbooks?", a: "Procedimientos paso a paso para responder a cada tipo de amenaza (fuerza bruta SSH, malware, exfiltración…). Cada alerta del **LSA Monitor** sugiere el runbook más adecuado." },
         { q: "¿Cómo genero el informe ejecutivo?", a: "Menú lateral → **Informe ejecutivo** (solo administradores). Elige el rango de fechas y exporta el PDF ejecutivo o el técnico. Los datos salen de las alertas e incidentes reales del periodo." },
       ],
@@ -100,7 +100,7 @@ const CONTENT: Record<Lang, Group[]> = {
       blurb: "Create, assign and close incidents; runbooks and reports.",
       faqs: [
         { q: "How do I turn an alert into an incident?", a: "Press **+INC** in the alerts table. A ticket linked to the alert is created and appears in **Incidents**, in notifications and in the top counter." },
-        { q: "How do I assign an incident to myself?", a: "From the **notifications** panel (bell) → **Assign to me**, or from the incident in the **Workspace**, where you can also attach evidence (max 10 MB: text, PDF, images, Excel and CSV)." },
+        { q: "How do I assign an incident to myself?", a: "From the **notifications** panel (bell) → **Assign to me**, or from the incident in the **Workspace**, where you can also attach evidence (max 10 MB: images, PDF, TXT/LOG, JSON, CSV, PCAP and ZIP)." },
         { q: "What are runbooks?", a: "Step-by-step procedures to respond to each threat type (SSH brute force, malware, exfiltration…). Every **LSA Monitor** alert suggests the most suitable runbook." },
         { q: "How do I produce the executive report?", a: "Sidebar → **Executive report** (admins only). Pick the date range and export the executive or technical PDF. Data comes from the real alerts and incidents of the period." },
       ],

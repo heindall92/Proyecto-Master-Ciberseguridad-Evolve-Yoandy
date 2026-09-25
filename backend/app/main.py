@@ -298,11 +298,31 @@ def _migrate_users_rank_column(sync_conn) -> None:
         logger.info("Migración DB: users.rank → users.security_rank")
 
 
+def _migrate_tickets_resolved_at(sync_conn) -> None:
+    """Añade tickets.resolved_at (necesario para medir el tiempo de resolución / MTTR)."""
+    if "tickets" not in inspect(sync_conn).get_table_names():
+        return
+    cols = {c["name"] for c in inspect(sync_conn).get_columns("tickets")}
+    if "resolved_at" not in cols:
+        sync_conn.execute(text("ALTER TABLE tickets ADD COLUMN resolved_at TIMESTAMP WITH TIME ZONE"))
+        sync_conn.execute(text("UPDATE tickets SET resolved_at = updated_at WHERE status = 'resolved'"))
+        logger.info("Migración DB: tickets.resolved_at")
+
+
+def _track_resolution(t: "Ticket", new_status: str | None) -> None:
+    """Fija o limpia resolved_at según el estado."""
+    if new_status == "resolved" and t.resolved_at is None:
+        t.resolved_at = datetime.now(timezone.utc)
+    elif new_status and new_status != "resolved":
+        t.resolved_at = None
+
+
 @app.on_event("startup")
 async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_users_rank_column)
+        await conn.run_sync(_migrate_tickets_resolved_at)
     
     # Bootstrap admin solo si ADMIN_PASSWORD está definido (nunca hardcodeado)
     async with SessionLocal() as db:
@@ -725,8 +745,10 @@ async def update_ticket_ep(ticket_id: int, req: TicketUpdate, db: AsyncSession =
     if not t:
         raise HTTPException(404, "Ticket not found")
     _require_ticket_access(current, t)
-    for field, value in req.model_dump(exclude_unset=True).items():
+    changes = req.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(t, field, value)
+    _track_resolution(t, changes.get("status"))
     await db.commit()
     return await get_ticket(t.id, db, current)
 
@@ -748,6 +770,7 @@ async def resolve_ticket_ep(ticket_id: int, req: TicketResolve, db: AsyncSession
     _require_ticket_access(current, t)
     t.status = req.status
     t.resolution_notes = req.resolution_notes
+    _track_resolution(t, req.status)
     await db.commit()
     return await get_ticket(t.id, db, current)
 
