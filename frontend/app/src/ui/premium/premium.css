@@ -397,7 +397,9 @@ body input.vp-bare-input.vp-bare-input:not([type="checkbox"]):not([type="radio"]
   .topbar .topbar-stat-group { display: none; }
 }
 @media (max-width: 760px) {
-  .vp-user__text { display: none; }
+  .vp-user__text { display: none !important; } /* lleva display:flex en línea */
+  /* Idioma, tema y acentos siguen en el menú de usuario → Apariencia */
+  .vp-tb-wide, .vp-tb-sep, .topbar .topbar__sub, .vp-user > svg { display: none !important; }
   .vp-help__scroll { padding: 16px 14px 32px; }
 }
 @media (prefers-reduced-motion: reduce) {

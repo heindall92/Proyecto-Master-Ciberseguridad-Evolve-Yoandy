@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
+import { Trash2 } from "lucide-react";
 import { vtCheckIp, vtCheckHash, vtCheckDomain, listIOCs, addIOC, updateIOC, deleteIOC, setMyVtApiKey, getVtKeyStatus, blockIp, unblockIp } from "../lib/api";
 
 export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?: string, lang?: string }) {
@@ -555,7 +556,7 @@ export default function ThreatIntelView({ initialIp, lang = 'es' }: { initialIp?
                                 <button onClick={() => handleUpdateStatus(ioc.id, ioc.status)} title="Cambiar Estado" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--text-bright)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}>
                                     {isBlocked ? '' : isResolved ? '' : ''}
                                 </button>
-                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}></button>
+                                <button onClick={() => handleDeleteIOC(ioc.id)} title="Eliminar" aria-label="Eliminar IOC" style={{ background: 'none', border: '1px solid var(--line)', color: 'var(--danger)', cursor: 'pointer', padding: '2px 5px', fontSize: '10px' }}><Trash2 size={12} /></button>
                             </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '8px' }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import logger from "../lib/logger";
+import { X } from "lucide-react";
 import { listRunbooks, createRunbook, updateRunbook, deleteRunbook } from "../lib/api";
 
 interface RunbookStep {
@@ -469,7 +470,7 @@ function StepsSection({
                     placeholder="Descripción de la acción..."
                     style={{ ...inputStyle, flex: 1 }}
                   />
-                  <button onClick={() => onRemove(i)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}></button>
+                  <button onClick={() => onRemove(i)} title="Quitar" aria-label="Quitar" style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex' }}><X size={14} /></button>
                 </>
               ) : (
                 <div style={{ flex: 1, color: 'var(--text)', fontSize: '12px', fontWeight: 500 }}>

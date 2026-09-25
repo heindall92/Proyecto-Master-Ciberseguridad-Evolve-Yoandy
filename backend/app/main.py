@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import json
+import uuid
 import secrets
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import select, desc, func, delete, or_, text, inspect
@@ -218,17 +219,28 @@ def _tickets_assignee_filter(q, user: User):
     return q
 
 
+_DM_RE = _re.compile(r"^dm:(\d{1,10})-(\d{1,10})$")
+
+
+def _dm_members(chat_id: str) -> tuple[int, int] | None:
+    """Participantes de un chat privado `dm:<menor>-<mayor>`; None si el id no es válido."""
+    m = _DM_RE.match(chat_id or "")
+    if not m:
+        return None
+    a, b = int(m.group(1)), int(m.group(2))
+    return (a, b) if a < b else None
+
+
 def _can_access_chat(user: User, chat_id: str) -> bool:
+    """global: cualquier usuario autenticado. DM: solo sus dos participantes.
+
+    Antes un admin podía leer cualquier conversación privada y se aceptaban ids como
+    `dm:1-2-3`; la privacidad de los mensajes directos es ahora estricta (RGPD).
+    """
     if chat_id == "global":
         return True
-    if chat_id.startswith("dm:"):
-        parts = chat_id.replace("dm:", "").split("-")
-        try:
-            ids = {int(p) for p in parts if p.isdigit()}
-            return user.id in ids or user.role == "admin"
-        except ValueError:
-            return False
-    return user.role == "admin"
+    members = _dm_members(chat_id)
+    return bool(members and user.id in members)
 
 
 def _require_chat_access(user: User, chat_id: str) -> None:
@@ -467,30 +479,80 @@ async def on_startup():
 # --- WEBSOCKET CHAT ---
 
 class ConnectionManager:
+    """Conexiones WebSocket por usuario.
+
+    Antes todas las conexiones recibían todos los mensajes, incluidos los privados de
+    otros usuarios (el filtrado lo hacía el navegador). Ahora el servidor decide quién
+    recibe cada evento y mantiene la presencia (usuarios conectados y su rol).
+    """
+
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: dict[WebSocket, dict[str, Any]] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, user: User):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[websocket] = {"id": user.id, "username": user.username, "role": user.role}
+        await self.broadcast_presence()
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+    async def disconnect(self, websocket: WebSocket):
+        if self.active_connections.pop(websocket, None) is not None:
+            await self.broadcast_presence()
 
-    async def broadcast(self, message: Any):
+    def online(self) -> list[dict[str, Any]]:
+        seen: dict[int, dict[str, Any]] = {}
+        for info in self.active_connections.values():
+            u = seen.setdefault(info["id"], {**info, "sessions": 0})
+            u["sessions"] += 1
+        return sorted(seen.values(), key=lambda u: u["username"].lower())
+
+    async def _send(self, message: Any, allowed=lambda info: True):
         if not isinstance(message, str):
             message = json.dumps(message)
-        for connection in self.active_connections:
+        for ws, info in list(self.active_connections.items()):
+            if not allowed(info):
+                continue
             try:
-                await connection.send_text(message)
-            except:
-                pass
+                await ws.send_text(message)
+            except Exception:
+                self.active_connections.pop(ws, None)
+
+    async def broadcast(self, message: Any):
+        """Eventos para todos los usuarios autenticados (alertas del SIEM, chat global)."""
+        await self._send(message)
+
+    async def send_chat(self, chat_id: str, message: Any):
+        """Evento de un chat: global a todos; DM solo a sus dos participantes."""
+        if chat_id == "global":
+            await self._send(message)
+            return
+        members = _dm_members(chat_id)
+        if members:
+            await self._send(message, lambda info: info["id"] in members)
+
+    async def broadcast_presence(self):
+        await self._send({"type": "PRESENCE", "users": self.online()})
 
 manager = ConnectionManager()
 
+def _ws_origin_allowed(websocket: WebSocket) -> bool:
+    """Evita el secuestro del WebSocket desde otra web (CSWSH): la cookie de sesión viaja sola.
+
+    Sin cabecera Origin (clientes no navegador con Bearer) se permite; si la hay, debe
+    estar en CORS_ORIGINS o coincidir con el Host de la petición.
+    """
+    origin = websocket.headers.get("origin")
+    if not origin:
+        return True
+    host = websocket.headers.get("host", "")
+    return origin in _cors_origins or origin.split("://", 1)[-1] == host
+
+
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
+    if not _ws_origin_allowed(websocket):
+        logger.warning("WebSocket rechazado por origen: %s", websocket.headers.get("origin"))
+        await websocket.close(code=1008)
+        return
     token = websocket.cookies.get("access_token")
     if not token:
         auth_header = websocket.headers.get("authorization", "")
@@ -506,12 +568,20 @@ async def websocket_endpoint(websocket: WebSocket):
         if not user:
             await websocket.close(code=1008)
             return
-    await manager.connect(websocket)
+    await manager.connect(websocket, user)
     try:
         while True:
             await websocket.receive_text()  # Keep alive
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        pass
+    finally:
+        await manager.disconnect(websocket)
+
+
+@app.get("/api/presence")
+async def presence(current: User = Depends(get_current_user)):
+    """Usuarios conectados ahora mismo (para trabajar varios analistas a la vez)."""
+    return manager.online()
 
 # --- ENDPOINTS ---
 
@@ -1709,33 +1779,56 @@ async def abuseipdb_scan_ip(ip: str, request: Request, db: AsyncSession = Depend
 
 # CHAT PERSISTENCE
 @app.get("/api/chat/{chat_id}", response_model=list[ChatMessageOut])
-async def get_chat_history(chat_id: str, limit: int = 100, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+async def get_chat_history(chat_id: str, limit: int = Query(100, ge=1, le=200), db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     _require_chat_access(current, chat_id)
     q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
     rows = (await db.execute(q)).scalars().all()
     # Return in chronological order
     return sorted(rows, key=lambda x: x.timestamp)
 
+_CHAT_RATE: dict[int, list[float]] = {}
+_CHAT_RATE_LIMIT = (20, 10.0)  # 20 mensajes cada 10 s por usuario
+
+
+def _chat_rate_ok(user_id: int) -> bool:
+    now = time.monotonic()
+    n, window = _CHAT_RATE_LIMIT
+    hits = [t for t in _CHAT_RATE.get(user_id, []) if now - t < window]
+    hits.append(now)
+    _CHAT_RATE[user_id] = hits
+    return len(hits) <= n
+
+
 @app.post("/api/chat", response_model=ChatMessageOut)
 async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     chat_id = msg.chat_id
+    if not _chat_rate_ok(current.id):
+        raise HTTPException(429, "Demasiados mensajes seguidos; espera unos segundos")
     _require_chat_access(current, chat_id)
+    members = _dm_members(chat_id)
+    if members:
+        partner = members[0] if members[1] == current.id else members[1]
+        if not (await db.execute(select(User.id).where(User.id == partner))).scalar_one_or_none():
+            raise HTTPException(404, "El destinatario no existe")
+    msg_id = msg.id or uuid.uuid4().hex
+    if (await db.execute(select(ChatMessage.id).where(ChatMessage.id == msg_id))).scalar_one_or_none():
+        raise HTTPException(409, "Ya existe un mensaje con ese id")
     new_msg = ChatMessage(
-        id=msg.id,
+        id=msg_id,
         user_id=current.id,
         username=current.username,
         text=msg.text,
         chat_id=chat_id,
         mentions=msg.mentions,
-        attachment=msg.attachment,
+        attachment=msg.attachment.model_dump() if msg.attachment else None,
     )
     db.add(new_msg)
     await db.commit()
     await db.refresh(new_msg)
     
-    # Broadcast via WS
+    # Solo a quien puede ver el chat (antes: a todas las conexiones)
     broadcast_data = ChatMessageOut.model_validate(new_msg).model_dump(by_alias=True, mode="json")
-    await manager.broadcast(json.dumps(broadcast_data))
+    await manager.send_chat(chat_id, broadcast_data)
 
     # Chatbot IA: si mencionan al asistente, responde en background.
     if _AI_CHAT_TRIGGER.search(msg.text or ""):
@@ -2133,7 +2226,7 @@ async def _build_ai_chat_context(db: AsyncSession, user: User, question: str) ->
 
 async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None:
     """Genera y publica la respuesta del asistente IA en el chat interno."""
-    await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": True}))
+    await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": True})
     clean_question = _AI_CHAT_TRIGGER.sub("", question or "").strip()
     clean_question = clean_question[:_AI_CHAT_MAX_QUESTION_CHARS]
     if not clean_question:
@@ -2142,19 +2235,19 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
         async with SessionLocal() as db:
             requester = (await db.execute(select(User).where(User.id == requester_id))).scalar_one_or_none()
             if not requester:
-                await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
+                await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": False})
                 return
             direct_answer = await _build_direct_soc_answer(db, requester, clean_question)
             app_context = "" if direct_answer else await _build_ai_chat_context(db, requester, clean_question)
         answer = direct_answer or await chat_assistant(clean_question, app_context=app_context)
     except Exception as e:
         logger.warning("AI chat reply falló: %s", e)
-        await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
+        await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": False})
         return
     async with SessionLocal() as db:
         ai = (await db.execute(select(User).where(User.username == "valhalla-ia"))).scalar_one_or_none()
         if not ai:
-            await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
+            await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": False})
             return
         m = ChatMessage(
             id=f"ai-{secrets.token_hex(8)}",
@@ -2168,8 +2261,8 @@ async def _ai_chat_reply(chat_id: str, requester_id: int, question: str) -> None
         await db.commit()
         await db.refresh(m)
         broadcast_data = ChatMessageOut.model_validate(m).model_dump(by_alias=True, mode="json")
-        await manager.broadcast(json.dumps({"type": "AI_TYPING", "chatId": chat_id, "isTyping": False}))
-        await manager.broadcast(json.dumps(broadcast_data))
+        await manager.send_chat(chat_id, {"type": "AI_TYPING", "chatId": chat_id, "isTyping": False})
+        await manager.send_chat(chat_id, broadcast_data)
 
 _AI_UNAVAILABLE = "El sistema de IA no esta disponible"  # prefijo del texto de error de ollama_client
 

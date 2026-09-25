@@ -5,7 +5,7 @@ import { sanitizePlainText } from "../lib/sanitize";
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import "./HUD.css";
 import "./light-theme-overrides.css";
-import { getAudioContext, playNotificationSound, playResolvedSound, playChatSound, playMentionSound } from "./audio";
+import { getAudioContext, playNotificationSound, playResolvedSound, playChatSound, playMentionSound, unlockAudioOnFirstGesture } from "./audio";
 
 import {
   login,
@@ -69,15 +69,39 @@ import "./premium/dark-glass.css";
 import CommandPalette, { PaletteCommand } from "./premium/CommandPalette";
 import HelpCenter from "./premium/HelpCenter";
 import QuickSettings from "./premium/QuickSettings";
-import { Toaster } from "./premium/widgets";
+import { Toaster, toast } from "./premium/widgets";
 import "./premium/dashboard.css";
+import "./premium/edges.css";
 import {
   Search, MessageSquare, Bell, BellOff, CircleHelp, Palette, Sun, Moon, ChevronDown,
   UserRound, SlidersHorizontal, LayoutGrid, Lock, Unlock, RefreshCw, Play, LogOut,
   AlertTriangle, ShieldAlert, Info, ArrowRight, UserCheck, Minimize2,
   LayoutDashboard, Layers, Monitor, Siren, Radar, Activity, ScrollText, Bug, Globe2,
   KeyRound, BarChart3, FileText, ShieldCheck, BookOpen, Briefcase, FileBarChart, Users,
+  Paperclip, SendHorizontal, X, File as FileIcon, FileSpreadsheet, Trash2,
 } from "lucide-react";
+
+// Adjuntos del chat: misma lista que el backend (schemas.CHAT_ATTACHMENT_TYPES). Sin SVG: puede llevar scripts.
+const CHAT_ATTACHMENT_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+/** Solo se pinta/abre un adjunto si es un data: URL en base64 de un tipo permitido (nunca javascript: u otros). */
+function safeAttachmentUrl(a: { type: string; data: string }): string | null {
+  return CHAT_ATTACHMENT_TYPES.includes(a.type) && a.data.startsWith(`data:${a.type};base64,`) ? a.data : null;
+}
+
+/** Abre el adjunto como blob (las data: URL de nivel superior las bloquean los navegadores). */
+function openAttachment(a: { type: string; data: string }) {
+  const url = safeAttachmentUrl(a);
+  if (!url) return;
+  const bin = atob(url.slice(url.indexOf(',') + 1));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: a.type }));
+  window.open(blobUrl, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
 
 const darkTheme = createTheme({ palette: { mode: "dark" } });
 
@@ -205,6 +229,8 @@ export default function App() {
   }, [activeChatId, dispatch]);
 
   const totalUnread = Object.values(unreadByChat).reduce((a, b) => a + b, 0);
+  const [onlineUsers, setOnlineUsers] = useState<Array<{ id: number; username: string; role: string; sessions: number }>>([]);
+  useEffect(() => { unlockAudioOnFirstGesture(); }, []);
 
   useEffect(() => {
     const originalTitle = "Valhalla SOC";
@@ -464,6 +490,11 @@ export default function App() {
             dispatch(setNotifSeen(false));
             return;
           }
+          if (payload?.type === "PRESENCE") {
+            // Usuarios conectados (no es un mensaje: antes caía en la lógica del chat y fallaba)
+            setOnlineUsers(Array.isArray(payload.users) ? payload.users : []);
+            return;
+          }
           if (payload?.type === "AI_TYPING") {
             if (!payload.chatId || payload.chatId === activeChatIdRef.current) {
               dispatch(setAiTyping(Boolean(payload.isTyping)));
@@ -471,6 +502,7 @@ export default function App() {
             return;
           }
 
+          if (!payload?.chatId || !payload?.id) return; // solo mensajes de chat a partir de aquí
           const msg: ChatMessage = payload;
           dispatch(upsertMessage(msg));
           if (msg.username?.toLowerCase() === "valhalla-ia") {
@@ -585,18 +617,22 @@ export default function App() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const allowed = ['text/plain','application/pdf','image/png','image/jpeg','image/svg+xml',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'];
-    if (!allowed.includes(file.type) && !file.name.endsWith('.csv')) {
-      alert(lang === 'es' ? 'Tipo no permitido. Usa: texto, PDF, PNG, JPG, SVG, Excel o CSV' : 'File type not allowed');
+    // Windows etiqueta los .csv como application/vnd.ms-excel: se normaliza a text/csv
+    const type = file.name.toLowerCase().endsWith('.csv') ? 'text/csv' : file.type;
+    if (!CHAT_ATTACHMENT_TYPES.includes(type)) {
+      toast(lang === 'es' ? 'Tipo no permitido: texto, CSV, PDF, imagen (PNG/JPG/GIF/WebP) o Excel (.xlsx)' : 'File type not allowed', 'err');
       e.target.value = ''; return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert(lang === 'es' ? 'Archivo demasiado grande (máx 2 MB)' : 'File too large (max 2 MB)');
+      toast(lang === 'es' ? 'Archivo demasiado grande (máx. 2 MB)' : 'File too large (max 2 MB)', 'err');
       e.target.value = ''; return;
     }
     const reader = new FileReader();
-    reader.onload = ev => dispatch(setPendingAttachment({ name: file.name, type: file.type, size: file.size, data: ev.target!.result as string }));
+    reader.onload = ev => {
+      const raw = ev.target!.result as string;
+      const data = `data:${type};base64,${raw.slice(raw.indexOf(',') + 1)}`;
+      dispatch(setPendingAttachment({ name: file.name, type, size: file.size, data }));
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -649,12 +685,12 @@ export default function App() {
     }
     postChatMessage(msg).catch(err => {
       dispatch(setAiTyping(false));
-      console.error("Chat Send Error", err);
+      toast(`${lang === 'es' ? 'No se envió el mensaje' : 'Message not sent'}: ${err instanceof Error ? err.message : err}`, 'err');
     });
     dispatch(setChatInput(''));
     dispatch(setPendingAttachment(null));
     dispatch(setShowMentionDrop(false));
-  }, [chatInput, user, activeChatId, pendingAttachment, dispatch]);
+  }, [chatInput, user, activeChatId, pendingAttachment, dispatch, lang]);
 
   if (showCinematic) {
     return <CinematicIntro onComplete={() => {
@@ -755,6 +791,7 @@ export default function App() {
 
   const NavBtn = ({ id, label, sub, icon, badge, color }: any) => (
     <button className={`navbtn ${view === id ? 'active' : ''}`} onClick={() => dispatch(setView(id))}>
+      <span className="navbtn__edge" aria-hidden="true" />
       <span className="navbtn__icon-wrap">
         {(() => { const Icon = NAV_ICONS[id]; return Icon ? <Icon className="navbtn__icon" aria-hidden="true" /> : <svg className="navbtn__icon"><use href={`#${icon}`}/></svg>; })()}
       </span>
@@ -856,14 +893,14 @@ export default function App() {
                 <span>{es ? 'Buscar módulo o acción…' : 'Search module or action…'}</span>
                 <span className="vp-kbd">Ctrl K</span>
               </button>
-              <div className="vp-seg" role="group" aria-label={es ? 'Idioma' : 'Language'}>
+              <div className="vp-seg vp-tb-wide" role="group" aria-label={es ? 'Idioma' : 'Language'}>
                 <button aria-pressed={lang === 'es'} onClick={() => dispatch(setLang('es'))}>ES</button>
                 <button aria-pressed={lang === 'en'} onClick={() => dispatch(setLang('en'))}>EN</button>
               </div>
-              <button className="vp-iconbtn" onClick={toggleTheme} title={theme === 'dark' ? (es ? 'Modo claro' : 'Light mode') : (es ? 'Modo oscuro' : 'Dark mode')} aria-label={es ? 'Cambiar tema' : 'Toggle theme'}>
+              <button className="vp-iconbtn vp-tb-wide" onClick={toggleTheme} title={theme === 'dark' ? (es ? 'Modo claro' : 'Light mode') : (es ? 'Modo oscuro' : 'Dark mode')} aria-label={es ? 'Cambiar tema' : 'Toggle theme'}>
                 {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
               </button>
-              <button className="vp-iconbtn" onClick={() => setTweaksOpen(!tweaksOpen)} aria-expanded={tweaksOpen} title={es ? 'Apariencia y acentos' : 'Appearance & accents'} aria-label={es ? 'Apariencia' : 'Appearance'}>
+              <button className="vp-iconbtn vp-tb-wide" onClick={() => setTweaksOpen(!tweaksOpen)} aria-expanded={tweaksOpen} title={es ? 'Apariencia y acentos' : 'Appearance & accents'} aria-label={es ? 'Apariencia' : 'Appearance'}>
                 <Palette size={17} />
               </button>
             </div>
@@ -1124,10 +1161,13 @@ export default function App() {
                   ? 'COMMS // EQUIPO'
                   : `DM // ${getDmPartner(activeChatId)?.username?.toUpperCase() || '???'}`
                 }
+                <span className="chat-panel__online" title={onlineUsers.map(u => `${u.username} (${u.role})`).join(', ')}>
+                  <i className="presence-dot is-on" />{onlineUsers.length} {lang === 'es' ? 'en línea' : 'online'}
+                </span>
               </span>
               <div className="chat-panel__head-actions">
-                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}></button>
-                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))}></button>
+                <button className="chat-panel__action-btn" onClick={handleClearActiveChat} title={lang === 'es' ? 'Limpiar chat' : 'Clear chat'} aria-label={lang === 'es' ? 'Limpiar chat' : 'Clear chat'}><Trash2 size={14} /></button>
+                <button className="chat-panel__close" onClick={() => dispatch(setChatOpen(false))} title={lang === 'es' ? 'Cerrar chat' : 'Close chat'} aria-label={lang === 'es' ? 'Cerrar chat' : 'Close chat'}><X size={16} /></button>
               </div>
             </div>
 
@@ -1162,7 +1202,7 @@ export default function App() {
                         dispatch(clearUnread(dmId));
                       }}
                     >
-                      @ {partner?.username?.toUpperCase() || `U${uid}`}
+                      <span><i className={`presence-dot${onlineUsers.some(o => o.id === uid) ? ' is-on' : ''}`} />@ {partner?.username?.toUpperCase() || `U${uid}`}</span>
                       {(unreadByChat[dmId] || 0) > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <span className="chat-sidebar__unread">{unreadByChat[dmId]}</span>
@@ -1178,7 +1218,7 @@ export default function App() {
                   .filter(u => u.id !== user?.id && !dmUserIds.includes(u.id))
                   .map(u => (
                     <button key={u.id} className="chat-sidebar__item" onClick={() => openDm(u)} style={{ opacity: 0.55 }}>
-                      + {u.username.toUpperCase()}
+                      <span><i className={`presence-dot${onlineUsers.some(o => o.id === u.id) ? ' is-on' : ''}`} />+ {u.username.toUpperCase()}</span>
                     </button>
                   ))
                 }
@@ -1202,21 +1242,21 @@ export default function App() {
                       {msg.text && <div className="chat-msg__text">{renderMsgText(msg.text)}</div>}
                       {msg.attachment && (
                         <div className="chat-msg__attachment">
-                          {msg.attachment.type.startsWith('image/') ? (
+                          {!safeAttachmentUrl(msg.attachment) ? (
+                            <span style={{ color: 'var(--text-faint)' }}>{lang === 'es' ? 'Adjunto bloqueado (tipo no permitido)' : 'Attachment blocked'}</span>
+                          ) : msg.attachment.type.startsWith('image/') ? (
                             <img
-                              src={msg.attachment.data}
+                              src={safeAttachmentUrl(msg.attachment)!}
                               alt={msg.attachment.name}
-                              onClick={() => window.open(msg.attachment!.data)}
+                              onClick={() => openAttachment(msg.attachment!)}
                               style={{ cursor: 'pointer' }}
                             />
                           ) : (
                             <>
-                              <span style={{ fontSize: '16px' }}>
-                                {msg.attachment.type === 'application/pdf' ? '' :
-                                 msg.attachment.type.includes('spreadsheet') || msg.attachment.type.includes('excel') ? '' :
-                                 msg.attachment.type === 'text/plain' ? '' : ''}
-                              </span>
-                              <a href={msg.attachment.data} download={msg.attachment.name} style={{ color: 'var(--signal)', textDecoration: 'none' }}>
+                              {msg.attachment.type.includes('spreadsheet') || msg.attachment.type === 'text/csv'
+                                ? <FileSpreadsheet size={15} />
+                                : msg.attachment.type === 'application/pdf' ? <FileText size={15} /> : <FileIcon size={15} />}
+                              <a href={safeAttachmentUrl(msg.attachment)!} download={msg.attachment.name} rel="noopener" style={{ color: 'var(--signal)', textDecoration: 'none' }}>
                                 {msg.attachment.name}
                               </a>
                               <span style={{ fontSize: '8px', color: 'var(--text-faint)' }}>
@@ -1245,7 +1285,7 @@ export default function App() {
                     ) : (
                       <span> {pendingAttachment.name} ({(pendingAttachment.size / 1024).toFixed(0)} KB)</span>
                     )}
-                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))}></button>
+                    <button className="chat-attachment-preview__remove" onClick={() => dispatch(setPendingAttachment(null))} title={lang === 'es' ? 'Quitar adjunto' : 'Remove'} aria-label={lang === 'es' ? 'Quitar adjunto' : 'Remove'}><X size={13} /></button>
                   </div>
                 )}
 
@@ -1271,9 +1311,9 @@ export default function App() {
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                     style={{ display: 'none' }}
-                    accept=".txt,.pdf,.png,.jpg,.jpeg,.svg,.xlsx,.xls,.csv"
+                    accept=".txt,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp,.xlsx"
                   />
-                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}></button>
+                  <button className="chat-attach-btn" onClick={() => fileInputRef.current?.click()} title={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'} aria-label={lang === 'es' ? 'Adjuntar archivo' : 'Attach file'}><Paperclip size={16} /></button>
                   <input
                     ref={chatInputRef}
                     className="chat-panel__input"
@@ -1289,7 +1329,7 @@ export default function App() {
                     maxLength={500}
                     autoFocus
                   />
-                  <button className="chat-panel__send" onClick={sendChatMessage} title="Enviar"></button>
+                  <button className="chat-panel__send" onClick={sendChatMessage} title={lang === 'es' ? 'Enviar' : 'Send'} aria-label={lang === 'es' ? 'Enviar' : 'Send'}><SendHorizontal size={16} /></button>
                 </div>
               </div>
             </div>

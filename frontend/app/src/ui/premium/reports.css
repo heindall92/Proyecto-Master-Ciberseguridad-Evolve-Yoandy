@@ -165,3 +165,6 @@ button.rc-tlp[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--bg-
 .rc-toolbar .wk-hash { min-width: 0; overflow: hidden; white-space: nowrap; }
 .rc-toolbar .wk-iconbtn { flex-shrink: 0; }
 @container (max-width: 560px) { .rc-toolbar .wk-hash { display: none; } }
+
+/* Pestañas: en anchos pequeños se desplazan dentro de su caja en lugar de desbordar la página */
+.rc-head .vx-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
