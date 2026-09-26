@@ -71,6 +71,18 @@ def real_ip(peer: str | None, headers) -> str:
     return peer
 
 
+def is_https(peer: str | None, headers) -> bool:
+    """¿El navegador llegó por HTTPS? El backend habla http con su proxy; lo sabemos por las
+    cabeceras de un proxy de confianza (nginx: X-Forwarded-Proto; tailscale serve -> Vite:
+    X-Forwarded-Host *.ts.net). Sirve para marcar las cookies como Secure solo cuando toca:
+    marcarlas siempre rompería el acceso por http en la red local."""
+    if (peer or "") not in _trusted():
+        return False
+    proto = headers.get("x-forwarded-proto", "").lower()
+    host = headers.get("x-forwarded-host", "").split(",")[0].strip().lower().rsplit(":", 1)[0]
+    return "https" in proto or host.endswith(".ts.net")
+
+
 def network_of(ip: str) -> str:
     try:
         a = ipaddress.ip_address(ip)

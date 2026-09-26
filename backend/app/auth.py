@@ -200,12 +200,15 @@ def set_auth_cookies(
     access_token: str,
     refresh_token: str,
     csrf_token: str,
+    secure: bool = False,
 ) -> None:
+    # Secure si el navegador llegó por HTTPS (o si la configuración lo exige siempre)
+    secure = secure or settings.session_cookie_secure
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=settings.session_cookie_secure,
+        secure=secure,
         samesite=settings.session_cookie_samesite,
         max_age=settings.access_token_expire_minutes * 60,
         path="/",
@@ -214,7 +217,7 @@ def set_auth_cookies(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=settings.session_cookie_secure,
+        secure=secure,
         samesite=settings.session_cookie_samesite,
         max_age=settings.refresh_token_expire_minutes * 60,
         path="/api/auth",
@@ -223,7 +226,7 @@ def set_auth_cookies(
         key="csrf_token",
         value=csrf_token,
         httponly=False,
-        secure=settings.session_cookie_secure,
+        secure=secure,
         samesite=settings.session_cookie_samesite,
         path="/",
     )

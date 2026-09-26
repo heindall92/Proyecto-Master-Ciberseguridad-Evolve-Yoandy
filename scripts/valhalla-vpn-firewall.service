@@ -1,0 +1,13 @@
+[Unit]
+Description=Valhalla SOC: desde la VPN solo HTTPS (cierra los puertos de Docker a tailscale0)
+After=docker.service tailscaled.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/valhalla-vpn-firewall
+
+[Install]
+WantedBy=multi-user.target docker.service
