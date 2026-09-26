@@ -153,7 +153,14 @@ async def test_logout_revokes_access_token(test_db):
         cookies = login.cookies
         me = await ac.get("/api/auth/me", cookies=cookies)
         assert me.status_code == 200
-        await ac.post("/api/auth/logout", cookies=cookies)
+        # Logout es un POST protegido por CSRF (double-submit): hay que reenviar
+        # el valor de la cookie csrf_token en la cabecera, igual que hace el frontend.
+        csrf = cookies.get("csrf_token")
+        assert csrf
+        out = await ac.post(
+            "/api/auth/logout", cookies=cookies, headers={"X-CSRF-Token": csrf}
+        )
+        assert out.status_code == 200
         me2 = await ac.get("/api/auth/me", cookies=cookies)
     assert me2.status_code == 401
 
