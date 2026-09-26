@@ -8,6 +8,8 @@ export default defineConfig({
   server: { 
     host: true, 
     port: 3000,
+    // HTTPS por la VPN: `tailscale serve` publica https://<máquina>.<tailnet>.ts.net con certificado válido
+    allowedHosts: [".ts.net"],
     watch: {
       usePolling: true
     },

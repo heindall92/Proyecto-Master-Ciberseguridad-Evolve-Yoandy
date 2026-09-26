@@ -125,8 +125,8 @@ export function HoldButton({ children, onConfirm, holdMs = 900, disabled, title,
 type ToastKind = "ok" | "err" | "info";
 interface ToastMsg { id: number; kind: ToastKind; text: string }
 
-export function toast(text: string, kind: ToastKind = "info") {
-  window.dispatchEvent(new CustomEvent("valhalla-toast", { detail: { text, kind } }));
+export function toast(text: string, kind: ToastKind = "info", ms?: number) {
+  window.dispatchEvent(new CustomEvent("valhalla-toast", { detail: { text, kind, ms } }));
 }
 
 export function Toaster() {
@@ -134,10 +134,10 @@ export function Toaster() {
   useEffect(() => {
     let seq = 0;
     const onToast = (e: Event) => {
-      const { text, kind } = (e as CustomEvent).detail as { text: string; kind: ToastKind };
+      const { text, kind, ms } = (e as CustomEvent).detail as { text: string; kind: ToastKind; ms?: number };
       const id = ++seq;
       setItems((prev) => [...prev.slice(-3), { id, kind, text }]);
-      setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), kind === "err" ? 7000 : 4000);
+      setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), ms ?? (kind === "err" ? 7000 : 4000));
     };
     window.addEventListener("valhalla-toast", onToast);
     return () => window.removeEventListener("valhalla-toast", onToast);

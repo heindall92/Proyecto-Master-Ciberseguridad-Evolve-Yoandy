@@ -297,7 +297,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             csrf_token = secrets.token_urlsafe(32)
             
         if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-            bypass_paths = ["/api/auth/login", "/api/auth/refresh", "/api/webhook/wazuh", "/health"]
+            bypass_paths = ["/api/auth/login", "/api/auth/refresh", "/api/webhook/wazuh", "/health",
+                            # Enlaces de invitación: se autentican con el token del cuerpo, no con cookie
+                            "/api/auth/invite/check", "/api/auth/invite/activate"]
             csrf_check_needed = (
                 settings.csrf_enabled
                 and request.url.path not in bypass_paths

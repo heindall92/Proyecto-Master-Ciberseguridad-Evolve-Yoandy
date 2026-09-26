@@ -16,6 +16,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="analista", nullable=False)
     security_rank: Mapped[str] = mapped_column(String(64), default="L1 Analyst", nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cuenta de Tailscale vinculada (la que aceptó la invitación o el primer acceso por VPN)
+    tailscale_login: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     assigned_tickets: Mapped[list["Ticket"]] = relationship(
@@ -25,6 +27,21 @@ class User(Base):
         "Ticket", back_populates="reporter", foreign_keys="Ticket.reporter_id"
     )
     __table_args__ = (Index("idx_users_role", role),)
+
+class UserInvite(Base):
+    """Enlace de activación de un solo uso: el invitado elige su contraseña.
+
+    Solo se guarda el SHA-256 del token; el token en claro se muestra una vez al admin.
+    """
+    __tablename__ = "user_invites"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ts_invite_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 class Runbook(Base):
     __tablename__ = "runbooks"
@@ -192,6 +209,13 @@ class ChatMessage(Base):
     chat_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     mentions: Mapped[list] = mapped_column(JSON, default=list)
     attachment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+class ChatClear(Base):
+    """«Vaciar chat» por usuario: oculta los mensajes anteriores solo para él (los demás conservan su historial)."""
+    __tablename__ = "chat_clears"
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    chat_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    cleared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 class IOC(Base):
     __tablename__ = "iocs"

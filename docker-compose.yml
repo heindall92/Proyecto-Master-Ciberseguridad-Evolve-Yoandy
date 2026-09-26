@@ -403,6 +403,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:-DEV-ONLY-valhalla-insecure-key-replace-in-prod}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # Invitaciones por VPN (opcional). Clave de la API de Tailscale para crear enlaces de acceso compartido
+      TAILSCALE_API_KEY: ${TAILSCALE_API_KEY:-}
+      VALHALLA_PUBLIC_URL: ${VALHALLA_PUBLIC_URL:-}
       ENV: ${ENV:-development}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -416,6 +419,7 @@ services:
       - ./scripts:/opt/valhalla-scripts:ro
     networks:
       - valhalla-net
+      - ts-internal
 
   # ──────────────────────────────────────────────────
   # FRONTEND DASHBOARD REACT + TS
@@ -435,6 +439,23 @@ services:
       - backend
     networks:
       - valhalla-net
+
+  # Identidad de Tailscale (opcional): docker compose --profile tailscale up -d
+  # Único contenedor con acceso al socket de tailscaled; solo responde "de quién es esta IP".
+  ts-whois:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python", "/app/whois.py"]
+    read_only: true
+    user: "65534:65534"  # sin root: tailscaled solo da acceso de lectura a otros usuarios
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./tailscale-whois/whois.py:/app/whois.py:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+    networks:
+      - ts-internal
+    profiles: ["tailscale"]
 
   # HTTPS gateway — VM / exposición: docker compose --profile prod up -d
   gateway:
@@ -470,3 +491,7 @@ volumes:
 networks:
   valhalla-net:
     driver: bridge
+  # Solo backend <-> ts-whois: el resto de contenedores (incluido el atacante) no llega
+  ts-internal:
+    driver: bridge
+    internal: true

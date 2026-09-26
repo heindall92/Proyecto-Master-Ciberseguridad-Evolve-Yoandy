@@ -37,6 +37,7 @@ export type UserOut = {
   security_rank: string;
   avatar_url?: string | null;
   created_at?: string;
+  tailscale_login?: string | null;
 };
 
 export type AgentOut = {
@@ -253,11 +254,31 @@ export function deleteUser(userId: number) {
 }
 
 export function resetPassword(userId: number, password: string) {
-  return http<any>(`/api/users/${userId}/reset-password`, { 
-    method: "POST", 
-    body: JSON.stringify({ new_password: password }) 
+  return http<any>(`/api/users/${userId}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: password })
   });
 }
+
+// Invitaciones: enlace de activación de un solo uso + acceso compartido por Tailscale
+export type Invite = {
+  username: string; role: string; valhalla_url: string; activation_url: string; vpn: boolean;
+  tailscale_url: string | null; tailscale_error: string | null; expires_at: string;
+};
+export type InviteState = {
+  status: "pending" | "used" | "expired" | null; created_at?: string; expires_at?: string; used_at?: string | null;
+  tailscale?: { accepted: boolean; login: string | null } | null; tailscale_login: string | null;
+};
+export const createInvite = (userId: number, tailscale = true) =>
+  http<Invite>(`/api/users/${userId}/invite`, { method: "POST", body: JSON.stringify({ tailscale }) });
+export const getInviteState = (userId: number) => http<InviteState>(`/api/users/${userId}/invite`);
+export const revokeInvite = (userId: number) => http<{ ok: boolean }>(`/api/users/${userId}/invite`, { method: "DELETE" });
+export const pendingInvites = () => http<Array<{ user_id: number; expires_at: string }>>("/api/invites/pending");
+export const unlinkTailscale = (userId: number) => http<{ ok: boolean }>(`/api/users/${userId}/tailscale`, { method: "DELETE" });
+export const inviteCheck = (token: string) =>
+  http<{ username: string; role: string; expires_at: string }>("/api/auth/invite/check", { method: "POST", body: JSON.stringify({ token }) });
+export const inviteActivate = (token: string, password: string) =>
+  http<{ ok: boolean; username: string }>("/api/auth/invite/activate", { method: "POST", body: JSON.stringify({ token, password }) });
 
 // Agents
 export function listAgents() {
@@ -711,6 +732,11 @@ export function getChatHistory(chatId: string, limit = 100) {
 
 export function postChatMessage(msg: any) {
   return http<any>("/api/chat", { method: "POST", body: JSON.stringify(msg) });
+}
+
+/** Vacía el chat para este usuario en el servidor (sincroniza móvil y ordenador). */
+export function clearChatHistory(chatId: string) {
+  return http<{ ok: boolean }>(`/api/chat/${encodeURIComponent(chatId)}/clear`, { method: "POST" });
 }
 
 export const getChatWsUrl = () => {

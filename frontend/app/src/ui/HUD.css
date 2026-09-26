@@ -2171,3 +2171,15 @@ body[data-theme="light"] .view {
   border-color: var(--signal);
   box-shadow: 0 0 12px var(--signal-glow);
 }
+
+/* ======== INVITACIÓN: activar cuenta (/activar#token) ======== */
+.invite-msg { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 13px; line-height: 1.45; color: var(--login-label); font-family: var(--sans); }
+.invite-msg svg { flex: none; margin-top: 2px; color: var(--signal); }
+.invite-msg--ok { color: var(--signal); }
+.invite-msg--err, .invite-msg--err svg { color: var(--danger, #e5484d); }
+.invite-rules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; color: var(--login-label); font-family: var(--sans); }
+.invite-rules li { display: flex; align-items: center; gap: 6px; opacity: .7; }
+.invite-rules li.is-ok { color: var(--signal); opacity: 1; }
+.invite-foot { margin: 0; font-size: 11px; text-align: center; color: var(--login-label); font-family: var(--sans); }
+.login-btn:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 420px) { .invite-rules { grid-template-columns: 1fr; } }

@@ -11,6 +11,7 @@ import ipaddress
 import os
 import re
 import socket
+import struct
 import time
 
 _PROXY_HOSTS = [h.strip() for h in os.getenv("TRUSTED_PROXY_HOSTS", "dashboard,nginx").split(",") if h.strip()]
@@ -19,10 +20,25 @@ _cache: dict[str, object] = {"at": 0.0, "ips": set()}
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")  # CGNAT que usa Tailscale
 
 
+def _gateways() -> set[str]:
+    """Puerta de enlace de la red Docker = el propio host (p. ej. `tailscale serve`, el proxy HTTPS de la VPN)."""
+    gws: set[str] = set()
+    try:
+        with open("/proc/net/route") as f:
+            for line in f.read().splitlines()[1:]:
+                fields = line.split()
+                if len(fields) > 2 and fields[1] == "00000000" and fields[2] != "00000000":
+                    gws.add(socket.inet_ntoa(struct.pack("<L", int(fields[2], 16))))
+    except (OSError, ValueError):
+        pass
+    return gws
+
+
 def _trusted() -> set[str]:
     now = time.monotonic()
     if now - float(_cache["at"]) > 300:
-        ips: set[str] = {"127.0.0.1"}
+        ips: set[str] = {"127.0.0.1"} | _gateways()
+        ips.update(h.strip() for h in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if h.strip())
         for h in _PROXY_HOSTS:
             try:
                 ips.update(ai[4][0] for ai in socket.getaddrinfo(h, None))
@@ -33,18 +49,22 @@ def _trusted() -> set[str]:
 
 
 def real_ip(peer: str | None, headers) -> str:
-    """IP del cliente. Con un proxy de confianza, la última entrada de X-Forwarded-For
-    (la que añade el propio proxy; las anteriores las puede inventar el cliente)."""
+    """IP del cliente. Con un proxy de confianza se recorre X-Forwarded-For de derecha a
+    izquierda saltando los proxies de confianza (dashboard, nginx, el host): la primera IP
+    que no es de confianza es el cliente. Lo que el cliente añada a la izquierda no se lee."""
     peer = peer or ""
-    if peer in _trusted():
+    trusted = _trusted()
+    if peer in trusted:
         xff = headers.get("x-forwarded-for", "")
         if xff:
-            last = xff.split(",")[-1].strip()
-            try:
-                ipaddress.ip_address(last)
-                return last
-            except ValueError:
-                pass
+            for hop in reversed([h.strip() for h in xff.split(",") if h.strip()]):
+                try:
+                    ipaddress.ip_address(hop)
+                except ValueError:
+                    return peer  # entrada manipulada: no se sigue leyendo la cadena
+                if hop not in trusted:
+                    return hop
+            return peer
         xri = headers.get("x-real-ip", "").strip()
         if xri:
             return xri

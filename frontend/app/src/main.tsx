@@ -22,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<AppCore />} />
+            <Route path="/activar" element={<AppCore />} />
             <Route path="/executive-report" element={<ExecutiveReport />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
