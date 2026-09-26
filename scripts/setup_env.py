@@ -234,6 +234,11 @@ def run_setup(
         ENV_PATH.rename(ROOT / ".env.bak")
 
     content = _merge_env(secret_key, admin, webhook_secret)
+    # Contraseña de PostgreSQL propia de esta instalación. Antes se quedaba el valor de ejemplo
+    # (público en el repositorio) y la BD se inicializaba con él. Solo al crear el .env: cambiarla
+    # en una instalación existente la desincronizaría de la base de datos ya creada.
+    content = re.sub(r"(?m)^POSTGRES_PASSWORD=(replace-with-real-pass|valhalla|)\s*$",
+                     lambda _m: f"POSTGRES_PASSWORD={_generate_indexer_password()}", content)
     ENV_PATH.write_text(content, encoding="utf-8")
     patch_integration_credentials(ENV_PATH)
     _write_backup(secret_key, admin, webhook_secret)

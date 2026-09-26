@@ -1,12 +1,18 @@
-FROM node:20-alpine
+# Node 22 LTS: Node 20 dejó de tener soporte el 30/04/2026
+FROM node:22-alpine
+
+# Parches de seguridad del sistema base (OpenSSL) y del npm que trae la imagen (Trivy)
+RUN apk upgrade --no-cache && npm install -g npm@latest --no-audit --no-fund
 
 WORKDIR /app
 
-COPY package.json /app/package.json
+COPY package.json package-lock.json /app/
 COPY tsconfig.json /app/tsconfig.json
 COPY vite.config.ts /app/vite.config.ts
 
-RUN npm install
+# npm ci instala exactamente las versiones auditadas del lockfile (antes npm install sin
+# lockfile: cada build resolvía versiones distintas, no reproducible ni auditable)
+RUN npm ci --no-audit --no-fund
 
 COPY app /app/app
 

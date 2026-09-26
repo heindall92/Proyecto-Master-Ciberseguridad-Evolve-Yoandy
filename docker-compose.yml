@@ -260,7 +260,8 @@ services:
   # COWRIE HONEYPOT
   # ──────────────────────────────────────────────────
   cowrie:
-    image: cowrie/cowrie:latest
+    # Fijada por digest (Cowrie no publica etiquetas de versión): misma imagen revisada en cada instalación
+    image: cowrie/cowrie@sha256:fc57120d88c2bfb5817f63f6c132ce5c2969b641c2f1ac67887652b6f294148d
     logging:
       driver: "json-file"
       options:
@@ -340,7 +341,7 @@ services:
   # OLLAMA (analisis ia local para backend y wazuh)
   # ──────────────────────────────────────────────────
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.34.4  # versión fijada: con "latest" cada instalación podía traer otra distinta
     restart: unless-stopped
     # API sin autenticación: solo accesible desde la propia máquina (el backend usa la red interna)
     ports:
@@ -366,7 +367,7 @@ services:
 
   # Descarga el modelo configurado en el primer arranque (idempotente: si ya existe no hace nada)
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.34.4  # versión fijada: con "latest" cada instalación podía traer otra distinta
     restart: "no"
     depends_on:
       ollama:
