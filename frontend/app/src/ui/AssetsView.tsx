@@ -22,6 +22,7 @@ type Tab = "hosts" | "lsa";
 const SEV = ["critical", "high", "medium", "low"] as const;
 const SEV_ES: Record<string, string> = { critical: "Crítica", high: "Alta", medium: "Media", low: "Baja" };
 const SEV_TONE: Record<string, string> = { critical: "crit", high: "high", medium: "warn", low: "ok" };
+const unscored = (v: Record<string, number>) => Math.max(0, (v.total ?? 0) - SEV.reduce((n, s) => n + (v[s] ?? 0), 0));
 const osText = (a: any) => (typeof a.os === "object" && a.os ? `${a.os.name ?? ""} ${a.os.version ?? ""}`.trim() : a.os) || "—";
 const ago = (iso?: string) => {
   if (!iso) return "—";
@@ -78,7 +79,7 @@ export default function AssetsView({ lang = "es", initialTab = "hosts" }: { lang
   const active = (agents ?? []).filter(a => a.status === "active").length;
   const vTotal = Object.values(vsum).reduce((s, v) => s + (v.total ?? 0), 0);
   const vCrit = Object.values(vsum).reduce((s, v) => s + (v.critical ?? 0) + (v.high ?? 0), 0);
-  const shownVulns = (vulns ?? []).filter(v => vfilter === "all" || v.severity === vfilter);
+  const shownVulns = (vulns ?? []).filter(v => vfilter === "all" || (vfilter === "none" ? !SEV_ES[v.severity] : v.severity === vfilter));
   const copy = (c: string) => { navigator.clipboard.writeText(c); toast(es ? "Comando copiado." : "Copied.", "ok"); };
 
   return (
@@ -131,7 +132,11 @@ export default function AssetsView({ lang = "es", initialTab = "hosts" }: { lang
                     <span className="in-prod"><b>{osText(a)}</b></span>
                     <span className="in-muted">{(a.version || "").replace("Wazuh ", "")}</span>
                     <span className="in-muted">{ago(a.lastKeepAlive || a.last_keep_alive)}</span>
-                    <span className="as-vulns">{vs?.total ? SEV.filter(s => vs[s]).map(s => <span key={s} className={`in-cvss ex-tone-${SEV_TONE[s]}`} title={SEV_ES[s]}>{vs[s]}</span>) : <span className="in-muted">{es ? "0 / pendiente" : "0"}</span>}</span>
+                    <span className="as-vulns">{vs?.total ? <>
+                      {SEV.filter(s => vs[s]).map(s => <span key={s} className={`in-cvss ex-tone-${SEV_TONE[s]}`} title={SEV_ES[s]}>{vs[s]}</span>)}
+                      {/* CVE recientes que NVD aún no ha puntuado: antes no se contaban en la fila */}
+                      {unscored(vs) > 0 && <span className="in-cvss as-unscored" title={es ? "Sin puntuar todavía (CVE reciente sin CVSS)" : "Not scored yet"}>{unscored(vs)}</span>}
+                    </> : <span className="in-muted" title={a.id === "000" ? (es ? "El manager no envía inventario de paquetes" : "Manager has no package inventory") : undefined}>{a.id === "000" ? (es ? "no analizado" : "not scanned") : "0"}</span>}</span>
                   </div>
                 );
               })}
@@ -237,7 +242,7 @@ export default function AssetsView({ lang = "es", initialTab = "hosts" }: { lang
               <div className="wk-section__body">
                 {vulns && vulns.length > 0 && (
                   <div className="wk-chipset" style={{ padding: "0 0 8px" }}>
-                    {["all", ...SEV].map(s => <button key={s} type="button" aria-pressed={vfilter === s} onClick={() => setVfilter(s)}>{s === "all" ? (es ? "Todas" : "All") : SEV_ES[s]} <small>{s === "all" ? vulns.length : vulns.filter(v => v.severity === s).length}</small></button>)}
+                    {["all", ...SEV, "none"].filter(s => s !== "none" || vulns.some(v => !SEV_ES[v.severity])).map(s => <button key={s} type="button" aria-pressed={vfilter === s} onClick={() => setVfilter(s)}>{s === "all" ? (es ? "Todas" : "All") : s === "none" ? (es ? "Sin puntuar" : "Unscored") : SEV_ES[s]} <small>{s === "all" ? vulns.length : s === "none" ? vulns.filter(v => !SEV_ES[v.severity]).length : vulns.filter(v => v.severity === s).length}</small></button>)}
                   </div>
                 )}
                 {!vulns ? <p className="in-muted">{es ? "Consultando…" : "Loading…"}</p> : !vulns.length ? (
@@ -247,7 +252,7 @@ export default function AssetsView({ lang = "es", initialTab = "hosts" }: { lang
                     {shownVulns.slice(0, 100).map(v => (
                       <li key={v.cve + v.package}>
                         <span className="in-prod"><b>{v.cve}</b><small>{v.package} {v.version}</small></span>
-                        <span className={`in-cvss ex-tone-${SEV_TONE[v.severity] ?? "warn"}`}>{v.score ?? "—"}<small>{SEV_ES[v.severity] ?? v.severity}</small></span>
+                        <span className={`in-cvss ${SEV_TONE[v.severity] ? `ex-tone-${SEV_TONE[v.severity]}` : "as-unscored"}`}>{v.score ?? "—"}<small>{SEV_ES[v.severity] ?? (es ? "Sin puntuar" : "Unscored")}</small></span>
                       </li>
                     ))}
                   </ul>
