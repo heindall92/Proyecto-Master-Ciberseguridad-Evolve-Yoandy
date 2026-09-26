@@ -44,7 +44,7 @@ services:
       - NET_ADMIN
       - NET_RAW
     networks:
-      - valhalla-net
+      - lab-net   # aislado del núcleo del SOC: solo ve el honeypot
 
   # ──────────────────────────────────────────────────
   # EXPLOIT SEARCH — microservicio searchsploit (Fase 5)
@@ -87,6 +87,7 @@ services:
       - "discovery.type=single-node"
       - "bootstrap.memory_lock=true"
       - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-}
     user: "0"
     entrypoint: >
       bash -c "
@@ -136,8 +137,12 @@ services:
       - "1514:1514"
       - "1515:1515"
       - "514:514/udp"
-      - "55000:55000"
+      # API de Wazuh solo en la propia máquina: el backend y la consola llegan por la red interna
+      - "127.0.0.1:55000:55000"
     environment:
+      # Credencial de la API: la imagen la fija al arrancar (create_user.py). Antes, la de fábrica wazuh-wui
+      - API_USERNAME=wazuh-wui
+      - API_PASSWORD=${WAZUH_API_PASSWORD:-}
       - INDEXER_URL=https://wazuh.indexer:9200
       - INDEXER_USERNAME=${INDEXER_USERNAME:-admin}
       - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
@@ -153,6 +158,10 @@ services:
       - wazuh-manager-data:/var/ossec/data
       - wazuh-manager-api:/var/ossec/api/configuration
       - wazuh-manager-logs:/var/ossec/logs
+      # Datos permanentes que la imagen espera en volúmenes: sin ellos, recrear el contenedor
+      # perdía el registro de agentes (etc/client.keys) y el catálogo de vulnerabilidades (queue/vd)
+      - wazuh-manager-etc:/var/ossec/etc
+      - wazuh-manager-queue:/var/ossec/queue
 
       # Certs para conexion TLS con indexer
       - ./config/wazuh_indexer_ssl_certs:/source_certs:ro
@@ -223,6 +232,10 @@ services:
       - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
       - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
       - WAZUH_API_URL=https://wazuh.manager:55000
+      - API_USERNAME=wazuh-wui
+      - API_PASSWORD=${WAZUH_API_PASSWORD:-}
+      # Usuario interno con el que la consola habla con el indexador (antes kibanaserver/kibanaserver)
+      - KIBANASERVER_PASSWORD=${DASHBOARD_PASSWORD:-kibanaserver}
       - SERVER_SSL_CERTIFICATE=/etc/wazuh-dashboard/certs/dashboard.pem
       - SERVER_SSL_KEY=/etc/wazuh-dashboard/certs/dashboard-key.pem
       # Permite que el plugin Wazuh conecte a la API del manager sin validar su cert auto-firmado
@@ -239,7 +252,7 @@ services:
       chmod 444 /etc/wazuh-dashboard/certs/* &&
       sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
-      sed -i 's|#opensearch.password:|opensearch.password: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
+      sed -i \"s|#opensearch.password:.*|opensearch.password: $$KIBANASERVER_PASSWORD|; s|^opensearch.password:.*|opensearch.password: $$KIBANASERVER_PASSWORD|\" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       exec /usr/sbin/chroot --userspec=1000:0 / /entrypoint.sh
       "
     volumes:
@@ -280,7 +293,7 @@ services:
     environment:
       - COWRIE_OUTPUT_jsonlog_enabled=true
     networks:
-      - valhalla-net
+      - lab-net   # recibe al atacante del laboratorio; sus registros llegan a Wazuh por volumen
     deploy:
       resources:
         limits:
@@ -421,6 +434,7 @@ services:
     networks:
       - valhalla-net
       - ts-internal
+      - lab-net   # solo para comprobar por DNS que el honeypot y el atacante siguen en marcha
 
   # ──────────────────────────────────────────────────
   # FRONTEND DASHBOARD REACT + TS
@@ -481,6 +495,8 @@ volumes:
   wazuh-manager-data:
   wazuh-manager-api:
   wazuh-manager-logs:
+  wazuh-manager-etc:
+  wazuh-manager-queue:
   wazuh-dashboard-config:
   wazuh-dashboard-custom:
   cowrie_logs:
@@ -491,6 +507,9 @@ volumes:
 
 networks:
   valhalla-net:
+    driver: bridge
+  # Laboratorio: el atacante solo ve el honeypot (antes compartía red con la BD, el manager y el indexador)
+  lab-net:
     driver: bridge
   # Solo backend <-> ts-whois: el resto de contenedores (incluido el atacante) no llega
   ts-internal:
