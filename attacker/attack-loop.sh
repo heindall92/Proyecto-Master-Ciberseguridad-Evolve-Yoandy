@@ -29,6 +29,12 @@ attack_ssh_bruteforce() {
 
 attack_telnet_interactive() {
   log "VECTOR 3 — Telnet + comandos simulados"
+  # Antes, sin el cliente telnet instalado, el error se ocultaba (2>/dev/null || true) y
+  # ningún comando llegaba al honeypot: «comandos ejecutados» salía siempre vacío.
+  if ! command -v telnet >/dev/null 2>&1; then
+    log "ERROR: falta el cliente telnet en la imagen del atacante (reconstruir: docker compose --profile labs build attacker)"
+    return 0
+  fi
   {
     sleep 1
     echo "root"

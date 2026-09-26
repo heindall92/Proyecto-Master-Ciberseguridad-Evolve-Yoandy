@@ -19,7 +19,7 @@ RUN apt-get install -y --no-install-recommends --fix-missing \
     wget \
     gobuster \
     dirb \
-    netcat-openbsd \
+    netcat-openbsd     telnet \
     socat \
     tcpdump \
     traceroute \
