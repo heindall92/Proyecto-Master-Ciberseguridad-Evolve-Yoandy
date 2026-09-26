@@ -17,7 +17,8 @@ export function AnimatedNumber({ value, duration = 700 }: { value: number; durat
     const tick = (now: number) => {
       const p = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3);
-      const current = Math.round(from + (value - from) * eased);
+      const f = Number.isInteger(value) ? 1 : 10; // conserva un decimal (p. ej. 1,4 d)
+      const current = p < 1 ? Math.round((from + (value - from) * eased) * f) / f : value;
       fromRef.current = current;
       setDisplay(current);
       if (p < 1) raf = requestAnimationFrame(tick);
@@ -26,7 +27,7 @@ export function AnimatedNumber({ value, duration = 700 }: { value: number; durat
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
 
-  return <>{display.toLocaleString()}</>;
+  return <>{display.toLocaleString("es-ES")}</>;
 }
 
 /* ---------- Mini gráfico de línea ---------- */
@@ -46,8 +47,8 @@ export function Sparkline({ points, height = 28 }: { points: number[]; height?: 
 /* ---------- Tarjeta KPI ---------- */
 export type Tone = "accent" | "danger" | "warning" | "info" | "ok";
 
-export function KpiCard({ icon: Icon, label, value, sub, tone = "accent", spark, onClick }: {
-  icon: LucideIcon; label: string; value: number; sub?: React.ReactNode; tone?: Tone; spark?: number[]; onClick?: () => void;
+export function KpiCard({ icon: Icon, label, value, unit, sub, tone = "accent", spark, onClick }: {
+  icon: LucideIcon; label: string; value: number; unit?: string; sub?: React.ReactNode; tone?: Tone; spark?: number[]; onClick?: () => void;
 }) {
   const Tag = onClick ? "button" : "div";
   return (
@@ -56,7 +57,7 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = "accent", spark,
         <span className="vx-kpi__icon"><Icon size={16} /></span>
         <span className="vx-kpi__label">{label}</span>
       </div>
-      <div className="vx-kpi__value"><AnimatedNumber value={value} /></div>
+      <div className="vx-kpi__value"><AnimatedNumber value={value} />{unit && <small className="vx-kpi__unit">{unit}</small>}</div>
       {sub && <div className="vx-kpi__sub">{sub}</div>}
       {spark && spark.length > 1 && <Sparkline points={spark} />}
     </Tag>

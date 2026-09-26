@@ -38,7 +38,7 @@ echo -e "  ${CY}╚════════════════════�
 echo ""
 
 # ── 1. Prerrequisitos ─────────────────────────────────────────────────────────
-step "1/5" "Comprobando prerrequisitos"
+step "1/7" "Comprobando prerrequisitos"
 
 command -v git   >/dev/null 2>&1 || fail "Git no encontrado. Instálalo con tu gestor de paquetes (apt/brew/dnf) y vuelve a ejecutar."
 ok "Git $(git --version)"
@@ -53,7 +53,7 @@ command -v python3 >/dev/null 2>&1 || fail "Python 3 no encontrado. Instálalo c
 ok "$(python3 --version)"
 
 # ── 2. Clonar o actualizar el repo ───────────────────────────────────────────
-step "2/5" "Preparando el repositorio"
+step "2/7" "Preparando el repositorio"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 
@@ -73,7 +73,7 @@ fi
 cd "$INSTALL_DIR"
 
 # ── 3. Generar .env con secretos únicos ──────────────────────────────────────
-step "3/5" "Configurando secretos (.env)"
+step "3/7" "Configurando secretos (.env)"
 
 if [ -f ".env" ]; then
     ok ".env ya existe — no se sobreescribe (exporta FORCE_ENV=1 para regenerar)"
@@ -82,8 +82,14 @@ else
     ok ".env generado con secretos únicos"
 fi
 
-# ── 4. Levantar el stack con Docker Compose ──────────────────────────────────
-step "4/5" "Levantando el stack Docker"
+# ── 4. Certificados TLS de Wazuh ─────────────────────────────────────────────
+step "4/7" "Generando certificados de Wazuh"
+# No se versionan (son secretos): cada instalación crea los suyos
+bash scripts/gen_certs.sh
+ok "Certificados en config/wazuh_indexer_ssl_certs/"
+
+# ── 5. Levantar el stack con Docker Compose ──────────────────────────────────
+step "5/7" "Levantando el stack Docker"
 
 PROFILE_ARG=""
 [ "$NO_LABS" = "0" ] && PROFILE_ARG="--profile labs"
@@ -94,26 +100,26 @@ eval "$CMD"
 
 ok "Todos los contenedores iniciados"
 
-# ── 5. Modelo IA (Ollama) ────────────────────────────────────────────────────
-step "5/5" "Descargando modelo de IA ($OLLAMA_MODEL)"
+# ── 6. Modelo IA (Ollama) ────────────────────────────────────────────────────
+step "6/7" "Modelo de IA ($OLLAMA_MODEL)"
 
 if [ "$SKIP_OLLAMA" = "1" ]; then
-    warn "Saltando descarga del modelo (SKIP_OLLAMA=1). El chatbot IA no funcionará hasta que lo descargues."
+    warn "Saltando el modelo (SKIP_OLLAMA=1). El asistente IA no funcionará hasta que lo descargues."
 else
-    echo -e "      ${DG}Esperando a que Ollama arranque...${NC}"
-    tries=0
-    until docker exec ollama ollama list >/dev/null 2>&1 || [ $tries -ge 20 ]; do
-        sleep 3
-        tries=$((tries + 1))
-    done
-
-    if docker exec ollama ollama list >/dev/null 2>&1; then
-        docker exec ollama ollama pull "$OLLAMA_MODEL"
-        ok "Modelo $OLLAMA_MODEL descargado"
+    # El servicio ollama-init lo descarga solo; aquí se espera a que termine
+    echo -e "      ${DG}Esperando a ollama-init (descarga de ~2 GB la primera vez)...${NC}"
+    docker compose wait ollama-init >/dev/null 2>&1 || true
+    if docker compose exec -T ollama ollama show "$OLLAMA_MODEL" >/dev/null 2>&1; then
+        ok "Modelo $OLLAMA_MODEL disponible"
     else
-        warn "Ollama tardó demasiado en arrancar. Ejecuta manualmente: docker exec ollama ollama pull $OLLAMA_MODEL"
+        warn "El modelo aún no está. Ejecuta: docker compose exec ollama ollama pull $OLLAMA_MODEL"
     fi
 fi
+
+# ── 7. Wazuh: credenciales del indexador ─────────────────────────────────────
+step "7/7" "Configurando el conector de vulnerabilidades de Wazuh"
+bash scripts/wazuh_post_install.sh && ok "Keystore del manager configurado" \
+    || warn "Repite más tarde: bash scripts/wazuh_post_install.sh"
 
 # ── Resumen ───────────────────────────────────────────────────────────────────
 echo ""
