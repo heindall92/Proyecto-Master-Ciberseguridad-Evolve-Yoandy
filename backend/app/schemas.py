@@ -78,7 +78,8 @@ class UserBase(BaseModel):
     avatar_url: str | None = None
 
 class UserCreate(UserBase):
-    password: str
+    # Sin contraseña = el usuario la elige con el enlace de invitación
+    password: str | None = None
 
 class UserUpdate(BaseModel):
     username: str | None = None
@@ -97,6 +98,19 @@ class UserOut(UserBase):
     id: int
     email: str | None = None
     created_at: datetime
+    tailscale_login: str | None = None
+
+
+class InviteCreate(BaseModel):
+    tailscale: bool = True
+
+
+class InviteToken(BaseModel):
+    token: str = Field(min_length=20, max_length=128)
+
+
+class InviteActivate(InviteToken):
+    password: str = Field(min_length=8, max_length=128)
 
 class PasswordReset(BaseModel):
     new_password: str

@@ -18,6 +18,7 @@ import {
   listUsers,
   UserOut,
   getChatHistory,
+  clearChatHistory,
   postChatMessage,
   getChatWsUrl,
   logout as apiLogout,
@@ -58,6 +59,7 @@ import SocMaturityView from "./SocMaturityView";
 import ReportsCenter from "./ReportsCenter";
 import ProfileView from "./ProfileView";
 import CinematicIntro from "./components/CinematicIntro";
+import InviteActivation, { readInviteToken } from "./components/InviteActivation";
 import "./premium/premium.css";
 import "./premium/accents.css";
 import "./premium/light-glass.css";
@@ -312,6 +314,15 @@ export default function App() {
     };
   }, []);
 
+  // Enlace de invitación (/activar#token): sustituye el formulario de login hasta activar la cuenta
+  const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
+  const [prefillUser, setPrefillUser] = useState("");
+  const finishInvite = (username: string | null) => {
+    setInviteToken(null);
+    window.history.replaceState(null, "", "/");
+    if (username) setPrefillUser(username);
+  };
+
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
@@ -505,6 +516,20 @@ export default function App() {
             setOnlineUsers(Array.isArray(payload.users) ? payload.users : []);
             return;
           }
+          if (payload?.type === "SESSION_EVENT") {
+            // Solo llega a administradores: alguien acaba de entrar o de activar su invitación
+            const where = [payload.device?.type, payload.device?.os].filter(Boolean).join(" · ");
+            const vpn = payload.ts?.login ? ` · VPN ${payload.ts.login}${payload.ts.device ? ` (${payload.ts.device})` : ""}` : ` · ${payload.network}`;
+            if (payload.mismatch) {
+              playNotificationSound();
+              toast(`ALERTA: ${payload.username} ha entrado con la cuenta de Tailscale ${payload.ts?.login}, pero tiene vinculada ${payload.expected}.`, "err", 15000);
+            } else if (payload.username !== user?.username || payload.device?.type === "móvil") {
+              playChatSound();
+              toast(`${payload.kind === "activated" ? "Invitación activada" : "Conexión"}: ${payload.username} · ${where}${vpn}`, payload.kind === "activated" ? "ok" : "info", 9000);
+            }
+            window.dispatchEvent(new CustomEvent("valhalla-session-event", { detail: payload }));
+            return;
+          }
           if (payload?.type === "AI_TYPING") {
             if (!payload.chatId || payload.chatId === activeChatIdRef.current) {
               dispatch(setAiTyping(Boolean(payload.isTyping)));
@@ -660,7 +685,10 @@ export default function App() {
   };
 
   const handleClearActiveChat = () => {
-    dispatch(clearChat(activeChatId));
+    const id = activeChatId;
+    dispatch(clearChat(id));
+    // Antes solo se vaciaba la pantalla y el historial volvía al recargar
+    clearChatHistory(id).catch(() => toast(lang === 'es' ? 'No se pudo vaciar el chat en el servidor.' : 'Could not clear chat on server.', 'err'));
   };
 
   const getDmPartner = (chatId: string) => {
@@ -761,16 +789,18 @@ export default function App() {
                  <div className="login-panel-icon">
                     <AlexanaLetter char="V" style={{ width: '36px', height: '36px', color: isOffline ? 'var(--danger)' : 'var(--signal)' }} />
                  </div>
-                 <h2 className="login-welcome">{t('welcome')}</h2>
+                 <h2 className="login-welcome">{inviteToken ? 'ACTIVAR CUENTA' : t('welcome')}</h2>
               </div>
+              {inviteToken ? <InviteActivation token={inviteToken} onDone={finishInvite} /> : (
               <form className="login-form" onSubmit={onLogin}>
+                 {prefillUser && <p className="invite-msg invite-msg--ok">Cuenta activada. Inicia sesión con tu nueva contraseña.</p>}
                  <div className="login-field">
                    <label className="login-label" htmlFor="login-user">{t('user_id')}</label>
-                   <input id="login-user" name="u" className="login-input" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" autoFocus />
+                   <input id="login-user" key={prefillUser} name="u" className="login-input" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" defaultValue={prefillUser} autoFocus={!prefillUser} />
                  </div>
                  <div className="login-field">
                    <label className="login-label" htmlFor="login-pass">{t('password')}</label>
-                   <input id="login-pass" name="p" className="login-input" type="password" placeholder="••••••••" />
+                   <input id="login-pass" key={`p-${prefillUser}`} name="p" className="login-input" type="password" placeholder="••••••••" autoFocus={!!prefillUser} />
                  </div>
                  <button type="submit" className="login-btn">{t('login_btn')}</button>
                  <div className="login-footer">
@@ -782,6 +812,7 @@ export default function App() {
                     </button>
                  </div>
               </form>
+              )}
             </div>
             </div>
           </div>

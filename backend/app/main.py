@@ -65,6 +65,7 @@ from app import cve_feed
 from app import virustotal_client as vt
 from app import report_builder as rb
 from app import grc_builder
+from app import tailscale as ts
 from app import abuseipdb_client as abuse
 from app.rag import build_knowledge
 from app import hunting
@@ -346,6 +347,7 @@ def _migrate_tickets_resolved_at(sync_conn) -> None:
 # Columnas añadidas después de la primera versión (create_all no altera tablas existentes).
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "audit_logs": {"status_code": "INTEGER"},
+    "users": {"tailscale_login": "VARCHAR(128)"},
     "tickets": {"classification": "VARCHAR(32)"},
     "evidence": {
         "sha256": "VARCHAR(64)",
@@ -537,10 +539,12 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, user: User):
         await websocket.accept()
         ip = real_ip(websocket.client.host if websocket.client else None, websocket.headers)
+        ts_id = await ts.whois(ip)
         self.active_connections[websocket] = {
             "id": user.id, "username": user.username, "role": user.role,
             "ip": ip, "network": network_of(ip), "device": device_of(websocket.headers.get("user-agent", "")),
             "since": datetime.now(timezone.utc).isoformat(),
+            "ts": ts_id, "mismatch": _ts_mismatch(user, ts_id),
         }
         await self.broadcast_presence()
 
@@ -559,7 +563,7 @@ class ConnectionManager:
             u["sessions"] += 1
             show_ip = with_ip_for is not None and (with_ip_for.role == "admin" or with_ip_for.id == info["id"])
             u["detail"].append({"device": info["device"], "network": info["network"], "since": info["since"],
-                                **({"ip": info["ip"]} if show_ip else {})})
+                                **({"ip": info["ip"], "ts": info.get("ts"), "mismatch": info.get("mismatch", False)} if show_ip else {})})
         return sorted(seen.values(), key=lambda u: u["username"].lower())
 
     async def _send(self, message: Any, allowed=lambda info: True):
@@ -586,10 +590,46 @@ class ConnectionManager:
         if members:
             await self._send(message, lambda info: info["id"] in members)
 
+    async def send_admins(self, message: Any):
+        await self._send(message, lambda info: info["role"] == "admin")
+
     async def broadcast_presence(self):
         await self._send({"type": "PRESENCE", "users": self.online()})
 
 manager = ConnectionManager()
+
+
+def _ts_mismatch(user: User, ts_id: dict | None) -> bool:
+    """Entra por la VPN con una cuenta de Tailscale distinta de la vinculada a su usuario."""
+    return bool(ts_id and ts_id.get("login") and user.tailscale_login
+                and ts_id["login"].lower() != user.tailscale_login.lower())
+
+
+async def _session_event(kind: str, user: User, ip: str, ua: str, db: AsyncSession) -> None:
+    """Aviso en directo a los administradores: quién acaba de entrar, desde dónde y con qué cuenta de VPN.
+
+    Primer acceso por VPN sin cuenta vinculada: se vincula (confianza en el primer uso).
+    Si la cuenta de Tailscale no coincide con la vinculada, se audita y se marca como alerta.
+    """
+    try:
+        ts_id = await ts.whois(ip)
+        mismatch = _ts_mismatch(user, ts_id)
+        if ts_id and ts_id.get("login") and not user.tailscale_login:
+            user.tailscale_login = ts_id["login"][:128]
+            await db.commit()
+        if mismatch:
+            logger.warning("Sesión de %s desde la cuenta de Tailscale %s (vinculada: %s)", user.username, ts_id.get("login"), user.tailscale_login)
+            db.add(AuditLog(user_id=user.id, username=user.username, action="TS_MISMATCH", route=f"/api/auth/{kind}",
+                            ip_address=ip or None, status_code=None))
+            await db.commit()
+        await manager.send_admins({
+            "type": "SESSION_EVENT", "kind": kind, "username": user.username, "role": user.role,
+            "device": device_of(ua), "network": network_of(ip), "ip": ip, "ts": ts_id,
+            "mismatch": mismatch, "expected": user.tailscale_login if mismatch else None,
+            "at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:  # noqa: BLE001 - el aviso nunca debe romper el login
+        logger.error("Aviso de sesión fallido para %s: %s", user.username, e)
 
 def _ws_origin_allowed(websocket: WebSocket) -> bool:
     """Evita el secuestro del WebSocket desde otra web (CSWSH): la cookie de sesión viaja sola.
@@ -669,6 +709,7 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
     refresh_token, _, _ = create_refresh_token_with_meta(user.username)
     csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
     set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    await _session_event("login", user, client_ip, request.headers.get("user-agent", ""), db)
     return Token(
         access_token=access_token,
         expires_in=settings.access_token_expire_minutes * 60,
@@ -759,7 +800,8 @@ async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), cu
     if current.role != "admin": raise HTTPException(403, "Forbidden")
     # Antes no se aplicaba la política de contraseñas ni se validaban usuario, email ni rol al crear
     username = InputValidator.validate_username(req.username)
-    InputValidator.validate_password(req.password)
+    if req.password:
+        InputValidator.validate_password(req.password)
     email = InputValidator.validate_email(req.email)
     role = _check_role(req.role)
     existing = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
@@ -768,7 +810,8 @@ async def create_user_ep(req: UserCreate, db: AsyncSession = Depends(get_db), cu
     new_user = User(
         username=username,
         email=email,
-        password_hash=get_password_hash(req.password),
+        # Sin contraseña: una aleatoria que nadie conoce hasta que active su invitación
+        password_hash=get_password_hash(req.password or secrets.token_urlsafe(32)),
         role=role,
         security_rank=(req.security_rank or "")[:64] or "L1 Analyst",
     )
@@ -881,6 +924,137 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
     u.password_hash = get_password_hash(req.new_password)
     await db.commit()
     return {"ok": True}
+
+# --- INVITACIONES (acceso de nuevos usuarios, p. ej. desde el móvil por la VPN) ---
+INVITE_TTL = timedelta(hours=24)
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _pending_invites(db: AsyncSession, user_id: int) -> list[UserInvite]:
+    return list((await db.execute(select(UserInvite).where(UserInvite.user_id == user_id, UserInvite.used_at.is_(None)))).scalars())
+
+
+async def _drop_invites(db: AsyncSession, invites: list[UserInvite]) -> None:
+    for inv in invites:
+        if inv.ts_invite_id:
+            st = await ts.invite_status(inv.ts_invite_id)
+            if not (st and st["accepted"]):
+                await ts.revoke_invite(inv.ts_invite_id)
+        await db.delete(inv)
+
+
+@app.post("/api/users/{user_id}/invite")
+async def create_invite(user_id: int, req: InviteCreate, request: Request, db: AsyncSession = Depends(get_db), current: User = Depends(require_admin)):
+    """Genera el enlace de activación (un solo uso, 24 h) y, si se pide, el de Tailscale.
+
+    El token en claro solo aparece en esta respuesta; en la base de datos se guarda su hash.
+    Generar una invitación nueva anula las anteriores de ese usuario.
+    """
+    u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not u: raise HTTPException(404, "User not found")
+    if u.username.lower() in SYSTEM_USERS:
+        raise HTTPException(409, "Es un usuario de sistema y no se puede invitar")
+    await _drop_invites(db, await _pending_invites(db, u.id))
+    token = secrets.token_urlsafe(32)
+    ts_id = ts_url = ts_err = None
+    if req.tailscale:
+        ts_id, ts_url, ts_err = await ts.create_share_invite()
+    expires = datetime.now(timezone.utc) + INVITE_TTL
+    db.add(UserInvite(user_id=u.id, token_hash=_token_hash(token), created_by_id=current.id, expires_at=expires, ts_invite_id=ts_id))
+    await db.commit()
+    base = await ts.public_url() or (request.headers.get("origin") or "").rstrip("/")
+    host = base.split("://")[-1].split(":")[0]
+    return {
+        "username": u.username, "role": u.role, "valhalla_url": base,
+        "activation_url": f"{base}/activar#{token}",  # el token va en el fragmento: no llega a logs ni a Referer
+        "vpn": network_of(host).startswith("VPN"),
+        "tailscale_url": ts_url, "tailscale_error": ts_err,
+        "expires_at": expires.isoformat(),
+    }
+
+
+@app.get("/api/users/{user_id}/invite")
+async def invite_state(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Estado de la última invitación y de la de Tailscale (si se aceptó, se vincula esa cuenta)."""
+    u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not u: raise HTTPException(404, "User not found")
+    inv = (await db.execute(select(UserInvite).where(UserInvite.user_id == user_id).order_by(desc(UserInvite.created_at)).limit(1))).scalar_one_or_none()
+    if not inv:
+        return {"status": None, "tailscale_login": u.tailscale_login}
+    now = datetime.now(timezone.utc)
+    st = await ts.invite_status(inv.ts_invite_id) if inv.ts_invite_id else None
+    if st and st["accepted"] and st["login"] and not u.tailscale_login:
+        u.tailscale_login = st["login"][:128]
+        await db.commit()
+    return {
+        "status": "used" if inv.used_at else "expired" if inv.expires_at < now else "pending",
+        "created_at": inv.created_at.isoformat(), "expires_at": inv.expires_at.isoformat(),
+        "used_at": inv.used_at.isoformat() if inv.used_at else None,
+        "tailscale": st, "tailscale_login": u.tailscale_login,
+    }
+
+
+@app.delete("/api/users/{user_id}/invite")
+async def revoke_invite_ep(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    pending = await _pending_invites(db, user_id)
+    await _drop_invites(db, pending)
+    await db.commit()
+    return {"ok": True, "revoked": len(pending)}
+
+
+@app.get("/api/invites/pending")
+async def pending_invites(db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    rows = (await db.execute(select(UserInvite).where(UserInvite.used_at.is_(None), UserInvite.expires_at > now))).scalars().all()
+    return [{"user_id": r.user_id, "expires_at": r.expires_at.isoformat()} for r in rows]
+
+
+@app.delete("/api/users/{user_id}/tailscale")
+async def unlink_tailscale(user_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
+    """Desvincula la cuenta de Tailscale (p. ej. cambió de móvil); el próximo acceso por VPN la vuelve a vincular."""
+    u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not u: raise HTTPException(404, "User not found")
+    u.tailscale_login = None
+    await db.commit()
+    return {"ok": True}
+
+
+async def _valid_invite(db: AsyncSession, token: str) -> tuple[UserInvite, User]:
+    inv = (await db.execute(select(UserInvite).where(UserInvite.token_hash == _token_hash(token)))).scalar_one_or_none()
+    if not inv or inv.used_at or inv.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(410, "El enlace de invitación no es válido, ya se usó o ha caducado. Pide uno nuevo al administrador.")
+    u = (await db.execute(select(User).where(User.id == inv.user_id))).scalar_one()
+    return inv, u
+
+
+@app.post("/api/auth/invite/check")
+@limiter.limit("20/minute")
+async def invite_check(request: Request, req: InviteToken, db: AsyncSession = Depends(get_db)):
+    """Público: ¿es válido este enlace? (POST para que el token no quede en logs ni en la auditoría)."""
+    inv, u = await _valid_invite(db, req.token)
+    return {"username": u.username, "role": u.role, "expires_at": inv.expires_at.isoformat()}
+
+
+@app.post("/api/auth/invite/activate")
+@limiter.limit("10/minute")
+async def invite_activate(request: Request, req: InviteActivate, db: AsyncSession = Depends(get_db)):
+    """Público: el invitado fija su contraseña. El enlace deja de servir en ese momento."""
+    inv, u = await _valid_invite(db, req.token)
+    InputValidator.validate_password(req.password)
+    if u.username.lower() in req.password.lower():
+        raise HTTPException(400, "La contraseña no puede contener el nombre de usuario")
+    u.password_hash = get_password_hash(req.password)
+    inv.used_at = datetime.now(timezone.utc)
+    await db.execute(delete(UserInvite).where(UserInvite.user_id == u.id, UserInvite.id != inv.id, UserInvite.used_at.is_(None)))
+    await db.commit()
+    request.state.user = u  # auditoría a su nombre
+    ip = real_ip(request.client.host if request.client else None, request.headers) or ""
+    await _session_event("activated", u, ip, request.headers.get("user-agent", ""), db)
+    return {"ok": True, "username": u.username}
+
 
 @app.get("/api/auth/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)): return current_user
@@ -1953,10 +2127,31 @@ async def abuseipdb_scan_ip(ip: str, request: Request, db: AsyncSession = Depend
 @app.get("/api/chat/{chat_id}", response_model=list[ChatMessageOut])
 async def get_chat_history(chat_id: str, limit: int = Query(100, ge=1, le=200), db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
     _require_chat_access(current, chat_id)
-    q = select(ChatMessage).where(ChatMessage.chat_id == chat_id).order_by(desc(ChatMessage.timestamp)).limit(limit)
-    rows = (await db.execute(q)).scalars().all()
+    q = select(ChatMessage).where(ChatMessage.chat_id == chat_id)
+    cleared = (await db.execute(select(ChatClear.cleared_at).where(ChatClear.user_id == current.id, ChatClear.chat_id == chat_id))).scalar_one_or_none()
+    if cleared:
+        q = q.where(ChatMessage.timestamp > cleared)
+    rows = (await db.execute(q.order_by(desc(ChatMessage.timestamp)).limit(limit))).scalars().all()
     # Return in chronological order
     return sorted(rows, key=lambda x: x.timestamp)
+
+
+@app.post("/api/chat/{chat_id}/clear")
+async def clear_chat_history(chat_id: str, db: AsyncSession = Depends(get_db), current: User = Depends(get_current_user)):
+    """Vacía el chat para el usuario actual en todos sus dispositivos.
+
+    Antes solo se vaciaba la pantalla y los mensajes volvían al recargar. No se borran de la
+    base de datos: el resto de participantes conserva su historial.
+    """
+    _require_chat_access(current, chat_id)
+    now = datetime.now(timezone.utc)
+    row = (await db.execute(select(ChatClear).where(ChatClear.user_id == current.id, ChatClear.chat_id == chat_id))).scalar_one_or_none()
+    if row:
+        row.cleared_at = now
+    else:
+        db.add(ChatClear(user_id=current.id, chat_id=chat_id, cleared_at=now))
+    await db.commit()
+    return {"ok": True, "cleared_at": now.isoformat()}
 
 _CHAT_RATE: dict[int, list[float]] = {}
 _CHAT_RATE_LIMIT = (20, 10.0)  # 20 mensajes cada 10 s por usuario
