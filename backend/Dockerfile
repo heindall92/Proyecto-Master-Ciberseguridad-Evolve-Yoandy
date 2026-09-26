@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Dependencias de sistema: libmagic para python-magic (MIME detection)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade: parches de seguridad del sistema base en cada reconstrucción (Trivy)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 

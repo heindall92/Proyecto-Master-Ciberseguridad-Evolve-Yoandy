@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Crosshair, Globe2, MapPin, RefreshCw, Radar } from "lucide-react";
 import logger from "../lib/logger";
@@ -8,6 +8,11 @@ import { getThreatMap } from "../lib/api";
 /**
  * Mapa de origen de los ataques (pestaña "Mapa" de Inteligencia).
  * Teselas de Esri sin clave (CARTO pasó a exigirla y mostraba "API KEY REQUIRED").
+ *
+ * Leaflet directo (BSD-2): react-leaflet usa la licencia Hippocratic-2.1, que añade
+ * restricciones de uso incompatibles con la GPLv2 del proyecto. Las ventanas emergentes se
+ * construyen con nodos DOM y textContent: IP, ciudad y ASN vienen de un servicio externo de
+ * geolocalización y nunca se interpretan como HTML.
  */
 
 interface AttackPoint {
@@ -43,10 +48,69 @@ export default function ThreatMapView({ lang = "es", onAnalyze }: { lang?: strin
   };
   useEffect(() => { load(); const iv = setInterval(load, 60000); return () => clearInterval(iv); }, [hours]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const geo = attacks.filter(a => a.lat !== 0 && a.lon !== 0);
+  const geo = useMemo(() => attacks.filter(a => a.lat !== 0 && a.lon !== 0), [attacks]);
   const maxCount = Math.max(...geo.map(a => a.count), 1);
   const honeypotHits = geo.filter(a => a.is_honeypot).reduce((s, a) => s + a.count, 0);
   const foreign = countries.filter(c => c.country !== "ES" && c.country !== "XX").length;
+
+  // Mapa: se crea una vez; teselas según el tema y capa de ataques según los datos
+  const mapEl = useRef<HTMLDivElement>(null);
+  const map = useRef<L.Map | null>(null);
+  const tiles = useRef<L.TileLayer | null>(null);
+  const layer = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    if (!mapEl.current || map.current) return;
+    map.current = L.map(mapEl.current, { center: [25, 5], zoom: 2, minZoom: 2, worldCopyJump: true, preferCanvas: true });
+    layer.current = L.layerGroup().addTo(map.current);
+    return () => { map.current?.remove(); map.current = null; tiles.current = null; layer.current = null; };
+  }, []);
+  useEffect(() => {
+    if (!map.current) return;
+    tiles.current?.remove();
+    tiles.current = L.tileLayer(TILES[theme], { attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap" }).addTo(map.current);
+  }, [theme]);
+  useEffect(() => {
+    const g = layer.current;
+    if (!g) return;
+    g.clearLayers();
+    // El canvas no entiende variables CSS: se resuelve el color de acento del tema actual
+    const signal = getComputedStyle(document.body).getPropertyValue("--signal").trim() || "#3fb37f";
+    for (const a of geo) {
+      const radius = Math.max(4, (a.count / maxCount) * 15);
+      const color = a.is_honeypot ? COLOR.honeypot : a.country_code === "ES" ? signal : COLOR.external;
+      L.polyline([[a.lat, a.lon], SOC_COORDS], { color, weight: 1, className: "tm-line" }).addTo(g);
+      L.circleMarker([a.lat, a.lon], { radius: radius * 2, color, fill: false, weight: 1, className: "tm-pulse" }).addTo(g);
+      L.circleMarker([a.lat, a.lon], { radius, color, fillColor: color, fillOpacity: 0.55, weight: 1 })
+        .bindPopup(() => popup(a, color)).addTo(g);
+    }
+  }, [geo, maxCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const popup = (a: AttackPoint, color: string) => {
+    const box = document.createElement("div");
+    box.className = "tm-pop";
+    const title = document.createElement("b");
+    title.style.color = color;
+    title.textContent = a.is_honeypot ? (es ? "Ataque al honeypot" : "Honeypot hit") : (es ? "Ataque entrante" : "Inbound attack");
+    box.append(title);
+    const place = document.createElement("span");
+    place.textContent = [a.city, countryName(a.country_code || a.country)].filter(Boolean).join(", ");
+    box.append(place);
+    for (const [k, v] of [["IP", a.ip], ["ASN", a.as || a.isp || "—"], [es ? "Eventos" : "Events", String(a.count)]]) {
+      const row = document.createElement("span");
+      const key = document.createElement("i");
+      key.textContent = k;
+      row.append(key, document.createTextNode(v));
+      box.append(row);
+    }
+    if (onAnalyze) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = es ? "Analizar IP" : "Analyze IP";
+      btn.onclick = () => onAnalyze(a.ip);
+      box.append(btn);
+    }
+    return box;
+  };
 
   return (
     <div className="tm">
@@ -64,31 +128,7 @@ export default function ThreatMapView({ lang = "es", onAnalyze }: { lang?: strin
 
       <div className="tm-grid">
         <div className="tm-map in-panel">
-          <MapContainer center={[25, 5]} zoom={2} minZoom={2} worldCopyJump style={{ height: "100%", width: "100%" }} preferCanvas>
-            <TileLayer key={theme} url={TILES[theme]} attribution="Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap" />
-            {geo.map((a, i) => {
-              const radius = Math.max(4, (a.count / maxCount) * 15);
-              const color = a.is_honeypot ? COLOR.honeypot : a.country_code === "ES" ? COLOR.local : COLOR.external;
-              return (
-                <React.Fragment key={`${a.ip}-${i}`}>
-                  <Polyline positions={[[a.lat, a.lon], SOC_COORDS]} pathOptions={{ color, weight: 1, className: "tm-line" }} />
-                  <CircleMarker center={[a.lat, a.lon]} radius={radius} pathOptions={{ color, fillColor: color, fillOpacity: 0.55, weight: 1 }}>
-                    <Popup>
-                      <div className="tm-pop">
-                        <b style={{ color }}>{a.is_honeypot ? (es ? "Ataque al honeypot" : "Honeypot hit") : (es ? "Ataque entrante" : "Inbound attack")}</b>
-                        <span>{[a.city, countryName(a.country_code || a.country)].filter(Boolean).join(", ")}</span>
-                        <span><i>IP</i>{a.ip}</span>
-                        <span><i>ASN</i>{a.as || a.isp || "—"}</span>
-                        <span><i>{es ? "Eventos" : "Events"}</i>{a.count}</span>
-                        {onAnalyze && <button type="button" onClick={() => onAnalyze(a.ip)}>{es ? "Analizar IP" : "Analyze IP"}</button>}
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                  <CircleMarker center={[a.lat, a.lon]} radius={radius * 2} pathOptions={{ color, fillColor: "none", weight: 1, className: "tm-pulse" }} />
-                </React.Fragment>
-              );
-            })}
-          </MapContainer>
+          <div ref={mapEl} style={{ height: "100%", width: "100%" }} />
           <div className="tm-legend">
             <span><i style={{ background: COLOR.external }} />{es ? "Externo" : "External"}</span>
             <span><i style={{ background: COLOR.honeypot }} />Honeypot</span>
