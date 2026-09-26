@@ -250,7 +250,7 @@ Un SOC es un objetivo en sí mismo. Resumen de los controles:
 
 ## <img src="docs/assets/icons/triangle-alert.svg" width="20" height="20" valign="middle"/> Limitaciones conocidas
 
-- **Vulnerabilidades por equipo**: el escáner de Wazuh 4.9 analiza los equipos, pero su índice (`wazuh-states-vulnerabilities-*`) aún no se llena en esta instalación; Activos lo muestra como «pendiente» en lugar de inventar cifras. La inteligencia de CVE (CISA KEV) funciona con independencia de esto.
+- **Catálogo de vulnerabilidades de Wazuh**: se carga desde una instantánea del CTI de Wazuh (`offline-url` en `wazuh_config/ossec.conf`, 16/09/2026), porque el catálogo que trae la imagen es de 2024 y ponerlo al día cambio a cambio tardaba días. Mientras no se cambie ese enlace, las CVE publicadas después no se detectan. Al recrear el contenedor del manager, la instantánea se vuelve a procesar (unos 30 minutos). El manager no envía inventario de paquetes, así que aparece como «no analizado». Las CVE aún sin CVSS se muestran como «sin puntuar».
 - **Mapa de ataques**: en el laboratorio todas las IPs son privadas y no se pueden geolocalizar; el mapa lo indica en lugar de situarlas en un país.
 - **IA en CPU**: el modelo de 3B es rápido de desplegar pero lento generando (~3 palabras/s) y limitado en razonamiento; sirve para redactar, no para decidir.
 - **Consola de Wazuh** con certificado autofirmado (aviso del navegador en `https://localhost`).

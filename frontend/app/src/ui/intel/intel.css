@@ -471,3 +471,4 @@ body[data-theme="light"] .us-invite__warn { color: #9a6b00; }
   .rb .wk-head .in-bar, .us .wk-head .in-bar { flex-wrap: wrap; margin-left: 0; width: 100%; }
   .rb .wk-head .in-bar .wk-search, .us .wk-head .in-bar .wk-search { width: auto; }
 }
+.as-unscored { color: var(--text-dim); border-color: var(--line); background: color-mix(in srgb, var(--text-dim) 10%, transparent); }
