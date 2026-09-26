@@ -462,3 +462,12 @@ body[data-theme="light"] .us-invite__warn { color: #9a6b00; }
 }
 
 .us-invite__actions a.vp-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* Runbooks y Usuarios: búsqueda + botón en una sola línea en escritorio (antes se apilaban
+   por encima del título a 1440 px); en pantallas estrechas vuelven a partirse */
+.rb .wk-head .in-bar, .us .wk-head .in-bar { flex-wrap: nowrap; margin-left: auto; }
+.rb .wk-head .in-bar .wk-search, .us .wk-head .in-bar .wk-search { width: 300px; }
+@container intel (max-width: 640px) {
+  .rb .wk-head .in-bar, .us .wk-head .in-bar { flex-wrap: wrap; margin-left: 0; width: 100%; }
+  .rb .wk-head .in-bar .wk-search, .us .wk-head .in-bar .wk-search { width: auto; }
+}

@@ -1576,12 +1576,17 @@ async def cowrie_timeline(hours: int = 24, interval: str = "1h", _=Depends(get_c
     return await osc.get_cowrie_timeline(hours, interval)
 
 
-async def _tcp_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+async def _container_running(host: str, timeout: float = 2.0) -> bool:
+    """¿Está el contenedor en marcha? El DNS interno de Docker solo resuelve contenedores activos.
+
+    Antes se abría una conexión TCP al puerto SSH de Cowrie: el honeypot la registraba como
+    una sesión de ataque desde el backend (~2.400 falsas al día por pestaña abierta, que
+    aparecían como el atacante nº 1). Resolver el nombre no toca el servicio.
+    """
+    import socket
     try:
         async with asyncio.timeout(timeout):
-            _r, w = await asyncio.open_connection(host, port)
-            w.close()
-            await w.wait_closed()
+            await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
             return True
     except Exception:
         return False
@@ -1611,7 +1616,6 @@ async def wazuh_services(_=Depends(get_current_user)):
         logger.debug("Indexer check failed: %s", e)
 
     cowrie_host = os.getenv("COWRIE_HOST", "cowrie")
-    cowrie_ssh = int(os.getenv("COWRIE_SSH_PORT", "2222"))
     cowrie_events = 0
     try:
         stats = await osc.get_cowrie_stats(24)
@@ -1619,7 +1623,7 @@ async def wazuh_services(_=Depends(get_current_user)):
     except Exception:
         pass
 
-    cowrie_port_up = await _tcp_reachable(cowrie_host, cowrie_ssh)
+    cowrie_port_up = await _container_running(cowrie_host)
     if cowrie_port_up:
         cowrie_status = "active" if cowrie_events > 0 else "warning"
     elif cowrie_events > 0:
@@ -1628,7 +1632,7 @@ async def wazuh_services(_=Depends(get_current_user)):
         cowrie_status = "disconnected"
 
     attacker_host = os.getenv("ATTACKER_HOST", "attacker")
-    attacker_up = await _tcp_reachable(attacker_host, 22, timeout=1.5)
+    attacker_up = await _container_running(attacker_host, timeout=1.5)
 
     return {
         "status": manager_status,

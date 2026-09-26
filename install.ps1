@@ -37,7 +37,7 @@ Write-Host "  ╚═════════════════════
 Write-Host ""
 
 # ── 1. Prerrequisitos ─────────────────────────────────────────────────────────
-Write-Step "1/5" "Comprobando prerrequisitos"
+Write-Step "1/7" "Comprobando prerrequisitos"
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Fail "Git no encontrado. Instálalo desde https://git-scm.com/download/win y vuelve a ejecutar."
@@ -62,7 +62,7 @@ if ($pyver -notmatch "Python 3") { Write-Fail "Se requiere Python 3, encontrado:
 Write-OK "$pyver"
 
 # ── 2. Clonar o actualizar el repo ───────────────────────────────────────────
-Write-Step "2/5" "Preparando el repositorio"
+Write-Step "2/7" "Preparando el repositorio"
 
 $alreadyInRepo = Test-Path (Join-Path $PSScriptRoot ".git")
 
@@ -83,7 +83,7 @@ if ($alreadyInRepo) {
 Set-Location $InstallDir
 
 # ── 3. Generar .env con secretos únicos ──────────────────────────────────────
-Write-Step "3/5" "Configurando secretos (.env)"
+Write-Step "3/7" "Configurando secretos (.env)"
 
 if (Test-Path ".env") {
     Write-OK ".env ya existe — no se sobreescribe (usa --Force para regenerar)"
@@ -92,8 +92,23 @@ if (Test-Path ".env") {
     Write-OK ".env generado con secretos únicos"
 }
 
-# ── 4. Levantar el stack con Docker Compose ──────────────────────────────────
-Write-Step "4/5" "Levantando el stack Docker"
+# ── 4. Certificados TLS de Wazuh ─────────────────────────────────────────────
+Write-Step "4/7" "Generando certificados de Wazuh"
+# No se versionan (son secretos): cada instalación crea los suyos
+$certDir = Join-Path (Get-Location) "config\wazuh_indexer_ssl_certs"
+if (Test-Path (Join-Path $certDir "root-ca.pem")) {
+    Write-OK "Certificados ya presentes"
+} else {
+    New-Item -ItemType Directory -Force $certDir | Out-Null
+    $cfg = Join-Path (Get-Location) "config\certs.yml"
+    docker run --rm -v "${cfg}:/config/certs.yml:ro" -v "${certDir}:/certificates/" wazuh/wazuh-certs-generator:0.0.2
+    # Permisos: el manager (uid 999) lee los suyos; el CA legible para el conector del indexador
+    docker run --rm -v "${certDir}:/c" alpine:3.20 sh -c "chown 1000:1000 /c/* && chown 999:999 /c/wazuh.manager* /c/root-ca-manager* 2>/dev/null; chmod 400 /c/* && chmod 644 /c/root-ca.pem"
+    Write-OK "Certificados en config\wazuh_indexer_ssl_certs\"
+}
+
+# ── 5. Levantar el stack con Docker Compose ──────────────────────────────────
+Write-Step "5/7" "Levantando el stack Docker"
 
 $profile = if ($NoLabs) { "" } else { "--profile labs" }
 $cmd = "docker compose $profile up -d --build"
@@ -103,26 +118,43 @@ Invoke-Expression $cmd
 
 Write-OK "Todos los contenedores iniciados"
 
-# ── 5. Modelo IA (Ollama) ────────────────────────────────────────────────────
-Write-Step "5/5" "Descargando modelo de IA ($OLLAMA_MODEL)"
+# ── 6. Modelo IA (Ollama) ────────────────────────────────────────────────────
+Write-Step "6/7" "Modelo de IA ($OLLAMA_MODEL)"
 
 if ($SkipOllama) {
-    Write-Warn "Saltando descarga del modelo (--SkipOllama). El chatbot IA no funcionará hasta que lo descargues."
+    Write-Warn "Saltando el modelo (--SkipOllama). El asistente IA no funcionará hasta que lo descargues."
 } else {
-    Write-Host "      Esperando a que Ollama arranque..." -ForegroundColor Gray
-    $tries = 0
-    do {
-        Start-Sleep -Seconds 3
-        $tries++
-        $ready = docker exec ollama ollama list 2>$null
-    } while (-not $ready -and $tries -lt 20)
-
-    if ($ready) {
-        docker exec ollama ollama pull $OLLAMA_MODEL
-        Write-OK "Modelo $OLLAMA_MODEL descargado"
+    # El servicio ollama-init lo descarga solo; aquí se espera a que termine
+    Write-Host "      Esperando a ollama-init (descarga de ~2 GB la primera vez)..." -ForegroundColor Gray
+    docker compose wait ollama-init 2>$null | Out-Null
+    docker compose exec -T ollama ollama show $OLLAMA_MODEL 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-OK "Modelo $OLLAMA_MODEL disponible"
     } else {
-        Write-Warn "Ollama tardó demasiado en arrancar. Ejecuta manualmente: docker exec ollama ollama pull $OLLAMA_MODEL"
+        Write-Warn "El modelo aún no está. Ejecuta: docker compose exec ollama ollama pull $OLLAMA_MODEL"
     }
+}
+
+# ── 7. Wazuh: credenciales del indexador ─────────────────────────────────────
+Write-Step "7/7" "Configurando el conector de vulnerabilidades de Wazuh"
+$envLines = Get-Content .env
+$idxUser = (($envLines | Where-Object { $_ -match '^OPENSEARCH_USER=' }) -replace '^OPENSEARCH_USER=', '') | Select-Object -Last 1
+if (-not $idxUser) { $idxUser = "admin" }
+$idxPass = (($envLines | Where-Object { $_ -match '^INDEXER_PASSWORD=' }) -replace '^INDEXER_PASSWORD=', '') | Select-Object -Last 1
+$ready = $false
+for ($i = 0; $i -lt 60 -and -not $ready; $i++) {
+    docker compose exec -T wazuh.manager test -x /var/ossec/bin/wazuh-keystore 2>$null
+    if ($LASTEXITCODE -eq 0) { $ready = $true } else { Start-Sleep -Seconds 5 }
+}
+if ($ready -and $idxPass) {
+    # Como argumento: la tubería de PowerShell añadiría un salto de línea al valor.
+    # (install.sh / wazuh_post_install.sh lo pasan por stdin, fuera de la línea de comandos)
+    docker compose exec -T wazuh.manager /var/ossec/bin/wazuh-keystore -f indexer -k username -v $idxUser
+    docker compose exec -T wazuh.manager /var/ossec/bin/wazuh-keystore -f indexer -k password -v $idxPass
+    docker compose restart wazuh.manager | Out-Null
+    Write-OK "Keystore del manager configurado"
+} else {
+    Write-Warn "Manager no disponible todavía. Repite: bash scripts/wazuh_post_install.sh"
 }
 
 # ── Resumen ───────────────────────────────────────────────────────────────────

@@ -12,6 +12,8 @@ import "./intel/intel.css";
 /** Bifröst: métricas del SOC y consola de threat hunting sobre los datos reales de Wazuh. */
 
 const SEV_ES: Record<string, string> = { critical: "Crítica", high: "Alta", medium: "Media", low: "Baja" };
+// Valor + unidad para las tarjetas (antes se mostraban minutos sin unidad: «1997»)
+const kpiTime = (m: number): [number, string] => (m >= 1440 ? [Math.round(m / 144) / 10, "d"] : m >= 60 ? [Math.round(m / 60), "h"] : [m, "min"]);
 const fmtMin = (m: number) => (m >= 1440 ? `${(m / 1440).toFixed(1)} d` : m >= 60 ? `${(m / 60).toFixed(1)} h` : `${m} min`);
 const isIp = (v: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(v);
 
@@ -73,10 +75,10 @@ export default function SocMaturityView({ lang = "es" }: { lang?: string }) {
       <div className="in-body">
         <div className="in-vulns">
           <div className="in-kpis">
-            <KpiCard icon={Clock} label="MTTR" value={m?.mttr_minutes ?? 0} sub={m?.tickets.closed ? `${fmtMin(m.mttr_minutes)} de media hasta resolver` : (es ? "Sin incidentes resueltos todavía" : "No resolved incidents yet")} tone="info" />
-            <KpiCard icon={Hourglass} label={es ? "Antigüedad de abiertos" : "Open dwell"} value={m?.dwell_open_avg_minutes ?? 0} sub={m ? `${fmtMin(m.dwell_open_avg_minutes)} de media · ${m.tickets.open} abiertos` : ""} tone="warning" />
-            <KpiCard icon={Target} label={es ? "Tasa de resolución" : "Resolution rate"} value={m?.tickets.resolution_rate_pct ?? 0} sub={m ? `${m.tickets.closed} de ${m.tickets.total} incidentes` : ""} tone={(m?.tickets.resolution_rate_pct ?? 0) >= 80 ? "ok" : "danger"} />
-            <KpiCard icon={ShieldCheck} label={es ? "Cobertura ATT&CK" : "ATT&CK coverage"} value={m?.attack_coverage_pct ?? 0} sub={m?.techniques_total ? `${m.techniques_covered} de ${m.techniques_total} técnicas con regla` : "—"} tone="accent" />
+            <KpiCard icon={Clock} label="MTTR" value={kpiTime(m?.mttr_minutes ?? 0)[0]} unit={m?.tickets.closed ? kpiTime(m.mttr_minutes)[1] : undefined} sub={m?.tickets.closed ? `${fmtMin(m.mttr_minutes)} de media hasta resolver` : (es ? "Sin incidentes resueltos todavía" : "No resolved incidents yet")} tone="info" />
+            <KpiCard icon={Hourglass} label={es ? "Antigüedad de abiertos" : "Open dwell"} value={kpiTime(m?.dwell_open_avg_minutes ?? 0)[0]} unit={kpiTime(m?.dwell_open_avg_minutes ?? 0)[1]} sub={m ? `${fmtMin(m.dwell_open_avg_minutes)} de media · ${m.tickets.open} abiertos` : ""} tone="warning" />
+            <KpiCard icon={Target} label={es ? "Tasa de resolución" : "Resolution rate"} value={m?.tickets.resolution_rate_pct ?? 0} unit="%" sub={m ? `${m.tickets.closed} de ${m.tickets.total} incidentes` : ""} tone={(m?.tickets.resolution_rate_pct ?? 0) >= 80 ? "ok" : "danger"} />
+            <KpiCard icon={ShieldCheck} label={es ? "Cobertura ATT&CK" : "ATT&CK coverage"} value={m?.attack_coverage_pct ?? 0} unit="%" sub={m?.techniques_total ? `${m.techniques_covered} de ${m.techniques_total} técnicas con regla` : "—"} tone="accent" />
           </div>
 
           <div className="bf-row">

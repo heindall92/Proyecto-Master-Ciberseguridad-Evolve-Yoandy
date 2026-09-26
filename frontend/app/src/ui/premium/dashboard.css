@@ -226,3 +226,4 @@ body[data-theme="light"] .vx-sev--info { --sev: #0b6f94; }
   .vx-overview .vx-card__meta { display: none; }
   .vx-overview .vx-card__tools { gap: 4px; }
 }
+.vx-kpi__unit { margin-left: 4px; font: 600 15px var(--sans); color: var(--text-dim); letter-spacing: 0; }
