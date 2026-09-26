@@ -300,46 +300,41 @@ Componentes de terceros: Wazuh (GPLv2), Cowrie (BSD-3-Clause), Ollama (MIT), el 
 
 <table>
 <tr>
-<td width="50%" valign="top">
-
-<table>
-<tr><td align="center" width="360">
+<td align="center" width="50%" valign="top">
 <img src="https://avatars.githubusercontent.com/u/238087465?v=4" alt="Yoandy Ramírez Delgado" width="96"/><br/>
 <b>Yoandy Ramírez Delgado</b><br/>
 <sub>Creador y mantenedor · Junior Pentester · eJPTv2 · AI Governance (ISO 42001) · SysAdmin</sub><br/>
 <a href="https://www.linkedin.com/in/yoandyrd92/">LinkedIn</a> · <a href="https://github.com/heindall92">GitHub</a> · <a href="https://yoandyramirez.com">Portafolio</a> · <a href="https://profile.hackthebox.com/profile/019c5812-b4ca-7315-b12f-14db6d2b42fa">HackTheBox</a>
-</td></tr>
-<tr><td align="center" width="360">
-<img src="https://avatars.githubusercontent.com/u/153531806?v=4" alt="Rosalino Martínez" width="96"/><br/>
-<b>Rosalino Martínez</b><br/>
-<sub>Full Stack Dev &amp; Cybersecurity Analyst</sub><br/>
-<a href="https://github.com/Rosalinowastaken">GitHub</a>
-</td></tr>
-<tr><td align="center" width="360">
-<img src="https://avatars.githubusercontent.com/u/206676927?v=4" alt="Julieta Tenti" width="96"/><br/>
-<b>Julieta Tenti</b><br/>
-<sub>Equipo Valhalla SOC</sub><br/>
-<a href="https://github.com/julitenti">GitHub</a>
-</td></tr>
-</table>
-
 </td>
-<td width="50%" valign="top">
-
-<table>
-<tr><td align="center" width="360">
+<td align="center" width="50%" valign="top">
 <img src="https://avatars.githubusercontent.com/u/90797615?v=4" alt="Santi Prada" width="96"/><br/>
 <b>Santi Prada</b><br/>
 <sub>Equipo Valhalla SOC</sub><br/>
 <a href="https://github.com/saantiidp">GitHub</a>
-</td></tr>
-<tr><td align="center" width="360">
+</td>
+</tr>
+<tr>
+<td align="center" width="50%" valign="top">
+<img src="https://avatars.githubusercontent.com/u/153531806?v=4" alt="Rosalino Martínez" width="96"/><br/>
+<b>Rosalino Martínez</b><br/>
+<sub>Full Stack Dev &amp; Cybersecurity Analyst</sub><br/>
+<a href="https://github.com/Rosalinowastaken">GitHub</a>
+</td>
+<td align="center" width="50%" valign="top">
 <img src="https://avatars.githubusercontent.com/u/240470051?v=4" alt="svisomar-SP" width="96"/><br/>
 <b>svisomar-SP</b><br/>
 <sub>Equipo Valhalla SOC</sub><br/>
 <a href="https://github.com/svisomar-SP">GitHub</a>
-</td></tr>
-</table>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%" valign="top">
+<img src="https://avatars.githubusercontent.com/u/206676927?v=4" alt="Julieta Tenti" width="96"/><br/>
+<b>Julieta Tenti</b><br/>
+<sub>Equipo Valhalla SOC</sub><br/>
+<a href="https://github.com/julitenti">GitHub</a>
+</td>
+<td align="center" width="50%" valign="top">
 
 </td>
 </tr>
