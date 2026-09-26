@@ -286,7 +286,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Get client IP
         # IP real: X-Forwarded-For solo si viene del proxy (antes se aceptaba de cualquiera y era falsificable)
-        from app.client_info import real_ip
+        from app.client_info import real_ip, is_https
         client_ip = real_ip(request.client.host if request.client else None, request.headers) or "unknown"
         
         # --- CSRF Protection (Double-Submit Cookie Pattern) ---
@@ -322,7 +322,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             key="csrf_token",
             value=csrf_token,
             httponly=False,
-            secure=settings.session_cookie_secure,
+            secure=settings.session_cookie_secure or is_https(request.client.host if request.client else None, request.headers),
             samesite=settings.session_cookie_samesite
         )
         

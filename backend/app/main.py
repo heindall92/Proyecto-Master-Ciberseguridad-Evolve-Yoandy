@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address  # noqa: F401
-from app.client_info import real_ip, network_of, device_of
+from app.client_info import real_ip, network_of, device_of, is_https
 from slowapi.errors import RateLimitExceeded
 
 from app.db import get_db, engine, SessionLocal
@@ -708,7 +708,8 @@ async def login(request: Request, response: Response, req: LoginRequest, db: Asy
     access_token, _, _ = create_access_token_with_meta(user.username)
     refresh_token, _, _ = create_refresh_token_with_meta(user.username)
     csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
-    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf,
+                     secure=is_https(request.client.host if request.client else None, request.headers))
     await _session_event("login", user, client_ip, request.headers.get("user-agent", ""), db)
     return Token(
         access_token=access_token,
@@ -742,7 +743,8 @@ async def refresh_session(request: Request, response: Response, db: AsyncSession
     access_token, _, _ = create_access_token_with_meta(user.username)
     refresh_token, _, refresh_exp = create_refresh_token_with_meta(user.username)
     csrf = request.cookies.get("csrf_token") or secrets.token_urlsafe(32)
-    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf,
+                     secure=is_https(request.client.host if request.client else None, request.headers))
     return Token(
         access_token=access_token,
         expires_in=settings.access_token_expire_minutes * 60,
