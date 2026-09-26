@@ -57,8 +57,8 @@ flowchart LR
 | S5 | Alguien entra por la VPN con la cuenta de otro | Identidad de Tailscale por sesión; vinculación en el primer acceso; alerta auditada `TS_MISMATCH` | `test_alerta_si_la_cuenta_de_vpn_no_es_la_vinculada` | Medio: la vinculación es de confianza en el primer uso |
 | S6 | Enlace de invitación interceptado o adivinado | Token de 256 bits de un solo uso, 24 h, en el fragmento de la URL (no llega a registros); solo se guarda su SHA-256 | `test_activacion_de_un_solo_uso`, `test_invitacion_usa_la_url_https_y_guarda_solo_el_hash` | Bajo; el canal de envío (WhatsApp, correo) queda fuera de nuestro control |
 
-| S7 | Uso de la API de Wazuh con la credencial de fábrica (`wazuh-wui`) desde la red local o desde el contenedor atacante | **Pendiente**: rotar la contraseña (`create_user.py` del manager), pasarla al backend y a la consola de Wazuh, y publicar el puerto 55000 solo en `127.0.0.1` | Comprobado el 26/09/2026: el puerto es alcanzable desde el atacante y la instalación usa la credencial por defecto | **Alto** |
-| S8 | Usuarios de demostración del indexador (`kibanaserver`, `readall`, `logstash`, `kibanaro`, `snapshotrestore`) con su contraseña pública | **Pendiente**: cambiar sus hashes en `internal_users.yml` (o eliminar los que no se usan) desde `init-security.sh`, igual que ya se hace con `admin` | Comprobado el 26/09/2026: el indexador acepta esas credenciales (responde 403 «sin permiso», no 401) | **Alto** |
+| S7 | Uso de la API de Wazuh con la credencial de fábrica (`wazuh-wui`) desde la red local o desde el contenedor atacante | **Corregido el 26/09/2026**: contraseña propia por instalación (`WAZUH_API_PASSWORD`, aplicada por el manager al arrancar con `API_PASSWORD`), puerto 55000 publicado solo en `127.0.0.1` y atacante en una red aislada | El backend se autentica con la contraseña nueva; `ss` muestra 55000 solo en 127.0.0.1; desde el atacante, manager:55000 no es alcanzable | Bajo |
+| S8 | Usuarios de demostración del indexador (`kibanaserver`, `readall`, `logstash`, `kibanaro`, `snapshotrestore`, `anomalyadmin`) con su contraseña pública | **Corregido el 26/09/2026**: `init-security.sh` v2 fija la contraseña de `kibanaserver` (`DASHBOARD_PASSWORD`, distinta de la de `admin`) y elimina los demás | La API de seguridad del indexador lista solo `admin` y `kibanaserver` | Bajo |
 | S9 | Contraseña de PostgreSQL de ejemplo (pública en el repositorio) en instalaciones nuevas | `setup_env.py` genera una aleatoria al crear el `.env` (antes se quedaba `replace-with-real-pass`) | `scripts/setup_env.py` | Bajo en instalaciones nuevas; las existentes deben revisar su `.env` |
 
 ### T — Manipulación
@@ -98,7 +98,7 @@ flowchart LR
 | D1 | Inundar la API de escrituras | Límite por IP real en escrituras; *slowapi* en login e invitaciones | `security.py` | Medio: las lecturas no se limitan (el panel hace *polling*) |
 | D2 | Inundar el chat | 20 mensajes cada 10 s por usuario | `main.py` (`_chat_rate_ok`) | Bajo |
 | D3 | Consultas de hunting o informes muy costosos | Ventanas acotadas (1-720 h), tamaños máximos, IA opcional en informes | `test_hunting_rechaza_consultas_y_ventanas_no_validas` | Medio |
-| D4 | El honeypot consume los recursos del SOC | Cowrie en su propio contenedor; el atacante del laboratorio con intervalo de 15 min | `docker-compose.yml` | Medio: sin límites de CPU/memoria por contenedor |
+| D4 | El honeypot consume los recursos del SOC o sirve de trampolín hacia él | Cowrie y el atacante del laboratorio en la red `lab-net`, sin acceso a la BD, al manager, al indexador ni a Ollama; límites de memoria en los servicios de Wazuh | Comprobado con `nc` desde el atacante: solo alcanza el honeypot y la API autenticada | Medio: Cowrie y el backend sin límites de CPU/memoria |
 | D5 | Sondas internas que generan ruido en el SIEM | El chequeo de salud ya no conecta al honeypot (antes: ~2.400 sesiones falsas al día) | `main.py` (`_container_running`) | Bajo |
 
 ### E — Elevación de privilegios
@@ -113,10 +113,10 @@ flowchart LR
 
 ## 3. Riesgos residuales priorizados
 
+Corregidos en esta revisión: S7 (credencial de fábrica de la API de Wazuh), S8 (usuarios de demostración del indexador), S9 (contraseña de PostgreSQL de ejemplo) y el acceso del contenedor atacante al núcleo del SOC (D4).
+
 | Prioridad | Riesgo | Acción |
 |---|---|---|
-| 🔴 Alta | Credencial de fábrica de la API de Wazuh accesible desde la LAN y el laboratorio (S7) | Rotarla y publicar el puerto 55000 solo en localhost; aislar el contenedor atacante en una red propia con el honeypot. |
-| 🔴 Alta | Usuarios de demostración del indexador con contraseña pública (S8) | Cambiar o eliminar esos usuarios en el arranque del indexador. |
 | 🔴 Alta | Certificados de Wazuh y copias de BD en el historial de Git (I6) | Reescribir el historial con `git filter-repo`, forzar la subida y regenerar los certificados. Requiere coordinar con el equipo antes de la entrega. |
 | 🟠 Media | Consola por HTTP en la red local (S3, I5) | Usar el perfil `prod` (nginx con TLS) o `tailscale serve` también en la LAN. |
 | 🟠 Media | Vinculación VPN por confianza en el primer uso (S5) | Vincular solo la cuenta que acepta la invitación de Tailscale (ya se hace cuando hay `TAILSCALE_API_KEY`). |

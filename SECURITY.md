@@ -27,6 +27,7 @@ riesgos residuales, está en [docs/STRIDE.md](docs/STRIDE.md). Los requisitos de
 | Secreto | Dónde vive | Cómo se genera |
 |---|---|---|
 | `SECRET_KEY`, `WEBHOOK_SECRET`, `ADMIN_PASSWORD`, `INDEXER_PASSWORD`, `POSTGRES_PASSWORD` | `.env` (fuera de Git) | `scripts/setup_env.py`: aleatorios y únicos por instalación |
+| `WAZUH_API_PASSWORD` (API de Wazuh) y `DASHBOARD_PASSWORD` (usuario interno `kibanaserver`) | `.env` | `scripts/setup_env.py`; el manager, el indexador y la consola de Wazuh las aplican al arrancar |
 | Certificados TLS de Wazuh | `config/wazuh_indexer_ssl_certs/` (fuera de Git) | `scripts/gen_certs.sh` con el generador oficial de Wazuh |
 | Credenciales del indexador para el manager | Keystore de Wazuh | `scripts/wazuh_post_install.sh` (por stdin, sin pasar por la línea de comandos) |
 | `TAILSCALE_API_KEY` (opcional) | `.env` | La crea el administrador en el panel de Tailscale; caduca en 90 días o menos |
@@ -38,15 +39,15 @@ riesgos residuales, está en [docs/STRIDE.md](docs/STRIDE.md). Los requisitos de
 > entonces, cualquier instalación debe generar **sus propios** certificados (el instalador ya lo
 > hace) y no reutilizar nada del historial.
 
-## Hallazgos abiertos
+## Hallazgos corregidos en la revisión del 26/09/2026
 
-Detectados en la revisión del 26/09/2026 y pendientes de corrección (detalle en [STRIDE](docs/STRIDE.md), S7 y S8):
-
-| Hallazgo | Riesgo | Corrección prevista |
+| Hallazgo | Riesgo | Corrección y evidencia |
 |---|---|---|
-| La API de Wazuh (puerto 55000) usa la credencial de fábrica `wazuh-wui` y es alcanzable desde la red local y desde el contenedor atacante | **Alto** | Rotar la contraseña con el script `create_user.py` del manager, pasarla al backend y a la consola de Wazuh, y publicar el puerto solo en `127.0.0.1` |
-| Los usuarios de demostración del indexador (`kibanaserver`, `readall`…) conservan su contraseña pública | **Alto** | Cambiar sus hashes (o eliminarlos) en `config/wazuh_indexer/init-security.sh`, como ya se hace con `admin` |
-| El contenedor atacante del laboratorio comparte red con la base de datos, el manager y el indexador | Medio | Red propia `lab-net` solo con el honeypot |
+| La API de Wazuh usaba la credencial de fábrica `wazuh-wui` y su puerto 55000 era alcanzable desde la red local y desde el contenedor atacante | Alto | Contraseña propia por instalación (`WAZUH_API_PASSWORD`), aplicada por el manager al arrancar; puerto publicado solo en `127.0.0.1`. El backend se autentica con la contraseña nueva y el puerto ya no escucha fuera de localhost. |
+| Usuarios de demostración del indexador con su contraseña pública | Alto | `init-security.sh` v2: contraseña propia para `kibanaserver` (distinta de la de `admin`) y eliminación de `anomalyadmin`, `kibanaro`, `logstash`, `readall` y `snapshotrestore`. El indexador lista solo `admin` y `kibanaserver`. |
+| Una instalación nueva dejaba la contraseña de PostgreSQL del ejemplo (pública) | Alto | `setup_env.py` la genera aleatoria al crear el `.env`. |
+| El contenedor atacante compartía red con la BD, el manager, el indexador y Ollama | Medio | Red `lab-net` solo con el honeypot. Comprobado con `nc` desde el atacante. |
+| Recrear el manager perdía el registro de agentes y el catálogo de vulnerabilidades | Medio (disponibilidad) | Volúmenes para `/var/ossec/etc` y `/var/ossec/queue`, como espera la imagen oficial; migrados con los datos actuales (el agente conserva su ID 001). |
 
 ## Auditoría de dependencias e imágenes
 

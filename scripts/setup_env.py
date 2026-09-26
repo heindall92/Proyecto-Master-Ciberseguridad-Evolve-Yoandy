@@ -11,6 +11,7 @@ import argparse
 import getpass
 import re
 import secrets
+import string
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,14 +78,16 @@ def patch_integration_credentials(path: Path = ENV_PATH) -> bool:
     patches = {
         "OPENSEARCH_USER": "admin",
         "WAZUH_API_USER": "wazuh-wui",
-        "WAZUH_API_PASSWORD": "wazuh-wui",
+        # Antes "wazuh-wui" (la credencial de fábrica); el manager la fija al arrancar (API_PASSWORD)
+        "WAZUH_API_PASSWORD": _generate_wazuh_api_password(),
     }
     # Indexer: una única contraseña fuerte compartida por indexer, manager, dashboard y backend.
     # Estas claves se escriben aunque no sean placeholder, para que las tres coincidan siempre.
     forced: dict[str, str] = {}
     if _is_placeholder(values.get("INDEXER_PASSWORD", "")):
         pw = _generate_indexer_password()
-        forced = {"INDEXER_PASSWORD": pw, "OPENSEARCH_PASSWORD": pw, "DASHBOARD_PASSWORD": pw}
+        # DASHBOARD_PASSWORD = usuario interno kibanaserver del indexador: contraseña distinta de admin
+        forced = {"INDEXER_PASSWORD": pw, "OPENSEARCH_PASSWORD": pw, "DASHBOARD_PASSWORD": _generate_indexer_password()}
     elif values.get("OPENSEARCH_PASSWORD") != values.get("INDEXER_PASSWORD"):
         forced = {"OPENSEARCH_PASSWORD": values["INDEXER_PASSWORD"]}
     changed = False
@@ -130,6 +133,13 @@ def _generate_indexer_password() -> str:
     return f"Vh-{secrets.token_urlsafe(18)}-9a"
 
 
+def _generate_wazuh_api_password() -> str:
+    """Contraseña de la API de Wazuh: 8-64 caracteres con mayúscula, minúscula, número y
+    un símbolo de los que admite su política (.*+?-)."""
+    alnum = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(28))
+    return f"Wz{alnum}.9a-"
+
+
 def _prompt_admin_password(non_interactive: bool, provided: str | None) -> str:
     if provided:
         return _validate_admin_password(provided)
@@ -167,10 +177,11 @@ def _merge_env(
         "SESSION_COOKIE_SECURE": "false",
         "SESSION_COOKIE_SAMESITE": "lax",
         "VITE_ALLOW_OFFLINE_DEMO": "false",
-        # Credenciales por defecto del stack Wazuh 4.9 en Docker (laboratorio)
+        # Stack Wazuh: usuario de la API de fábrica, pero con contraseña propia de esta instalación
+        # (el manager y la consola la aplican al arrancar con API_PASSWORD)
         "OPENSEARCH_USER": "admin",
         "WAZUH_API_USER": "wazuh-wui",
-        "WAZUH_API_PASSWORD": "wazuh-wui",
+        "WAZUH_API_PASSWORD": _generate_wazuh_api_password(),
         "TLS_VERIFY_SSL": "false",
         "AUTO_SYNC_WAZUH_TICKETS": "false",
         "AUTO_CREATE_WEBHOOK_TICKETS": "false",
