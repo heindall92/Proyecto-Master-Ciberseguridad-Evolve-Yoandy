@@ -36,6 +36,7 @@ La regla del proyecto es sencilla: **ningún dato inventado**. Cada métrica sal
 - [Trabajo en equipo y acceso remoto seguro](#trabajo-en-equipo-y-acceso-remoto-seguro)
 - [IA local](#ia-local)
 - [Arranque rápido](#arranque-rápido)
+- [Calidad](#calidad)
 - [Seguridad](#seguridad)
 - [Limitaciones conocidas](#limitaciones-conocidas)
 - [Estructura](#estructura)
@@ -234,6 +235,24 @@ En `.env`: `VALHALLA_PUBLIC_URL=https://<máquina>.<tailnet>.ts.net`, esa misma 
 </details>
 
 **Probar la detección:** con el perfil `labs` el atacante ya lanza ataques periódicos. A mano: `ssh root@localhost -p 2222` y unas cuantas contraseñas; en segundos aparece en SIEM y en Honeypots, y tras varios intentos salta la regla de fuerza bruta.
+
+## <img src="docs/assets/icons/list-checks.svg" width="20" height="20" valign="middle"/> Calidad
+
+Los [requisitos funcionales y no funcionales](docs/REQUISITOS.md) tienen criterios de aceptación comprobables. La suite del backend (56 pruebas) los verifica y genera la [matriz de trazabilidad](docs/TRAZABILIDAD.md) requisito → pruebas → resultado:
+
+```bash
+bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md
+```
+
+| Suite | Pruebas | Qué demuestra |
+|---|---|---|
+| Autenticación y sesión | 11 | Login, revocación, *refresh*, CSRF, cookies `HttpOnly`/`Secure` según HTTP/HTTPS, cabeceras de seguridad. |
+| Usuarios, roles e invitaciones | 13 | Permisos por rol en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad. |
+| Incidentes, métricas y runbooks | 10 | Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente. |
+| Chat, presencia y red | 11 | Privacidad de mensajes directos, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS. |
+| Informes, inteligencia y operaciones | 11 | Huella SHA-256 que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh lo confirma, auditoría sin cuerpos. |
+
+Las pruebas usan SQLite en memoria y dobles de Wazuh, OpenSearch, Ollama y Tailscale: no tocan datos ni servicios reales. Lo que no se puede automatizar (instalación en limpio, diseño adaptable, IA) figura en la matriz con su verificación manual.
 
 ## <img src="docs/assets/icons/shield-check.svg" width="20" height="20" valign="middle"/> Seguridad
 

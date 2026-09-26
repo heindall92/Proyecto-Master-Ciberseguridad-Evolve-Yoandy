@@ -931,6 +931,11 @@ async def reset_password_ep(user_id: int, req: PasswordReset, db: AsyncSession =
 INVITE_TTL = timedelta(hours=24)
 
 
+def _aware(dt: datetime | None) -> datetime | None:
+    """Fechas sin zona horaria (p. ej. SQLite) se interpretan como UTC para poder compararlas."""
+    return dt.replace(tzinfo=timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -992,7 +997,7 @@ async def invite_state(user_id: int, db: AsyncSession = Depends(get_db), _: User
         u.tailscale_login = st["login"][:128]
         await db.commit()
     return {
-        "status": "used" if inv.used_at else "expired" if inv.expires_at < now else "pending",
+        "status": "used" if inv.used_at else "expired" if _aware(inv.expires_at) < now else "pending",
         "created_at": inv.created_at.isoformat(), "expires_at": inv.expires_at.isoformat(),
         "used_at": inv.used_at.isoformat() if inv.used_at else None,
         "tailscale": st, "tailscale_login": u.tailscale_login,
@@ -1026,7 +1031,7 @@ async def unlink_tailscale(user_id: int, db: AsyncSession = Depends(get_db), _: 
 
 async def _valid_invite(db: AsyncSession, token: str) -> tuple[UserInvite, User]:
     inv = (await db.execute(select(UserInvite).where(UserInvite.token_hash == _token_hash(token)))).scalar_one_or_none()
-    if not inv or inv.used_at or inv.expires_at < datetime.now(timezone.utc):
+    if not inv or inv.used_at or _aware(inv.expires_at) < datetime.now(timezone.utc):
         raise HTTPException(410, "El enlace de invitación no es válido, ya se usó o ha caducado. Pide uno nuevo al administrador.")
     u = (await db.execute(select(User).where(User.id == inv.user_id))).scalar_one()
     return inv, u
@@ -3154,6 +3159,9 @@ async def soc_metrics(db: AsyncSession = Depends(get_db), current: User = Depend
     total = len(rows)
     closed = 0
     for created, resolved, status, severity, assignee in rows:
+        # Fechas sin zona (p. ej. SQLite en las pruebas) se interpretan como UTC
+        created = created.replace(tzinfo=timezone.utc) if created and created.tzinfo is None else created
+        resolved = resolved.replace(tzinfo=timezone.utc) if resolved and resolved.tzinfo is None else resolved
         st = (status or "").lower()
         by_sev[severity or "unknown"] = by_sev.get(severity or "unknown", 0) + 1
         if st in closed_states:
