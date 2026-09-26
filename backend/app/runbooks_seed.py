@@ -11,11 +11,11 @@ DEFAULT_RUNBOOKS: list[dict] = [
         "severity_applicable": "high",
         "identification_steps": [
             {"text": "Verificar alertas Wazuh reglas 5710/5712 o grupo cowrie en SIEM.", "command": "GET /api/wazuh/recent-alerts?hours=24"},
-            {"text": "Correlacionar IP origen en Threat Map y Threat Intel (VirusTotal)."},
+            {"text": "Correlacionar la IP de origen en Inteligencia › Mapa e Inteligencia › IOCs (VirusTotal, AbuseIPDB)."},
             {"text": "Revisar sesiones Cowrie: comandos, credenciales probadas, geo."},
         ],
         "containment_steps": [
-            {"text": "Añadir IP a IOC con estado blocked desde Threat Intel.", "command": "POST /api/ioc status=blocked"},
+            {"text": "Marcar la IP como bloqueada en Inteligencia › IOCs.", "command": "POST /api/ioc status=blocked"},
             {"text": "Escalar a ticket en Workspace si supera umbral del monitor."},
             {"text": "Notificar al canal SOC vía chat interno."},
         ],
@@ -40,7 +40,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
         "identification_steps": [
             {"text": "Identificar comando wget/curl/bash en sesión Cowrie."},
             {"text": "Extraer hash del artefacto si está en logs."},
-            {"text": "Consultar hash en Threat Intel (VirusTotal).", "command": "GET /api/virustotal/hash/{hash}"},
+            {"text": "Consultar el hash en Inteligencia › IOCs (VirusTotal).", "command": "GET /api/virustotal/hash/{hash}"},
         ],
         "containment_steps": [
             {"text": "Bloquear IP atacante en IOC."},
@@ -116,7 +116,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
         "severity_applicable": "high",
         "identification_steps": [
             {"text": "Revisar volumen de alertas en dashboard (chart-vol)."},
-            {"text": "Correlacionar IPs en Threat Map."},
+            {"text": "Correlacionar las IPs en Inteligencia › Mapa."},
         ],
         "containment_steps": [
             {"text": "Activar mitigación en firewall/WAF (proveedor)."},
@@ -185,10 +185,10 @@ DEFAULT_RUNBOOKS: list[dict] = [
         "severity_applicable": "medium",
         "identification_steps": [
             {"text": "Alertas Cowrie o IDS de escaneo en SIEM."},
-            {"text": "Verificar origen en Threat Map."},
+            {"text": "Verificar el origen en Inteligencia › Mapa."},
         ],
         "containment_steps": [
-            {"text": "Watchlist IP en Threat Intel."},
+            {"text": "Poner la IP en vigilancia en Inteligencia › IOCs."},
         ],
         "eradication_steps": [
             {"text": "No bloquear prematuramente si es tráfico de lab (attacker)."},
@@ -203,7 +203,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
     {
         "name": "Abuso de API / Credenciales VT",
         "category": "other",
-        "description": "Fallos repetidos en Threat Intel o uso indebido de claves API.",
+        "description": "Fallos repetidos en Inteligencia (IOCs) o uso indebido de claves API.",
         "severity_applicable": "low",
         "identification_steps": [
             {"text": "Errores 401/429 en consultas VirusTotal."},
@@ -213,7 +213,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
             {"text": "Rotar API key del operador afectado."},
         ],
         "eradication_steps": [
-            {"text": "Configurar clave por usuario en perfil Threat Intel."},
+            {"text": "Configurar la clave de VirusTotal del usuario en Inteligencia › IOCs (botón de la llave)."},
         ],
         "recovery_steps": [
             {"text": "Validar cuota VT con check-key."},
@@ -228,7 +228,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
         "description": "Acceso sospechoso a lsass.exe o herramientas de dumping (Sysmon 10).",
         "severity_applicable": "critical",
         "identification_steps": [
-            {"text": "Revisar LSA Monitor y alertas mimikatz/procdump en SIEM."},
+            {"text": "Revisar Activos › Hardening Windows (LSA) y las alertas mimikatz/procdump en SIEM."},
             {"text": "Correlacionar host en agentes Wazuh."},
         ],
         "containment_steps": [
@@ -237,7 +237,7 @@ DEFAULT_RUNBOOKS: list[dict] = [
         ],
         "eradication_steps": [
             {"text": "Aplicar hardening LSA vía playbook (RunAsPPL)."},
-            {"text": "Escanear con Wazuh vulnerability scan."},
+            {"text": "Revisar las vulnerabilidades del equipo en Activos (inventario de Wazuh) y las CVE explotadas en Inteligencia."},
         ],
         "recovery_steps": [
             {"text": "Reimagen o restauración limpia del endpoint."},
@@ -513,6 +513,45 @@ EXTRA_RUNBOOKS: list[dict] = [
 DEFAULT_RUNBOOKS = DEFAULT_RUNBOOKS + EXTRA_RUNBOOKS
 
 
+# Nombres de pantallas antiguos en textos de runbooks ya sembrados (Threat Map, Threat Intel,
+# LSA Monitor…): se sustituyen por la navegación actual en las instalaciones existentes.
+UI_RENAMES: list[tuple[str, str]] = [
+    ('Correlacionar IP origen en Threat Map y Threat Intel (VirusTotal).',
+     'Correlacionar la IP de origen en Inteligencia › Mapa e Inteligencia › IOCs (VirusTotal, AbuseIPDB).'),
+    ('Añadir IP a IOC con estado blocked desde Threat Intel.',
+     'Marcar la IP como bloqueada en Inteligencia › IOCs.'),
+    ('Consultar hash en Threat Intel (VirusTotal).',
+     'Consultar el hash en Inteligencia › IOCs (VirusTotal).'),
+    ('Correlacionar IPs en Threat Map.',
+     'Correlacionar las IPs en Inteligencia › Mapa.'),
+    ('Verificar origen en Threat Map.',
+     'Verificar el origen en Inteligencia › Mapa.'),
+    ('Watchlist IP en Threat Intel.',
+     'Poner la IP en vigilancia en Inteligencia › IOCs.'),
+    ('Fallos repetidos en Threat Intel o uso indebido de claves API.',
+     'Fallos repetidos en Inteligencia (IOCs) o uso indebido de claves API.'),
+    ('Configurar clave por usuario en perfil Threat Intel.',
+     'Configurar la clave de VirusTotal del usuario en Inteligencia › IOCs (botón de la llave).'),
+    ('Revisar LSA Monitor y alertas mimikatz/procdump en SIEM.',
+     'Revisar Activos › Hardening Windows (LSA) y las alertas mimikatz/procdump en SIEM.'),
+    ('Escanear con Wazuh vulnerability scan.',
+     'Revisar las vulnerabilidades del equipo en Activos (inventario de Wazuh) y las CVE explotadas en Inteligencia.'),
+]
+
+
+def _rename_steps(steps):
+    changed = False
+    out = []
+    for st in steps or []:
+        st = dict(st)
+        for old, new in UI_RENAMES:
+            if st.get("text") == old:
+                st["text"] = new
+                changed = True
+        out.append(st)
+    return out, changed
+
+
 async def seed_runbooks_if_empty(db) -> int:
     """Añade los runbooks por defecto que falten (por nombre).
 
@@ -522,6 +561,14 @@ async def seed_runbooks_if_empty(db) -> int:
     from sqlalchemy import select
 
     existing = {n for (n,) in (await db.execute(select(Runbook.name))).all()}
+    # Actualiza los textos con nombres de pantallas antiguos
+    for rb in (await db.execute(select(Runbook))).scalars():
+        if rb.description in dict(UI_RENAMES):
+            rb.description = dict(UI_RENAMES)[rb.description]
+        for phase in ("identification_steps", "containment_steps", "eradication_steps", "recovery_steps", "post_mortem_steps"):
+            steps, changed = _rename_steps(getattr(rb, phase))
+            if changed:
+                setattr(rb, phase, steps)
     added = 0
     for rb in DEFAULT_RUNBOOKS:
         if rb["name"] not in existing:
