@@ -1,0 +1,124 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Valhalla SOC — Integración continua
+#
+# En cada push y en cada Pull Request:
+#   · backend   → lint de errores graves (ruff) + suite pytest + matriz de trazabilidad
+#   · consola   → comprobación de tipos (tsc) + pruebas unitarias (Vitest) + build de producción
+#   · auditoría → pip-audit y npm audit (falla con vulnerabilidades altas o críticas)
+#   · imágenes  → build de las imágenes Docker del backend y del gateway (sin publicar)
+# Además, cada lunes se repite la auditoría: aparecen CVE nuevas aunque el código no cambie.
+# ═══════════════════════════════════════════════════════════════════════
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · lint y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # la misma que la imagen del backend (python:3.12-slim)
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt ruff==0.16.9
+      - name: Lint de errores graves (sintaxis, nombres no definidos)
+        run: ruff check --isolated --select E9,F63,F7,F82 --output-format=github app tests ../scripts ../docs/memoria
+      - name: Pruebas (SQLite en memoria y dobles de Wazuh/OpenSearch/Ollama/Tailscale)
+        env:
+          TRACE_MATRIX: ${{ runner.temp }}/TRAZABILIDAD.md
+        run: python -m pytest tests -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/pytest.xml"
+      - name: Matriz de trazabilidad en el resumen del job
+        if: always()
+        run: if [ -f "$RUNNER_TEMP/TRAZABILIDAD.md" ]; then cat "$RUNNER_TEMP/TRAZABILIDAD.md" >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-pruebas
+          path: |
+            ${{ runner.temp }}/TRAZABILIDAD.md
+            ${{ runner.temp }}/pytest.xml
+          if-no-files-found: ignore
+
+  frontend:
+    name: Consola · tipos, pruebas y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1" # Electron solo hace falta para el .exe de escritorio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # la misma que las imágenes Docker de la consola
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias (lockfile exacto)
+        run: npm ci --no-audit --no-fund
+      - name: Comprobación de tipos
+        run: npm run typecheck
+      - name: Pruebas unitarias
+        run: npm run test:coverage
+      - name: Build de producción
+        run: npm run build
+      - name: El build no pide nada a terceros (fuentes autoalojadas)
+        run: |
+          if grep -rlE "fonts\.(googleapis|gstatic)\.com" app/dist; then
+            echo "::error::El build referencia Google Fonts"; exit 1
+          fi
+          ls app/dist/assets/*.woff2 > /dev/null
+
+  audit:
+    name: Auditoría de dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (backend)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --desc on
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: npm audit (consola, incluidas las dependencias de desarrollo)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  docker:
+    name: Imágenes Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Imagen del backend
+        run: docker build -t valhalla-backend:ci backend
+      - name: Imagen del gateway (nginx + consola compilada)
+        run: docker build -t valhalla-gateway:ci -f nginx/Dockerfile .

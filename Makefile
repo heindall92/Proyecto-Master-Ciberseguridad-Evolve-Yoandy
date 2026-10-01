@@ -3,7 +3,7 @@
 # Single entry point for all dev/ops commands
 # ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: help setup dev dev-front dev-back lint lint-back lint-front fmt test clean install docker-up docker-down
+.PHONY: help setup dev dev-front dev-back lint lint-back lint-front fmt test test-front typecheck check clean install docker-up docker-down
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -40,8 +40,8 @@ lint: lint-back lint-front ## Run all linters
 lint-back: ## Lint backend with ruff
 	cd backend && python -m ruff check app/ --fix
 
-lint-front: ## Lint frontend with ESLint
-	cd frontend/app && npx eslint src/ --ext .ts,.tsx
+lint-front: ## Type-check the console (no ESLint config in the repo; tsc is the gate)
+	cd frontend && npm run typecheck
 
 fmt: ## Format backend code with ruff
 	cd backend && python -m ruff format app/
@@ -50,6 +50,14 @@ fmt: ## Format backend code with ruff
 
 test: ## Run backend tests
 	cd backend && python -m pytest tests/ -v --tb=short
+
+test-front: ## Run console unit tests (Vitest)
+	cd frontend && npm test
+
+typecheck: ## Type-check the console (tsc)
+	cd frontend && npm run typecheck
+
+check: test test-front typecheck ## Everything CI runs locally (tests + types)
 
 test-cov: ## Run tests with coverage report
 	cd backend && python -m pytest tests/ -v --cov=app --cov-report=term-missing
