@@ -70,10 +70,12 @@ def test_prioridad_de_cve_segun_la_formula():
 @pytest.mark.req("RF-11", "RNF-03")
 async def test_hunting_rechaza_consultas_y_ventanas_no_validas():
     async with client_as("analista") as ac:
-        fuera = await ac.get("/api/hunting/run/top_attackers?hours=721")
+        fuera = await ac.get("/api/hunting/run/top_attacker_ips?hours=721")
         inyeccion = await ac.get("/api/hunting/run/DROP%20TABLE")
+        inexistente = await ac.get("/api/hunting/run/no_existe")
         lista = await ac.get("/api/hunting/queries")
     assert fuera.status_code == 422 and inyeccion.status_code == 422
+    assert inexistente.status_code == 404
     assert lista.status_code == 200 and len(lista.json()) >= 7
 
 

@@ -3246,6 +3246,8 @@ async def hunting_queries(current: User = Depends(get_current_user)):
 async def hunting_run(query_id: str = Path(..., pattern=r"^[a-z_]{3,40}$"), hours: int = Query(168, ge=1, le=720), current: User = Depends(get_current_user)):
     if current.role.lower() not in ("admin", "analyst", "analista"):
         raise HTTPException(403, "Solo admin o analista puede ejecutar threat hunting")
+    if query_id not in hunting.HUNT_QUERIES:  # antes respondía 200 con un objeto de error
+        raise HTTPException(404, "Consulta de hunting no encontrada")
     return await hunting.run_query(query_id, hours=hours)
 
 

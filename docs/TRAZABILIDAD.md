@@ -1,6 +1,6 @@
 # Matriz de trazabilidad
 
-Generada automáticamente el 26/09/2026 19:34 al ejecutar la suite (`scripts/run_tests.sh`). Requisitos en [REQUISITOS.md](REQUISITOS.md).
+Generada automáticamente el 01/10/2026 08:16 al ejecutar la suite (`scripts/run_tests.sh`). Requisitos en [REQUISITOS.md](REQUISITOS.md).
 
 **Resultado: 56 de 56 pruebas superadas.**
 
@@ -28,6 +28,6 @@ Generada automáticamente el 26/09/2026 19:34 al ejecutar la suite (`scripts/run
 | **RNF-04** | Auditoría | `test_reports_intel_ops.py::test_toda_escritura_queda_auditada_sin_el_cuerpo` | ✅ 1/1 | — |
 | **RNF-05** | Datos reales | `test_incidents_runbooks.py::test_metricas_sin_datos_no_inventan_nada`<br>`test_reports_intel_ops.py::test_matriz_de_riesgo_con_umbrales_documentados`<br>`test_reports_intel_ops.py::test_si_wazuh_no_confirma_el_bloqueo_no_se_registra` | ✅ 3/3 | revisión de paneles |
 | **RNF-06** | Privacidad | `test_chat_network.py::test_mensaje_directo_solo_lo_leen_sus_participantes`<br>`test_chat_network.py::test_presencia_muestra_la_ip_solo_al_admin_y_al_propio_usuario` | ✅ 2/2 | — |
-| **RNF-07** | Instalación reproducible | — | — | instalación en máquina limpia |
+| **RNF-07** | Instalación reproducible | — | — | instalación desde cero el 01/10/2026 desde el repositorio público, correcta (memoria, §9.2) |
 | **RNF-08** | Usabilidad y diseño adaptable | — | — | capturas en `docs/img/readme` |
-| **RNF-09** | Rendimiento de la API | — | — | medición con `curl -w %{time_total}` |
+| **RNF-09** | Rendimiento de la API | — | — | medición del 01/10/2026 con `curl`: 10 lecturas habituales entre 0,005 y 0,058 s |

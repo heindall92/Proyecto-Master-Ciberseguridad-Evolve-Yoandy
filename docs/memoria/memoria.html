@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Valhalla SOC — Memoria Práctica 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 16mm 0 18mm 0; }
+  @page :first { margin: 0; }
+  :root { --ink:#13201b; --muted:#5d6e66; --line:#d5e0da; --accent:#1f8a5b; --accent-2:#0f5a3b; --soft:#eef6f1; --warn:#a86b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin:0; font: 10.2pt/1.55 Inter, Arial, sans-serif; color: var(--ink); }
+  .page { padding: 0 18mm; }
+  h1, h2, h3 { font-weight: 800; letter-spacing: -.2px; color: var(--accent-2); }
+  h2 { font-size: 17pt; margin: 0 0 10px; padding-top: 4px; border-bottom: 2px solid var(--accent); padding-bottom: 6px; break-after: avoid; }
+  h3 { font-size: 12pt; margin: 18px 0 6px; break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 12px 0 4px; color: var(--ink); break-after: avoid; }
+  section.chapter { break-before: page; }
+  p { margin: 6px 0 8px; text-align: justify; }
+  ul, ol { margin: 4px 0 8px 18px; padding: 0; } li { margin: 2px 0; }
+  code { font: 8.6pt "JetBrains Mono", monospace; background: var(--soft); padding: 1px 4px; border-radius: 3px; }
+  pre { font: 8.4pt/1.45 "JetBrains Mono", monospace; background: #0f1a16; color: #cfe9dc; padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 8.8pt; break-inside: auto; }
+  th { background: var(--accent-2); color: #fff; text-align: left; padding: 5px 7px; font-weight: 600; }
+  td { border-bottom: 1px solid var(--line); padding: 5px 7px; vertical-align: top; }
+  tr { break-inside: avoid; }
+  tr:nth-child(even) td { background: #f7fbf9; }
+  td.id { font-weight: 700; white-space: nowrap; color: var(--accent-2); }
+  td.num { text-align: center; white-space: nowrap; }
+  td.verif { width: 22%; font-size: 8.4pt; }
+  .muted { color: var(--muted); }
+  .note { border-left: 4px solid var(--accent); background: var(--soft); padding: 8px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; break-inside: avoid; }
+  .warn { border-left-color: var(--warn); background: #fff7e8; }
+  .bad { border-left-color: var(--bad); background: #fdeeed; }
+  figure { margin: 10px 0 14px; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  figure.phone img { max-height: 105mm; }
+  figcaption { font-size: 8.4pt; color: var(--muted); margin-top: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid2 figure { margin: 4px 0 8px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 14px; }
+  .kpi { border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 6px; padding: 8px 10px; break-inside: avoid; }
+  .kpi b { display: block; font-size: 17pt; color: var(--accent-2); line-height: 1.1; }
+  .kpi span { font-size: 8.2pt; color: var(--muted); }
+  /* Portada */
+  .cover { height: 297mm; display: flex; flex-direction: column; justify-content: space-between; padding: 22mm 20mm 14mm;
+           background: radial-gradient(ellipse at 15% 0%, #1f8a5b55, transparent 55%), linear-gradient(160deg, #06110d 0%, #0d2219 60%, #133626 100%); color: #e6fff0; }
+  .cover .tag { font: 600 9pt "JetBrains Mono", monospace; letter-spacing: 3px; color: #7fe3b0; }
+  .cover h1 { font-size: 44pt; color: #fff; margin: 14px 0 6px; letter-spacing: 6px; }
+  .cover .sub { font-size: 15pt; color: #a8e8c6; font-weight: 500; }
+  .cover .meta { font-size: 10pt; line-height: 1.8; color: #cfeedd; }
+  .cover .meta b { color: #fff; }
+  .cover .team { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; margin-top: 6px; }
+  .toc { columns: 1; font-size: 10.5pt; }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc li { margin: 4px 0; }
+  .mermaid { text-align: center; margin: 8px 0 12px; }
+  .mermaid svg { width: 100% !important; max-width: 100% !important; height: auto; }
+  section.req-cont { break-before: auto; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ PORTADA ═══════════════════════════ -->
+<div class="cover">
+  <div>
+    <div class="tag">MÁSTER EN CIBERSEGURIDAD · EVOLVE ACADEMY</div>
+    <h1>VALHALLA SOC</h1>
+    <div class="sub">Práctica 3 — De prototipo a producto</div>
+    <p style="margin-top:18px;color:#cfeedd;max-width:150mm;text-align:left">Centro de operaciones de seguridad con SIEM Wazuh, honeypot Cowrie, inteligencia de amenazas e IA local: detecta ataques reales, los investiga y los convierte en informes defendibles.</p>
+  </div>
+  <div class="meta">
+    <b>Grupo {{GRUPO}}</b> · Entrega: 16 de octubre de 2026<br>
+    Repositorio: github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy · etiqueta <b>v1.0-practica3</b>
+    <div class="team">
+      <span><b>Yoandy Ramírez Delgado</b> (coordinación y desarrollo)</span>
+      <span>Rosalino Martínez</span>
+      <span>Julieta Tenti</span>
+      <span>Santiago de Prada</span>
+      <span>svisomar-SP</span>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+<!-- ═══════════════════════════ ÍNDICE ═══════════════════════════ -->
+<section class="chapter">
+<h2>Índice</h2>
+<ol class="toc">
+  <li><a href="#resumen">Resumen ejecutivo</a></li>
+  <li><a href="#contexto">Contexto, objetivos y alcance</a></li>
+  <li><a href="#requisitos">Requisitos</a></li>
+  <li><a href="#arquitectura">Arquitectura y decisiones técnicas</a></li>
+  <li><a href="#producto">El producto: funcionalidades</a></li>
+  <li><a href="#ia">Inteligencia artificial local</a></li>
+  <li><a href="#seguridad">Seguridad: amenazas, secretos y dependencias</a></li>
+  <li><a href="#calidad">Calidad: pruebas y trazabilidad</a></li>
+  <li><a href="#despliegue">Despliegue e instalación desde cero</a></li>
+  <li><a href="#datos">Datos reales: incidencias detectadas y corregidas</a></li>
+  <li><a href="#limitaciones">Limitaciones y trabajo futuro</a></li>
+  <li><a href="#gestion">Gestión del proyecto</a></li>
+  <li><a href="#declaracion-ia">Declaración de uso de IA</a></li>
+  <li><a href="#conclusiones">Conclusiones</a></li>
+  <li><a href="#anexos">Anexos</a></li>
+</ol>
+</section>
+
+<!-- ═══════════════════════════ 1. RESUMEN ═══════════════════════════ -->
+<section class="chapter" id="resumen">
+<h2>1. Resumen ejecutivo</h2>
+<p><b>Valhalla SOC</b> es un centro de operaciones de seguridad completo que funciona en un único equipo con Docker. Un honeypot (Cowrie) recibe ataques reales; Wazuh los detecta, los correlaciona con MITRE ATT&amp;CK y los almacena; y una consola propia (React 19 + FastAPI) los convierte en trabajo de analista: triaje, incidentes con SLA, runbooks NIST, caza de amenazas, inteligencia de vulnerabilidades e informes ejecutivos y de cumplimiento. La IA también es local (Ollama), de modo que ningún dato del SOC sale de la máquina.</p>
+<p>En las prácticas 1 y 2 el equipo construyó un prototipo funcional. La Práctica 3 exigía convertirlo en un <b>producto</b>: que se instale desde cero siguiendo el README, que no muestre datos inventados, que su seguridad esté analizada y que cada requisito tenga una prueba que lo demuestre. Esta memoria documenta ese trabajo y, sobre todo, lo que se descubrió al hacerlo: varios fallos que el prototipo ocultaba.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>25</b><span>requisitos (16 RF · 9 RNF)</span></div>
+  <div class="kpi"><b>56/56</b><span>pruebas automáticas superadas</span></div>
+  <div class="kpi"><b>0</b><span>vulnerabilidades en dependencias (pip-audit · npm audit)</span></div>
+  <div class="kpi"><b>11</b><span>secciones de la consola rediseñadas</span></div>
+</div>
+
+<h3>Resultados principales</h3>
+<ul>
+  <li><b>Producto instalable</b>: un instalador para Linux y otro para Windows generan secretos únicos y certificados TLS propios, levantan el stack, descargan el modelo de IA y configuran Wazuh. Se validó con una instalación desde cero a partir del repositorio público (capítulo 9).</li>
+  <li><b>Seguridad revisada a fondo</b>: modelo STRIDE con fronteras de confianza; auditoría de dependencias e imágenes (de 11 paquetes Python y 26 avisos npm vulnerables a 0); corrección de credenciales de fábrica en Wazuh, aislamiento del laboratorio de ataque y limpieza de secretos del historial de Git.</li>
+  <li><b>Calidad demostrable</b>: suite de 56 pruebas etiquetadas por requisito que genera automáticamente la matriz de trazabilidad.</li>
+  <li><b>Trabajo en equipo y acceso remoto seguro</b>: varios analistas a la vez con roles, chat privado, presencia y avisos en directo; invitaciones de un solo uso y acceso desde el móvil solo por HTTPS a través de una VPN (Tailscale).</li>
+  <li><b>Datos honestos</b>: se encontraron y corrigieron fuentes de datos falsos (por ejemplo, el propio backend generaba unas 2.400 «sesiones de ataque» al día contra el honeypot) y cada métrica documenta su fórmula y sus limitaciones.</li>
+</ul>
+</section>
+
+<!-- ═══════════════════════════ 2. CONTEXTO ═══════════════════════════ -->
+<section class="chapter" id="contexto">
+<h2>2. Contexto, objetivos y alcance</h2>
+<h3>2.1 Punto de partida</h3>
+<p>Al empezar la Práctica 3, Valhalla SOC era un prototipo con buena base técnica (Wazuh, Cowrie, Ollama, FastAPI y React integrados con Docker Compose) pero con los problemas típicos de un prototipo: pantallas con datos de ejemplo, varias vistas solapadas, una instalación que solo funcionaba en la máquina del equipo, secretos en el historial del repositorio y ninguna prueba que respaldara lo que la aplicación decía hacer.</p>
+<h3>2.2 Objetivos de la Práctica 3</h3>
+<ol>
+  <li>Convertir el prototipo en un producto que cualquiera pueda instalar desde cero con el README.</li>
+  <li>Eliminar cualquier dato inventado: toda cifra debe salir del SIEM, de la base de datos o de una fuente citada.</li>
+  <li>Analizar la seguridad del propio SOC (STRIDE), gestionar secretos y auditar dependencias.</li>
+  <li>Definir requisitos verificables y demostrarlos con pruebas y una matriz de trazabilidad.</li>
+  <li>Rediseñar la consola para el trabajo diario de varios analistas, también desde el móvil.</li>
+</ol>
+<h3>2.3 Alcance</h3>
+<p>Valhalla SOC es un SOC de <b>laboratorio y para equipos pequeños</b>. Está pensado para ejecutarse en una red local o tras una VPN, no para exponerse directamente a Internet. El honeypot y el atacante automático forman parte del laboratorio y permiten generar actividad real que analizar; en un despliegue real se sustituirían por los registros de la organización.</p>
+</section>
+
+<!-- ═══════════════════════════ 3. REQUISITOS ═══════════════════════════ -->
+<section class="chapter" id="requisitos">
+<h2>3. Requisitos</h2>
+<p>Cada requisito tiene un criterio de aceptación comprobable y una forma de verificación: automática (una o varias pruebas de la suite, etiquetadas con <code>@pytest.mark.req</code>) o manual cuando no es razonable automatizarla (instalación en una máquina limpia, diseño adaptable, comportamiento de la IA). La fuente es <code>docs/REQUISITOS.md</code>.</p>
+{{REQ_TABLES}}
+</section>
+
+<!-- ═══════════════════════════ 4. ARQUITECTURA ═══════════════════════════ -->
+<section class="chapter" id="arquitectura">
+<h2>4. Arquitectura y decisiones técnicas</h2>
+<h3>4.1 Visión general</h3>
+<div class="mermaid">
+flowchart LR
+    A[Atacante<br/>Kali · lab-net] -->|SSH / Telnet| C[Cowrie<br/>honeypot]
+    C -->|registros| M[Wazuh Manager<br/>reglas + ATT&CK]
+    AG[Agente Wazuh] --> M
+    M --> I[(Wazuh Indexer<br/>OpenSearch)]
+    I --> B[Backend<br/>FastAPI]
+    M -->|API| B
+    B <--> P[(PostgreSQL)]
+    B <--> O[Ollama<br/>IA local]
+    B -->|REST + WebSocket| F[Consola<br/>React 19]
+    F --> U((Analistas))
+    T[Tailscale<br/>HTTPS] -.-> F
+</div>
+<p>El flujo es: el atacante llega al señuelo; Cowrie registra cada conexión, contraseña y comando; el manager de Wazuh aplica reglas propias (fuerza bruta, acceso tras fuerza bruta, escaneo…) mapeadas a ATT&amp;CK y guarda las alertas en el indexador; el backend lee el SIEM, abre incidentes según los monitores, calcula métricas y enriquece CVE; y la consola presenta todo a los analistas.</p>
+
+<h3>4.2 Componentes</h3>
+<table>
+<thead><tr><th>Contenedor</th><th>Función</th><th>Exposición</th></tr></thead>
+<tbody>
+<tr><td><code>dashboard</code></td><td>Consola React 19 (Vite 7) y proxy hacia la API</td><td>3000 (LAN) · HTTPS por VPN</td></tr>
+<tr><td><code>backend</code></td><td>API FastAPI, WebSocket del chat, lógica del SOC</td><td>8000</td></tr>
+<tr><td><code>postgres</code></td><td>Usuarios, incidentes, runbooks, informes, auditoría, chat</td><td>Solo red interna</td></tr>
+<tr><td><code>wazuh.manager</code></td><td>Reglas, agentes, API de Wazuh, escáner de vulnerabilidades</td><td>1514/1515 · API solo en 127.0.0.1</td></tr>
+<tr><td><code>wazuh.indexer</code></td><td>Almacén de alertas e inventario (OpenSearch)</td><td>Solo red interna</td></tr>
+<tr><td><code>wazuh.dashboard</code></td><td>Consola nativa de Wazuh</td><td>5601 (HTTPS)</td></tr>
+<tr><td><code>cowrie</code></td><td>Honeypot SSH/Telnet</td><td>2222/2223</td></tr>
+<tr><td><code>ollama</code></td><td>Modelo de IA local (qwen2.5:3b-instruct)</td><td>Solo 127.0.0.1</td></tr>
+<tr><td><code>attacker</code>, <code>wazuh.agent</code></td><td>Laboratorio (perfil <code>labs</code>): atacante automático aislado en <code>lab-net</code> y agente</td><td>—</td></tr>
+<tr><td><code>ts-whois</code></td><td>Identidad de Tailscale de cada sesión, solo lectura (perfil <code>tailscale</code>)</td><td>Red aislada <code>ts-internal</code></td></tr>
+</tbody></table>
+
+<h3>4.3 Decisiones técnicas relevantes</h3>
+<table>
+<thead><tr><th style="width:26%">Decisión</th><th>Motivo</th></tr></thead>
+<tbody>
+<tr><td>Todo en Docker Compose con perfiles</td><td>Un único comando levanta el SOC; los perfiles separan el laboratorio (<code>labs</code>), la VPN (<code>tailscale</code>) y la publicación con TLS (<code>prod</code>).</td></tr>
+<tr><td>IA local (Ollama) en lugar de un servicio en la nube</td><td>Los datos de un SOC (IPs, usuarios, incidentes) no deben salir de la organización. Coste cero y funcionamiento sin conexión.</td></tr>
+<tr><td>La IA redacta, no aporta datos</td><td>Todas las cifras se calculan en el backend; la IA solo resume y sugiere. Evita alucinaciones en métricas e informes.</td></tr>
+<tr><td>Informes congelados con huella SHA-256</td><td>Un informe emitido no puede cambiar en silencio: su contenido canónico tiene una huella verificable.</td></tr>
+<tr><td>Autorización siempre en el servidor</td><td>El navegador no es de confianza: roles, acceso a chats privados e IP real se deciden en el backend.</td></tr>
+<tr><td>Acceso remoto solo por VPN con HTTPS</td><td>Publicar un SOC en Internet sería exponer su superficie; Tailscale da HTTPS con certificado válido y comparte solo esta máquina.</td></tr>
+<tr><td>Volúmenes persistentes para el manager de Wazuh</td><td>La imagen oficial espera <code>/var/ossec/etc</code> y <code>/var/ossec/queue</code> en volúmenes; sin ellos, recrear el contenedor perdía agentes y catálogo de vulnerabilidades.</td></tr>
+</tbody></table>
+</section>
+
+<!-- ═══════════════════════════ 5. PRODUCTO ═══════════════════════════ -->
+<section class="chapter" id="producto">
+<h2>5. El producto: funcionalidades</h2>
+<p>La consola se rediseñó por completo en esta práctica: sistema de diseño propio (tema claro y oscuro con acentos, superficies translúcidas, iconos Lucide), navegación con 11 secciones, buscador de comandos (<code>Ctrl + K</code>), centro de ayuda, interfaz en español e inglés y una vista móvil con barra inferior. Cada sección se revisó para eliminar datos de ejemplo y declarar sus limitaciones.</p>
+
+<figure><img src="../img/readme/overview.png"><figcaption>Figura 1. Vista general: alertas, críticas, agentes e incidentes del periodo, con volumen, severidad y atacantes principales.</figcaption></figure>
+
+<h3>5.1 Detección: SIEM y honeypot</h3>
+<p><b>SIEM</b> muestra las alertas de Wazuh en vivo con filtros, las técnicas ATT&amp;CK observadas y acciones directas (crear incidente, bloquear la IP). <b>Honeypots</b> reconstruye cada sesión de Cowrie paso a paso: contraseñas probadas, reglas que saltan, accesos tras fuerza bruta y credenciales más usadas.</p>
+<div class="grid2">
+  <figure><img src="../img/readme/siem.png"><figcaption>Figura 2. SIEM.</figcaption></figure>
+  <figure><img src="../img/readme/honeypots.png"><figcaption>Figura 3. Honeypots.</figcaption></figure>
+</div>
+
+<h3>5.2 Respuesta: Workspace y Runbooks</h3>
+<p><b>Workspace</b> es un tablero kanban de incidentes (triaje → investigación → contención → resuelto) con SLA, asignación, comentarios, evidencias con SHA-256 e historial de cada cambio. Al cerrar un incidente se clasifica como verdadero positivo, falso positivo o benigno. <b>Runbooks</b> contiene 20 procedimientos con las cinco fases de NIST SP 800-61 y comandos reales, editables por los analistas.</p>
+<div class="grid2">
+  <figure><img src="../img/readme/workspace.png"><figcaption>Figura 4. Workspace de incidentes.</figcaption></figure>
+  <figure><img src="../img/readme/runbooks.png"><figcaption>Figura 5. Runbooks NIST SP 800-61.</figcaption></figure>
+</div>
+
+<h3>5.3 Inteligencia y activos</h3>
+<p><b>Inteligencia</b> reúne la reputación de indicadores (VirusTotal, AbuseIPDB) con lista de vigilancia; las CVE explotadas del catálogo CISA KEV priorizadas con una fórmula documentada (KEV 40 + CVSS×4 + exploit público 15 + ransomware 5, máximo 100) y enriquecidas con NVD, GitHub y Exploit-DB; y el mapa de origen de ataques. <b>Activos</b> lista los equipos con agente Wazuh, su inventario y sus vulnerabilidades reales, detectadas por el escáner de Wazuh.</p>
+<div class="grid2">
+  <figure><img src="../img/readme/intel_vulns.png"><figcaption>Figura 6. CVE explotadas priorizadas.</figcaption></figure>
+  <figure><img src="../img/readme/assets.png"><figcaption>Figura 7. Activos y vulnerabilidades por equipo.</figcaption></figure>
+</div>
+
+<h3>5.4 Métricas, informes y cumplimiento</h3>
+<p><b>Bifröst</b> calcula las métricas del SOC (MTTR con la fecha real de resolución, antigüedad de los abiertos, tasa de resolución, cobertura ATT&amp;CK) y ofrece siete consultas de caza de amenazas exportables. <b>Informes</b> genera el informe SOC, el resumen ejecutivo y el <b>Informe GRC</b>: matriz de riesgo 5×5, madurez NIST CSF 2.0, plan de tratamiento, cobertura ATT&amp;CK y correspondencia multinorma (ENS, ISO 27001, NIS2, ISO 42001). Cada informe se guarda con identificador, clasificación TLP y huella SHA-256.</p>
+<div class="grid2">
+  <figure><img src="../img/readme/bifrost.png"><figcaption>Figura 8. Bifröst: métricas y threat hunting.</figcaption></figure>
+  <figure><img src="../img/readme/report_grc.png"><figcaption>Figura 9. Informe GRC.</figcaption></figure>
+</div>
+
+<h3>5.5 Equipo y operación</h3>
+<p><b>Usuarios</b> gestiona roles (administrador, analista, reportero, lector) con salvaguardas (no se puede borrar al último administrador, a uno mismo ni al usuario de la IA), muestra las sesiones abiertas por dispositivo y red, y genera <b>invitaciones de un solo uso</b>. <b>Sistema</b> muestra la salud de cada integración, los monitores de detección y el registro de auditoría. El <b>chat</b> tiene canal global y mensajes directos privados; <code>@ia</code> responde en el canal.</p>
+<div class="grid2">
+  <figure><img src="../img/readme/users.png"><figcaption>Figura 10. Usuarios, roles y sesiones.</figcaption></figure>
+  <figure><img src="../img/readme/system.png"><figcaption>Figura 11. Sistema: salud de las integraciones.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure class="phone"><img src="../img/readme/mobile_overview.png"><figcaption>Figura 12. Vista móvil.</figcaption></figure>
+  <figure class="phone"><img src="../img/readme/mobile_intel.png"><figcaption>Figura 13. Inteligencia en móvil.</figcaption></figure>
+</div>
+</section>
+
+<!-- ═══════════════════════════ 6. IA ═══════════════════════════ -->
+<section class="chapter" id="ia">
+<h2>6. Inteligencia artificial local</h2>
+<p>Valhalla integra un modelo de lenguaje local, <b>Qwen2.5-3B-Instruct</b>, servido por Ollama dentro de Docker. No hay llamadas a servicios externos ni claves de API.</p>
+<h3>6.1 Usos</h3>
+<ul>
+  <li><b>Triaje de alertas</b>: propone riesgo, técnica ATT&amp;CK, acción recomendada y probabilidad de falso positivo, apoyándose en los runbooks y en MITRE (recuperación de contexto).</li>
+  <li><b>Asistente del chat</b> (<code>@ia</code>), con un glosario del SOC para no inventar términos; «resumen del día» adjunta el informe generado.</li>
+  <li><b>Resumen ejecutivo</b> opcional en los informes.</li>
+</ul>
+<h3>6.2 Principio de diseño: la IA redacta, no aporta datos</h3>
+<p>Todas las cifras de paneles e informes se calculan en el backend a partir del SIEM y de la base de datos. La IA recibe esos datos ya calculados y solo los redacta. Así, aunque el modelo se equivoque al expresarse, no puede introducir números falsos en un informe que se va a presentar a dirección.</p>
+<h3>6.3 Limitaciones</h3>
+<ul>
+  <li>En CPU genera unas 3 palabras por segundo; por eso el resumen de los informes es opcional.</li>
+  <li>Un modelo de 3B parámetros tiene un razonamiento limitado: sirve para redactar y sugerir, no para decidir. Las decisiones (bloquear, cerrar, escalar) siempre las toma un analista.</li>
+  <li>La licencia del modelo (<i>Qwen Research License</i>) no permite el uso comercial; para un despliegue comercial basta con cambiar <code>OLLAMA_MODEL</code> por un modelo con licencia permisiva.</li>
+</ul>
+</section>
+
+<!-- ═══════════════════════════ 7. SEGURIDAD ═══════════════════════════ -->
+<section class="chapter" id="seguridad">
+<h2>7. Seguridad: amenazas, secretos y dependencias</h2>
+<p>Un SOC es un objetivo en sí mismo: guarda incidentes, IPs, credenciales de integraciones y la capacidad de bloquear equipos. La seguridad se abordó en cuatro frentes: modelo de amenazas, controles en el código, gestión de secretos y cadena de suministro. El detalle completo está en <code>docs/STRIDE.md</code> y <code>SECURITY.md</code>.</p>
+
+<h3>7.1 Modelo de amenazas STRIDE</h3>
+<p>Se identificaron cinco fronteras de confianza: usuario → consola, SIEM → backend (webhook), backend → servicios internos, atacante → honeypot (zona hostil) y backend → fuentes externas. Para cada categoría STRIDE se documentaron las amenazas, su mitigación, la prueba o fichero que la comprueba y el riesgo residual. Resumen:</p>
+<table>
+<thead><tr><th style="width:15%">Categoría</th><th>Amenazas principales</th><th>Mitigaciones</th></tr></thead>
+<tbody>
+<tr><td><b>Suplantación</b></td><td>Fuerza bruta, IP falsificada, robo de sesión, webhook falso, cuenta VPN ajena</td><td>Límites por IP real (solo desde proxies de confianza), JWT en cookies <code>HttpOnly</code>/<code>Secure</code> con revocación, HMAC en el webhook, identidad Tailscale por sesión con alerta</td></tr>
+<tr><td><b>Manipulación</b></td><td>CSRF, informe alterado, XSS, datos hostiles del honeypot, adjuntos maliciosos</td><td>Doble cookie CSRF, huella SHA-256, validación Pydantic y neutralización de HTML, consultas por lista blanca, adjuntos por tipo y tamaño</td></tr>
+<tr><td><b>Repudio</b></td><td>Negar un cambio, perder registros</td><td>Auditoría de toda escritura (usuario, IP, ruta, resultado, nunca el cuerpo) e historial por incidente</td></tr>
+<tr><td><b>Divulgación</b></td><td>Leer DMs ajenos, IPs de compañeros, secretos en registros, datos a la nube</td><td>DMs solo para sus participantes (tampoco el administrador), IP visible solo a admin y al propio usuario, IA local</td></tr>
+<tr><td><b>Denegación</b></td><td>Inundar API o chat, consultas costosas, ruido interno</td><td>Límites de escritura y de chat, ventanas acotadas, sondas que no tocan el honeypot</td></tr>
+<tr><td><b>Elevación</b></td><td>Rol insuficiente que actúa, autoasignarse rol, compromiso del backend</td><td>Roles en cada endpoint, solo admin cambia roles, socket de Tailscale aislado en un contenedor sin privilegios</td></tr>
+</tbody></table>
+
+<h3>7.2 Hallazgos corregidos durante la revisión</h3>
+<p>Revisar la propia instalación con mentalidad de atacante sacó a la luz problemas que el prototipo arrastraba:</p>
+<table>
+<thead><tr><th>Hallazgo</th><th style="width:9%">Riesgo</th><th>Corrección</th></tr></thead>
+<tbody>
+<tr><td>La API de Wazuh usaba la credencial de fábrica <code>wazuh-wui</code> y era alcanzable desde la LAN y desde el contenedor atacante</td><td>Alto</td><td>Contraseña propia por instalación aplicada al arrancar; puerto solo en 127.0.0.1</td></tr>
+<tr><td>Usuarios de demostración del indexador con contraseña pública (<code>readall</code>, <code>kibanaserver</code>…)</td><td>Alto</td><td>Contraseña propia de <code>kibanaserver</code> y eliminación del resto en el arranque</td></tr>
+<tr><td>Certificados de Wazuh (con claves privadas) y copias de la BD en el repositorio público</td><td>Alto</td><td>Historial reescrito con <code>git filter-repo</code> en las 6 ramas; certificados generados en cada instalación</td></tr>
+<tr><td>Una instalación nueva dejaba la contraseña de PostgreSQL del ejemplo</td><td>Alto</td><td><code>setup_env.py</code> la genera aleatoria</td></tr>
+<tr><td>El atacante del laboratorio compartía red con la BD, Wazuh y Ollama</td><td>Medio</td><td>Red <code>lab-net</code> solo con el honeypot</td></tr>
+<tr><td><code>X-Forwarded-For</code> aceptado de cualquiera: IP falsificable y un único cupo de login para todos</td><td>Medio</td><td>Solo desde proxies de confianza, recorriendo la cadena desde la derecha</td></tr>
+<tr><td>Mensajes directos enviados por WebSocket a todos los conectados</td><td>Medio</td><td>El servidor decide quién recibe cada evento</td></tr>
+<tr><td>Acceso por la VPN sin cifrar y a todos los puertos de Docker</td><td>Medio</td><td>Solo HTTPS (<code>tailscale serve</code>) y cortafuegos persistente para el resto</td></tr>
+</tbody></table>
+
+<h3>7.3 Gestión de secretos</h3>
+<p>Ningún secreto vive en el repositorio. <code>setup_env.py</code> genera en cada instalación la clave de firma de sesiones, el secreto del webhook, la contraseña de administrador y las de PostgreSQL, el indexador, <code>kibanaserver</code> y la API de Wazuh; <code>gen_certs.sh</code> crea los certificados TLS con el generador oficial; y las credenciales del indexador se cargan en el keystore de Wazuh por la entrada estándar, sin pasar por la línea de comandos. Las contraseñas de usuarios se guardan con bcrypt y los enlaces de invitación como SHA-256.</p>
+
+<h3>7.4 Cadena de suministro</h3>
+<table>
+<thead><tr><th>Herramienta</th><th>Alcance</th><th>Antes</th><th>Después</th></tr></thead>
+<tbody>
+<tr><td>pip-audit</td><td>Dependencias Python</td><td>11 paquetes vulnerables</td><td><b>0</b></td></tr>
+<tr><td>npm audit</td><td>Dependencias de la consola</td><td>26 avisos (1 crítico)</td><td><b>0</b></td></tr>
+<tr><td>Trivy</td><td>Imagen de la consola</td><td>49 altos/críticos</td><td><b>0</b> (Node 22 LTS, Vite 7, <code>npm ci</code>)</td></tr>
+<tr><td>Trivy</td><td>Imagen del backend</td><td>44 altos</td><td>44 sin parche publicado por Debian (se recogen al reconstruir)</td></tr>
+</tbody></table>
+<p>Además se revisaron las licencias de todas las dependencias (<code>THIRD_PARTY_NOTICES.md</code>): se eliminaron PyMuPDF (AGPL-3.0, incompatible con la GPLv2 del proyecto y sin uso) y <code>react-leaflet</code> (licencia Hippocratic, que añade restricciones de uso), y se fijaron por versión o digest las imágenes que usaban <code>latest</code>.</p>
+</section>
+
+<!-- ═══════════════════════════ 8. CALIDAD ═══════════════════════════ -->
+<section class="chapter" id="calidad">
+<h2>8. Calidad: pruebas y trazabilidad</h2>
+<p>Al empezar la práctica había 17 pruebas, y 11 de ellas ni siquiera arrancaban: el modelo usaba un tipo de columna de PostgreSQL que la base de datos de pruebas no entendía. La suite actual tiene <b>56 pruebas</b> que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos ni servicios reales.</p>
+<pre>bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md</pre>
+<table>
+<thead><tr><th>Bloque</th><th style="width:9%">Pruebas</th><th>Qué demuestra</th></tr></thead>
+<tbody>
+<tr><td>Autenticación y sesión</td><td class="num">11</td><td>Login, revocación, <i>refresh</i>, CSRF, cookies según HTTP/HTTPS, cabeceras de seguridad</td></tr>
+<tr><td>Usuarios, roles e invitaciones</td><td class="num">13</td><td>Permisos en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad</td></tr>
+<tr><td>Incidentes, métricas y runbooks</td><td class="num">10</td><td>Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente</td></tr>
+<tr><td>Chat, presencia y red</td><td class="num">11</td><td>Privacidad de DMs, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS</td></tr>
+<tr><td>Informes, inteligencia y operaciones</td><td class="num">11</td><td>Huella que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh confirma, auditoría sin cuerpos</td></tr>
+</tbody></table>
+<p>Las pruebas también encontraron fallos reales: comparaciones de fechas sin zona horaria en invitaciones y métricas, que se corrigieron en el código.</p>
+<h3>Matriz de trazabilidad</h3>
+<p>Cada prueba lleva la etiqueta de los requisitos que verifica; al ejecutar la suite se genera la matriz requisito → pruebas → resultado. Resultado de la última ejecución: <b>{{TRACE_SUMMARY}}</b></p>
+{{TRACE_TABLE}}
+</section>
+
+<!-- ═══════════════════════════ 9. DESPLIEGUE ═══════════════════════════ -->
+<section class="chapter" id="despliegue">
+<h2>9. Despliegue e instalación desde cero</h2>
+<h3>9.1 Instalador</h3>
+<p>Los instaladores (<code>install.sh</code> para Linux/macOS/WSL e <code>install.ps1</code> para Windows) siguen siete pasos: comprobar requisitos, preparar el repositorio, generar secretos únicos, generar los certificados TLS de Wazuh, levantar el stack, esperar a que se descargue el modelo de IA y configurar el conector de vulnerabilidades de Wazuh.</p>
+<pre>git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc
+cd valhalla-soc
+./install.sh</pre>
+<h3>9.2 Prueba de instalación desde cero</h3>
+<p>Para validar el requisito RNF-07 se hizo una instalación completa siguiendo el README, el 1 de octubre de 2026: se clonó el repositorio público de GitHub en una carpeta nueva de la máquina del laboratorio (sin certificados, sin <code>.env</code>, sin volúmenes previos) y se ejecutó <code>./install.sh</code> sin intervención.</p>
+<div class="note bad"><b>Primer intento: fallo.</b> <code>./install.sh</code> devolvía <i>Permission denied</i>: el instalador y los scripts no tenían permiso de ejecución en Git, así que nadie que siguiera el README habría podido instalar. Se corrigió en el repositorio (commit <code>e03a3ec</code>) y se repitió la prueba desde un clon nuevo.</div>
+<p><b>Segundo intento: correcto en 5 minutos y 12 segundos</b>, con los siete pasos completados. Después se verificó que la instalación funcionaba, no solo que el instalador terminaba:</p>
+<table>
+<thead><tr><th>Comprobación</th><th style="width:30%">Resultado</th></tr></thead>
+<tbody>
+<tr><td>Servicios del stack (con el laboratorio)</td><td>11 en marcha</td></tr>
+<tr><td>Salud de la API y login de <code>admin</code> con la contraseña generada</td><td>Correctos (200)</td></tr>
+<tr><td>Backend conectado a Wazuh con la contraseña de API propia</td><td>Manager, indexador y honeypot activos</td></tr>
+<tr><td>Usuarios internos del indexador</td><td>Solo <code>admin</code> y <code>kibanaserver</code></td></tr>
+<tr><td>API de Wazuh publicada solo en localhost</td><td>Sí (127.0.0.1:55000)</td></tr>
+<tr><td>Consola de Wazuh (<code>https://localhost:5601</code>)</td><td>Responde</td></tr>
+<tr><td>Modelo de IA descargado</td><td>qwen2.5:3b-instruct (1,9 GB)</td></tr>
+<tr><td>Agente del laboratorio registrado y honeypot recibiendo ataques</td><td>Sí (35 eventos en los primeros minutos)</td></tr>
+<tr><td>Suite de pruebas en la instalación limpia</td><td>56/56</td></tr>
+</tbody></table>
+<p>No se esperó a que el escáner de vulnerabilidades terminara de cargar su catálogo (unos 30 minutos tras la instalación); esa parte se verificó en la instalación principal, donde el índice contiene las vulnerabilidades reales del agente.</p>
+<h3>9.3 Acceso remoto seguro</h3>
+<p>Para usar Valhalla desde el móvil o desde fuera de la red se usa Tailscale: <code>tailscale serve</code> publica la consola en <code>https://&lt;máquina&gt;.&lt;tailnet&gt;.ts.net</code> con certificado válido; un cortafuegos persistente (<code>scripts/vpn-firewall.sh</code>) cierra a la VPN todos los puertos de Docker, de modo que no hay forma de entrar sin cifrar; y el botón «Invitar» genera un enlace que comparte solo esta máquina, no la red. Cuando alguien inicia sesión, los administradores reciben un aviso en directo con su usuario, dispositivo y cuenta de VPN.</p>
+<h3>9.4 Operación diaria</h3>
+<p>Para el día a día en el equipo del laboratorio se preparó un lanzador de Windows de doble clic que enciende la máquina virtual, levanta los servicios, comprueba que la consola y la API responden y abre Valhalla en el navegador; y otro que la apaga de forma ordenada.</p>
+</section>
+
+<!-- ═══════════════════════════ 10. DATOS ═══════════════════════════ -->
+<section class="chapter" id="datos">
+<h2>10. Datos reales: incidencias detectadas y corregidas</h2>
+<p>La regla «ningún dato inventado» obligó a revisar de dónde salía cada cifra. Esa revisión descubrió varios problemas que el prototipo ocultaba:</p>
+<ul>
+  <li><b>El backend atacaba a su propio honeypot.</b> El widget de salud comprobaba Cowrie abriendo una conexión TCP a su puerto SSH; el honeypot la registraba como sesión de ataque. El backend aparecía como «atacante nº 1» con unas 2.400 sesiones falsas al día. Se cambió la comprobación por una consulta al DNS interno de Docker y se eliminaron del SIEM los 2.438 eventos falsos con un script auditado (copia de seguridad previa y salvaguarda). El incidente que habían generado se cerró como falso positivo.</li>
+  <li><b>El escáner de vulnerabilidades nunca llegaba a analizar.</b> El catálogo de la imagen de Wazuh era de 2024 y le faltaban unos 3 millones de cambios que el servidor de Wazuh entrega con límite de peticiones: ponerlo al día tardaba días. Se cargó la instantánea completa más reciente; el índice pasó de 0 a las 12 vulnerabilidades reales del equipo.</li>
+  <li><b>El atacante de laboratorio no ejecutaba comandos.</b> Su imagen no tenía cliente Telnet y el error se ocultaba; ahora se instala y, si falta, se registra.</li>
+  <li><b>Métricas mal calculadas.</b> El MTTR usaba la fecha de última modificación (un comentario posterior lo alteraba); ahora usa la de resolución. La cobertura ATT&amp;CK de Bifröst y la del Informe GRC no coincidían; ahora salen de la misma fuente.</li>
+  <li><b>Auditoría perdida.</b> Entre las 18:25 y las 18:41 UTC del 25/09/2026 la auditoría falló en silencio por una columna inexistente; se corrigió, se declaró la pérdida y los fallos de auditoría ya se registran como error.</li>
+</ul>
+<div class="note">Cuando falta un dato, la interfaz lo dice («sin datos», «no analizado», «sin puntuar») en lugar de mostrar un valor de ejemplo. Por ejemplo, el mapa de ataques del laboratorio aparece vacío porque las IPs son privadas y no se pueden geolocalizar, y así lo indica.</div>
+</section>
+
+<!-- ═══════════════════════════ 11. LIMITACIONES ═══════════════════════════ -->
+<section class="chapter" id="limitaciones">
+<h2>11. Limitaciones y trabajo futuro</h2>
+<table>
+<thead><tr><th style="width:32%">Limitación</th><th>Mejora propuesta</th></tr></thead>
+<tbody>
+<tr><td>Catálogo de vulnerabilidades fijado a una instantánea (16/09/2026)</td><td>Automatizar la actualización del enlace de la instantánea o volver a la actualización en línea cuando el catálogo esté al día.</td></tr>
+<tr><td>Consola por HTTP en la red local</td><td>Usar también en la LAN el acceso por Tailscale o el perfil <code>prod</code> con nginx y TLS.</td></tr>
+<tr><td>Vinculación de la cuenta VPN por confianza en el primer uso</td><td>Vincular solo la cuenta que acepta la invitación de Tailscale (ya se hace cuando hay clave de API).</td></tr>
+<tr><td>Auditoría en la misma base de datos que administra el administrador</td><td>Exportarla al SIEM (solo añadir) o firmarla.</td></tr>
+<tr><td>IA de 3B en CPU: lenta y de razonamiento limitado</td><td>Modelo mayor con GPU o servicio local dedicado.</td></tr>
+<tr><td>Sin límites de CPU/memoria en algunos contenedores</td><td>Definir <code>mem_limit</code>/<code>cpus</code> en Compose.</td></tr>
+<tr><td>Pruebas automáticas solo del backend</td><td>Pruebas de extremo a extremo de la consola (Playwright).</td></tr>
+<tr><td>El atacante de laboratorio envía comandos antes de que Cowrie termine el login, que se registran como intentos de usuario</td><td>Ajustar la sincronización del guion del laboratorio.</td></tr>
+</tbody></table>
+</section>
+
+<!-- ═══════════════════════════ 12. GESTIÓN ═══════════════════════════ -->
+<section class="chapter" id="gestion">
+<h2>12. Gestión del proyecto</h2>
+<h3>12.1 Cronología</h3>
+<table>
+<thead><tr><th style="width:22%">Fase</th><th style="width:16%">Periodo</th><th>Resultado</th></tr></thead>
+<tbody>
+<tr><td>Práctica 1</td><td>abril 2026</td><td>Integración inicial: Wazuh, Cowrie, Ollama y primera consola.</td></tr>
+<tr><td>Práctica 2</td><td>mayo 2026</td><td>Funcionalidades de SOC (incidentes, monitores, informes), autenticación y roles, despliegue.</td></tr>
+<tr><td>Práctica 3</td><td>sept.–oct. 2026</td><td>Rediseño completo, datos reales, seguridad, pruebas, instalación desde cero y acceso remoto seguro.</td></tr>
+</tbody></table>
+<p>El repositorio acumula 204 commits; unos 55 corresponden a la Práctica 3. El trabajo se organizó en ramas (<code>ui/premium-redesign</code> para la Práctica 3) y se unió a <code>main</code> por avance directo una vez revisado. Cada commit describe el problema, la causa y la corrección, de modo que el historial sirve también como registro de decisiones.</p>
+<h3>12.2 Equipo</h3>
+<p>El proyecto lo firman cinco miembros. En la Práctica 3, la coordinación, el desarrollo y la documentación los llevó principalmente Yoandy Ramírez Delgado; el resto del equipo revisó y aprobó el trabajo realizado. Las contribuciones de las prácticas anteriores quedan reflejadas en el historial de Git.</p>
+<h3>12.3 Metodología</h3>
+<p>Se trabajó en ciclos cortos: identificar un problema (a menudo al intentar demostrar un requisito), corregirlo, verificarlo en pantalla a varios anchos (móvil, 1280 y 1700 píxeles) o con pruebas, y documentarlo en el commit. Los cambios con impacto en la interfaz se validaban con el responsable del producto antes de aplicarse.</p>
+</section>
+
+<!-- ═══════════════════════════ 13. DECLARACIÓN IA ═══════════════════════════ -->
+<section class="chapter" id="declaracion-ia">
+<h2>13. Declaración de uso de IA</h2>
+<p>De acuerdo con las normas de la práctica, declaramos el uso de herramientas de inteligencia artificial en el desarrollo del proyecto:</p>
+<table>
+<thead><tr><th style="width:24%">Herramienta</th><th>Uso</th></tr></thead>
+<tbody>
+<tr><td><b>Claude Code</b> (Anthropic, modelo Claude Opus)</td><td>Asistente de programación durante la Práctica 3: implementación y refactorización de código (backend, consola, scripts de instalación), diagnóstico de fallos de infraestructura, redacción de pruebas, revisión de seguridad, auditoría de dependencias, documentación (README, STRIDE, SECURITY, requisitos) y esta memoria. Los commits en los que intervino lo indican con la línea <code>Co-Authored-By</code>.</td></tr>
+<tr><td>Otros asistentes en prácticas anteriores</td><td>El historial registra commits de otros asistentes de IA en las prácticas 1 y 2.</td></tr>
+<tr><td><b>Qwen2.5-3B-Instruct</b> (en el producto)</td><td>Modelo local integrado en Valhalla SOC para el triaje, el chat y los resúmenes (capítulo 6). Es una funcionalidad del producto, no una herramienta de desarrollo.</td></tr>
+</tbody></table>
+<h3>Supervisión humana</h3>
+<ul>
+  <li>Las decisiones de producto (qué secciones rediseñar, qué se elimina, el diseño visual) las tomó el equipo; la IA proponía y el responsable aprobaba antes de aplicar cambios relevantes.</li>
+  <li>Toda funcionalidad se verificó en ejecución real: en pantalla (escritorio y móvil), con la suite de pruebas o con comandos contra el stack. Los resultados de esta memoria proceden de esas verificaciones.</li>
+  <li>Las acciones irreversibles o sensibles (borrar datos del SIEM, reescribir el historial de Git, rotar credenciales) se confirmaron explícitamente y algunas las ejecutó directamente el responsable.</li>
+  <li>El equipo es responsable del contenido entregado, incluido el generado con ayuda de IA.</li>
+</ul>
+</section>
+
+<!-- ═══════════════════════════ 14. CONCLUSIONES ═══════════════════════════ -->
+<section class="chapter" id="conclusiones">
+<h2>14. Conclusiones</h2>
+<p>La diferencia entre un prototipo y un producto no estaba en añadir funcionalidades, sino en demostrar que las existentes funcionan, son seguras y dicen la verdad. Intentar cumplir cada requisito con una prueba, instalar desde cero o justificar cada cifra sacó a la luz fallos que el prototipo escondía: credenciales de fábrica, secretos publicados, datos falsos generados por el propio sistema, un escáner que nunca escaneaba o un instalador que no se podía ejecutar.</p>
+<p>Corregirlos dejó una lección práctica para la ciberseguridad: <b>las herramientas de seguridad también tienen superficie de ataque</b>, y un SOC debe pasar por el mismo análisis que exige a los sistemas que vigila. Valhalla SOC termina la Práctica 3 como un producto instalable, auditado y verificable, con sus limitaciones documentadas y un camino claro de mejora.</p>
+</section>
+
+<!-- ═══════════════════════════ ANEXOS ═══════════════════════════ -->
+<section class="chapter" id="anexos">
+<h2>15. Anexos</h2>
+<h3>A. Documentación del repositorio</h3>
+<table>
+<thead><tr><th>Documento</th><th>Contenido</th></tr></thead>
+<tbody>
+<tr><td><code>README.md</code></td><td>Presentación, arquitectura, capturas, instalación y accesos</td></tr>
+<tr><td><code>docs/REQUISITOS.md</code></td><td>Requisitos RF/RNF con criterios de aceptación</td></tr>
+<tr><td><code>docs/TRAZABILIDAD.md</code></td><td>Matriz requisito → pruebas → resultado (generada)</td></tr>
+<tr><td><code>docs/STRIDE.md</code></td><td>Modelo de amenazas completo</td></tr>
+<tr><td><code>SECURITY.md</code></td><td>Política de seguridad, secretos, auditoría y hallazgos</td></tr>
+<tr><td><code>THIRD_PARTY_NOTICES.md</code></td><td>Licencias de las dependencias</td></tr>
+<tr><td><code>docs/memoria/</code></td><td>Esta memoria y su generador</td></tr>
+</tbody></table>
+<h3>B. Comandos de referencia</h3>
+<pre># Instalación desde cero
+./install.sh                      # o .\install.ps1 en Windows
+# Pruebas y matriz de trazabilidad
+bash scripts/run_tests.sh
+# Auditoría de dependencias e imágenes
+bash scripts/security_audit.sh
+# Regenerar esta memoria
+python docs/memoria/build_memoria.py --grupo {{GRUPO}}</pre>
+<h3>C. Credenciales y accesos</h3>
+<p>Ninguna credencial se publica. Tras la instalación, las contraseñas están en el <code>.env</code> generado: <code>ADMIN_PASSWORD</code> para la consola de Valhalla (usuario <code>admin</code>) e <code>INDEXER_PASSWORD</code> para la consola de Wazuh (usuario <code>admin</code>, <code>https://localhost:5601</code>).</p>
+</section>
+
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: false, theme: "neutral", flowchart: { htmlLabels: true, curve: "basis" } });
+  try { await mermaid.run({ querySelector: ".mermaid" }); } finally { window.__mermaidDone = true; }
+</script>
+</body>
+</html>

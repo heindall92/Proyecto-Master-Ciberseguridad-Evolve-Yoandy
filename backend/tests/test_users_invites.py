@@ -34,7 +34,7 @@ async def test_lector_y_reportero_no_crean_runbooks():
 async def test_solo_admin_y_analista_gestionan_informes_y_hunting():
     async with client_as("lector") as ac:
         assert (await ac.get("/api/reports")).status_code == 403
-        assert (await ac.get("/api/hunting/run/top_attackers")).status_code == 403
+        assert (await ac.get("/api/hunting/run/top_attacker_ips")).status_code == 403
 
 
 # ── Gestión de usuarios ──────────────────────────────────────────────────────
