@@ -1,8 +1,8 @@
 # Matriz de trazabilidad
 
-Generada automáticamente el 01/10/2026 11:07 al ejecutar la suite (`scripts/run_tests.sh`). Requisitos en [REQUISITOS.md](REQUISITOS.md).
+Generada automáticamente el 01/10/2026 12:01 al ejecutar la suite (`scripts/run_tests.sh`). Requisitos en [REQUISITOS.md](REQUISITOS.md).
 
-**Resultado: 57 de 57 pruebas superadas.**
+**Resultado: 62 de 62 pruebas superadas.**
 
 | Requisito | Descripción | Pruebas automáticas | Resultado | Verificación manual |
 |---|---|---|---|---|
@@ -23,11 +23,11 @@ Generada automáticamente el 01/10/2026 11:07 al ejecutar la suite (`scripts/run
 | **RF-15** | Asistente de IA local | — | — | `@ia` en el chat y resumen del día (vídeo de la demo) |
 | **RF-16** | Acceso remoto por VPN | `test_auth.py::test_cookies_secure_cuando_se_llega_por_https`<br>`test_chat_network.py::test_alerta_si_la_cuenta_de_vpn_no_es_la_vinculada`<br>`test_chat_network.py::test_clasificacion_de_red_y_dispositivo`<br>`test_chat_network.py::test_deteccion_de_https_solo_con_proxy_de_confianza` | ✅ 4/4 | acceso desde el móvil |
 | **RNF-01** | Protección CSRF y de sesión | `test_auth.py::test_login_correcto_abre_sesion_con_cookies_httponly`<br>`test_auth.py::test_cookies_secure_cuando_se_llega_por_https`<br>`test_auth.py::test_escritura_sin_token_csrf_se_rechaza`<br>`test_auth.py::test_cabeceras_de_seguridad`<br>`test_chat_network.py::test_deteccion_de_https_solo_con_proxy_de_confianza` | ✅ 5/5 | — |
-| **RNF-02** | IP real no falsificable | `test_chat_network.py::test_ip_real_solo_desde_un_proxy_de_confianza`<br>`test_chat_network.py::test_lo_que_anade_el_cliente_a_x_forwarded_for_se_ignora` | ✅ 2/2 | — |
+| **RNF-02** | IP real no falsificable | `test_chat_network.py::test_ip_real_solo_desde_un_proxy_de_confianza`<br>`test_chat_network.py::test_lo_que_anade_el_cliente_a_x_forwarded_for_se_ignora`<br>`test_lifespan.py::test_proxies_de_confianza_disponibles_justo_tras_encender_la_maquina` | ✅ 3/3 | — |
 | **RNF-03** | Validación y saneamiento de entradas | `test_auth.py::test_usuario_con_html_se_rechaza`<br>`test_chat_network.py::test_ids_de_chat_manipulados_se_rechazan`<br>`test_chat_network.py::test_adjuntos_validados`<br>`test_chat_network.py::test_html_del_mensaje_se_neutraliza`<br>`test_incidents_runbooks.py::test_incidente_con_datos_no_validos_se_rechaza`<br>`test_incidents_runbooks.py::test_html_en_el_titulo_se_neutraliza`<br>`test_incidents_runbooks.py::test_runbook_no_valido_se_rechaza`<br>`test_reports_intel_ops.py::test_hunting_rechaza_consultas_y_ventanas_no_validas` | ✅ 8/8 | — |
-| **RNF-04** | Auditoría | `test_reports_intel_ops.py::test_toda_escritura_queda_auditada_sin_el_cuerpo` | ✅ 1/1 | — |
+| **RNF-04** | Auditoría | `test_lifespan.py::test_apagado_espera_la_auditoria_y_cancela_el_bucle_de_wazuh`<br>`test_lifespan.py::test_una_tarea_colgada_no_bloquea_el_apagado`<br>`test_reports_intel_ops.py::test_toda_escritura_queda_auditada_sin_el_cuerpo` | ✅ 3/3 | — |
 | **RNF-05** | Datos reales | `test_incidents_runbooks.py::test_metricas_sin_datos_no_inventan_nada`<br>`test_reports_intel_ops.py::test_matriz_de_riesgo_con_umbrales_documentados`<br>`test_reports_intel_ops.py::test_si_wazuh_no_confirma_el_bloqueo_no_se_registra` | ✅ 3/3 | revisión de paneles |
 | **RNF-06** | Privacidad | `test_chat_network.py::test_mensaje_directo_solo_lo_leen_sus_participantes`<br>`test_chat_network.py::test_presencia_muestra_la_ip_solo_al_admin_y_al_propio_usuario`<br>`test_users_invites.py::test_directorio_de_equipo_para_todos_sin_datos_privados` | ✅ 3/3 | — |
-| **RNF-07** | Instalación reproducible | — | — | instalación desde cero el 01/10/2026 desde el repositorio público, correcta (memoria, §9.2) |
+| **RNF-07** | Instalación reproducible | `test_lifespan.py::test_arranque_prepara_esquema_usuarios_y_semillas_sin_duplicar`<br>`test_lifespan.py::test_en_produccion_sin_admin_ni_contrasena_no_arranca` | ✅ 2/2 | instalación desde cero el 01/10/2026 desde el repositorio público, correcta (memoria, §9.2) |
 | **RNF-08** | Usabilidad y diseño adaptable | — | — | capturas en `docs/img/readme` |
 | **RNF-09** | Rendimiento de la API | — | — | medición del 01/10/2026 con `curl`: 10 lecturas habituales entre 0,005 y 0,058 s |

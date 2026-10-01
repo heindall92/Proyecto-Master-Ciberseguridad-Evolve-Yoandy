@@ -1,36 +1,79 @@
-# 🛡️ Valhalla SOC - Manual de Acceso y Operaciones
+# Valhalla SOC — Acceso, roles y operaciones
 
-Bienvenido a la plataforma Valhalla SOC. Este documento detalla los procedimientos estándar para el acceso y la gestión del sistema.
+> **Actualizado en octubre de 2026.** La versión anterior indicaba un acceso `admin`/`admin` por
+> defecto y el modelo `llama3`; ninguno de los dos existe ya. Cada instalación genera su propia
+> contraseña y la IA usa `qwen2.5:3b-instruct`. El manual completo está en [`MANUAL.md`](../MANUAL.md).
 
-## 1. Acceso Inicial
-Por seguridad, las credenciales por defecto se han movido a este manual.
+## 1. Acceso inicial
+
 - **Usuario:** `admin`
-- **Contraseña:** `admin`
+- **Contraseña:** la de `ADMIN_PASSWORD` en el fichero `.env`, generado al instalar
+  (`install.sh` / `install.ps1` o `scripts/setup_env.py`). **No hay contraseña por defecto común a
+  todas las instalaciones.**
 
-> [!IMPORTANT]
-> Se recomienda encarecidamente cambiar la contraseña del administrador inmediatamente después del primer acceso desde el perfil de usuario.
+Cámbiala desde **Mi perfil** si se la vas a compartir a alguien, y da de alta al resto del equipo con
+su propio usuario (sección 3). Si se pierde:
 
-## 2. Roles y Permisos
-- **Admin (L3 Blue Team):** Acceso total. Gestión de usuarios, auditoría, configuración global del sistema y ajuste de monitores SIEM.
-- **Analyst (L2/L1):** Gestión de incidentes, visualización de telemetría, ejecución de runbooks y consulta de Threat Intel.
+```bash
+docker compose exec backend python /opt/valhalla-scripts/reset_admin.py   # la pide sin mostrarla
+```
 
-## 3. Configuración del Sistema
-El módulo de **System Settings** (Ajustes Globales) permite configurar:
-- **IA/LLM:** URL de Ollama y modelo (default: `llama3`).
-- **Threat Intel:** API Keys para VirusTotal y AlienVault OTX. Los valores se almacenan cifrados mediante AES-256-GCM.
-- **Retención:** Días de permanencia de logs y límites de subida de evidencias.
+| Servicio | Dirección |
+|---|---|
+| Consola Valhalla SOC | `http://localhost:3000` (o `https://<máquina>.<tailnet>.ts.net` por VPN) |
+| API | `http://localhost:8000/docs` |
+| Consola nativa de Wazuh | `https://localhost:5601` (`admin` · `INDEXER_PASSWORD`) |
 
-## 4. Monitor de Seguridad LSA (Windows)
-El sistema permite monitorear y mitigar ataques de volcado de credenciales (Credential Dumping).
-- **Checks SCA:** El SOC consulta periódicamente el estado de `RunAsPPL` y `LSA Protection` vía Wazuh.
-- **Hardening:** Si un endpoint se detecta como vulnerable, el analista puede ejecutar "Harden LSA", lo cual dispara una respuesta activa que configura el registro de Windows para proteger el proceso `lsass.exe`.
+## 2. Roles y permisos
 
-## 5. Auditoría
-Todas las acciones administrativas (cambios de configuración, borrado de incidentes, gestión de usuarios) quedan registradas en el **Audit Log**, incluyendo:
-- Usuario y Rol.
-- Acción (POST/PUT/DELETE).
-- Dirección IP de origen.
-- Timestamp preciso.
+Los permisos se comprueban **en el servidor** (una llamada sin el rol adecuado devuelve `403`).
 
----
-*Valhalla SOC v3.41.2 - "Protecting the digital realm."*
+| Rol | Permisos |
+|---|---|
+| **Administrador** | Todo: usuarios e invitaciones, activos, sistema (salud, monitores, auditoría), honeypots, Bifröst, ajustes globales e informes. |
+| **Analista** | Alertas, incidentes, runbooks (con edición), inteligencia, *threat hunting* e informes. |
+| **Reportero** | Crea incidentes y ve los suyos. |
+| **Lector** | Ve solo los incidentes asignados a él o creados por él. |
+
+No se puede eliminar al último administrador, a uno mismo ni al usuario de sistema de la IA
+(`valhalla-ia`).
+
+## 3. Alta de usuarios: invitaciones de un solo uso
+
+**Usuarios → Nuevo usuario**, con la invitación marcada. Valhalla genera un enlace de activación
+**válido 24 horas y de un solo uso** con el que el invitado elige su contraseña; en la base de datos
+solo se guarda su huella SHA-256. Regenerar la invitación (mantener pulsado) anula la anterior.
+
+Con acceso por VPN y `TAILSCALE_API_KEY` configurada, el botón **Invitar** genera además el enlace de
+Tailscale que comparte **solo la máquina del SOC**, no toda la red.
+
+## 4. Sesión y protección de la cuenta
+
+- Cookies `HttpOnly` y `SameSite` (y `Secure` cuando se entra por HTTPS); acceso de **2 horas**
+  renovable durante **7 días**; el cierre de sesión revoca los tokens en el servidor.
+- **5 intentos de login por minuto** por IP real (la IP no se puede falsificar con cabeceras).
+- Contraseñas: mínimo 8 caracteres con mayúsculas, minúsculas y números.
+- Cada sesión muestra el dispositivo y la red (local, VPN o internet). La IP solo la ven el
+  administrador y el propio usuario. Con Tailscale, si alguien entra con una cuenta de VPN distinta de
+  la vinculada, salta una alerta.
+
+## 5. Ajustes globales (solo administradores)
+
+- **IA:** URL de Ollama (por defecto `http://ollama:11434`), modelo (`qwen2.5:3b-instruct`),
+  temperatura y nivel mínimo de alerta que se analiza.
+- **Inteligencia de amenazas:** claves de VirusTotal, AlienVault OTX y AbuseIPDB, guardadas
+  **cifradas con AES-256-GCM** y nunca mostradas completas.
+- **Límites:** tamaño máximo de evidencias (1–50 MB) y retención de datos (7–365 días).
+
+## 6. Monitor de seguridad LSA (Windows)
+
+Desde **Activos → Hardening Windows (LSA)** se consulta, vía las comprobaciones SCA de Wazuh, si cada equipo Windows tiene
+activadas `RunAsPPL` y la protección de LSA, con los comandos de PowerShell para endurecerlo frente al volcado de
+credenciales de `lsass.exe`.
+
+## 7. Auditoría
+
+Toda acción que modifica datos (POST, PUT, PATCH, DELETE en la API) queda en **Sistema → Auditoría** con
+usuario, ruta, **IP real**, código de resultado y fecha. **Nunca se guarda el cuerpo de la petición**
+(contraseñas, claves). Los inicios de sesión y las activaciones de invitaciones se notifican en
+directo a los administradores.

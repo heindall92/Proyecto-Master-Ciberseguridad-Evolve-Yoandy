@@ -86,7 +86,8 @@ Set-Location $InstallDir
 Write-Step "3/7" "Configurando secretos (.env)"
 
 if (Test-Path ".env") {
-    Write-OK ".env ya existe — no se sobreescribe (usa --Force para regenerar)"
+    # Regenerarlo cambia también las contraseñas de PostgreSQL y del indexador: solo en limpio
+    Write-OK ".env ya existe — no se sobreescribe (regenerar desde cero: docker compose --profile labs down -v; python scripts\setup_env.py --force)"
 } else {
     python scripts\setup_env.py --yes
     Write-OK ".env generado con secretos únicos"

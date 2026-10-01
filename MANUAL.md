@@ -1,398 +1,358 @@
-# Manual de Usuario — Valhalla SOC
+# Manual de usuario — Valhalla SOC
+
+> **Versión 2.0 · octubre de 2026** · Grupo Proyecto Valhalla
+>
+> Sustituye a la versión 1.0 (abril de 2026), que describía el prototipo: cuatro contenedores, acceso
+> `admin/admin` y Ollama instalado aparte. Hoy todo el stack (incluida la IA) corre en Docker, cada
+> instalación genera sus propios secretos y el trabajo se hace desde la consola de Valhalla.
+
+Este manual explica cómo **instalar, usar y administrar** Valhalla SOC. Está escrito para cualquier
+persona con conocimientos básicos de informática; los términos técnicos están en el
+[glosario](#9-glosario).
+
+| Si quieres… | Ve a |
+|---|---|
+| Instalarlo por primera vez | [1. Instalación](#1-instalación) · guía detallada en [`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md) |
+| Entrar y saber qué puedes hacer | [2. Acceso y roles](#2-acceso-y-roles) |
+| Trabajar como analista | [3. La consola](#3-la-consola-sección-a-sección) y [4. Flujo de trabajo](#4-flujo-de-trabajo-de-un-incidente) |
+| Administrar la plataforma | [6. Administración](#6-administración) |
+| Resolver un problema | [8. Problemas frecuentes](#8-problemas-frecuentes) |
 
 ---
 
-## Introducción
+## 1. Instalación
 
-Este manual explica paso a paso cómo instalar, configurar y usar **Valhalla SOC**, un Centro de Operaciones de Seguridad basado en software libre.
+### 1.1 Requisitos
 
-**¿A quién va dirigido?**
-A cualquier persona con conocimientos básicos de informática. No se necesita experiencia en ciberseguridad ni en programación. Se explica todo desde cero.
-
----
-
-## Parte 1: Instalación
-
-### 1.1 Instalar Docker Desktop
-
-Docker es el programa que ejecuta todos los servicios de Valhalla SOC dentro de "contenedores" (cajas aisladas).
-
-**Windows:**
-1. Ve a https://www.docker.com/products/docker-desktop
-2. Haz clic en "Download for Windows"
-3. Ejecuta el instalador (siguiente, siguiente, finalizar)
-4. Reinicia el ordenador si te lo pide
-5. Abre Docker Desktop — debe mostrar "Docker is running" (Docker está corriendo)
-
-**Linux (Ubuntu/Debian/Kali):**
-```bash
-sudo apt update
-sudo apt install docker.io docker-compose-plugin -y
-sudo systemctl start docker
-sudo systemctl enable docker
-# Añadir tu usuario al grupo docker (para no usar sudo)
-sudo usermod -aG docker $USER
-# Cierra sesión y vuelve a entrar para que tome efecto
-```
-
-**Verificar que funciona:**
-```bash
-docker --version
-# Debe mostrar algo como: Docker version 24.x.x
-```
-
----
-
-### 1.2 Instalar Ollama (la IA local)
-
-Ollama es el programa que ejecuta la inteligencia artificial en tu ordenador.
-
-**Windows/Mac:**
-1. Ve a https://ollama.ai/download
-2. Descarga e instala
-3. Ollama se inicia automáticamente y aparece un icono en la barra del sistema
-
-**Linux:**
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-**Descargar el modelo de IA** (solo la primera vez, ~4.5 GB):
-```bash
-ollama pull qwen2.5-coder:7b
-```
-
-**Verificar que funciona:**
-```bash
-# En una terminal:
-ollama list
-# Debe mostrar: qwen2.5-coder:7b
-
-# Probar la IA:
-ollama run qwen2.5-coder:7b "Di hola en español"
-# Debe responder en español
-```
-
----
-
-### 1.3 Instalar Git y Python
-
-**Git** (para descargar el proyecto):
-- Windows: https://git-scm.com/downloads
-- Linux: `sudo apt install git -y`
-
-**Python 3** (para los scripts de configuración):
-- Windows: https://www.python.org/downloads/ (marcar "Add to PATH")
-- Linux: Ya viene instalado (`python3 --version`)
-
----
-
-### 1.4 Descargar el proyecto
-
-```bash
-git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git
-cd Valhalla-SOC
-```
-
----
-
-## Parte 2: Configuración
-
-### 2.1 Variables de entorno
-
-```bash
-# Copiar el archivo de ejemplo
-# Windows (PowerShell):
-Copy-Item .env.example .env
-
-# Linux/Mac:
-cp .env.example .env
-```
-
-El archivo `.env` contiene las contraseñas. **Para pruebas locales**, los valores por defecto (`admin/admin`) funcionan perfectamente. Para producción, cámbialos.
-
-### 2.2 Certificados SSL
-
-Los certificados cifran la comunicación entre servicios. Ya vienen incluidos para pruebas. Para generarlos de nuevo:
-
-```bash
-docker run --rm \
-  -v ./config/wazuh_indexer_ssl_certs:/certificates \
-  -v ./config/certs.yml:/config/certs.yml \
-  wazuh/wazuh-certs-generator:0.0.2 \
-  -A /config/certs.yml
-```
-
----
-
-## Parte 3: Puesta en Marcha
-
-### 3.1 Levantar los servicios
-
-```bash
-# Asegúrate de que Docker Desktop está abierto y corriendo
-# Asegúrate de que Ollama está corriendo (ollama serve)
-
-# Levantar todo (primera vez tarda 5-10 minutos descargando imágenes)
-docker compose up -d
-```
-
-**¿Qué acaba de pasar?** Docker ha creado 4 "máquinas virtuales ligeras":
-
-| Contenedor | Qué hace | RAM máx. |
+| | Mínimo | Recomendado |
 |---|---|---|
-| `wazuh.indexer` | Almacena todas las alertas (base de datos) | 2 GB |
-| `wazuh.manager` | Lee logs, aplica reglas, genera alertas | 2.5 GB |
-| `wazuh.dashboard` | Interfaz web con gráficas y tablas | 1.5 GB |
-| `valhalla-cowrie` | Honeypot SSH/Telnet (la trampa) | 512 MB |
+| Memoria RAM | 8 GB | 16 GB |
+| Disco libre | 25 GB | 40 GB |
+| Software | Docker (Desktop, o Engine con Compose v2), Git y Python 3 | — |
+| Linux | `vm.max_map_count=262144` (lo necesita el indexador de Wazuh) | — |
 
-### 3.2 Verificar que todo está corriendo
+**No hace falta instalar Ollama, Node.js ni PostgreSQL**: van dentro de Docker.
 
-```bash
-docker compose ps
-```
-
-Debes ver los 4 servicios en estado **Running**:
-```
-NAME STATUS PORTS
-wazuh-indexer Running 9200/tcp
-wazuh-manager Running 1514/tcp, 1515/tcp, 514/udp, 55000/tcp
-wazuh-dashboard Running 443/tcp
-valhalla-cowrie Running 2222/tcp, 2223/tcp
-```
-
-**Si alguno NO está Running:**
-```bash
-# Ver qué pasó con un servicio específico
-docker compose logs wazuh.indexer
-docker compose logs wazuh.manager
-docker compose logs wazuh.dashboard
-docker compose logs cowrie
-```
-
-### 3.3 Esperar inicialización (3-5 minutos)
-
-Wazuh necesita unos minutos para:
-1. Generar sus certificados internos
-2. Crear los índices en OpenSearch
-3. Registrar el agente local
-
-**Cómo saber si ya está listo:**
-```bash
-# Ver logs en tiempo real (Ctrl+C para salir)
-docker compose logs -f
-
-# Cuando veas mensajes como "started" o "ready to receive requests", está listo
-```
-
-### 3.4 Crear dashboards y monitores
+En Linux, el ajuste del indexador se aplica así (y se hace permanente con la segunda línea):
 
 ```bash
-# Instalar la librería de Python necesaria
-pip install requests
-
-# Crear los dashboards de Cowrie
-python create_dashboards.py
-# Debe mostrar: Dashboard 'Valhalla SOC - Cowrie Honeypot': CREADO OK
-
-# Crear los monitores de alertas
-python setup_monitors.py
-# Debe mostrar: 7/7 monitores creados
-
-# Crear los reportes de seguridad
-python setup_reports.py
-# Debe mostrar: Dashboard Reportes: CREADO OK
+sudo sysctl -w vm.max_map_count=262144
+echo "vm.max_map_count=262144" | sudo tee /etc/sysctl.d/99-valhalla.conf
 ```
 
-### 3.5 Acceder al Dashboard
+### 1.2 Instalación automática (recomendada)
 
-1. **Abre tu navegador** y ve a: `https://localhost`
-2. **El navegador mostrará una advertencia** de certificado — es normal:
-   - Chrome: "Tu conexión no es privada" → Haz clic en "Configuración avanzada" → "Continuar a localhost"
-   - Firefox: "Advertencia: riesgo potencial de seguridad" → "Aceptar el riesgo y continuar"
-3. **Introduce las credenciales:**
-   - Usuario: `admin`
-   - Contraseña: `admin`
+```bash
+# Linux / macOS / WSL
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc
+cd valhalla-soc
+./install.sh
+```
+
+```powershell
+# Windows (PowerShell)
+git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc
+cd valhalla-soc
+.\install.ps1
+```
+
+El instalador:
+
+1. comprueba Git, Docker y Python;
+2. genera `.env` con **secretos únicos** para esta instalación (no se sube nunca a Git);
+3. genera los **certificados TLS de Wazuh** (tampoco se versionan);
+4. levanta el stack con `docker compose --profile labs up -d --build`;
+5. espera a que el servicio `ollama-init` descargue el modelo de IA (~2 GB la primera vez);
+6. guarda las credenciales del indexador en el keystore del manager (inventario de vulnerabilidades).
+
+Opciones: `NO_LABS=1 ./install.sh` (o `-NoLabs`) instala sin el atacante ni el agente del
+laboratorio; `SKIP_OLLAMA=1` (o `-SkipOllama`) no espera al modelo.
+
+La primera instalación tarda entre **10 y 20 minutos**, sobre todo por la descarga de imágenes.
+
+### 1.3 Dónde están las contraseñas
+
+Todas se generan en el fichero **`.env`** de la carpeta del proyecto:
+
+| Variable | Para qué sirve |
+|---|---|
+| `ADMIN_PASSWORD` | Usuario `admin` de la consola de Valhalla |
+| `INDEXER_PASSWORD` | Usuario `admin` de la consola nativa de Wazuh |
+| `SECRET_KEY`, `WEBHOOK_SECRET` | Firma de sesiones y de las alertas que envía Wazuh (no se usan para entrar) |
+
+Si ejecutas el asistente a mano (`python3 scripts/setup_env.py`) te pedirá la contraseña de `admin`.
+Pulsar Enter deja `Valhalla2026!`, **pensada solo para un laboratorio**: cámbiala si la consola va a
+estar accesible para más personas. El asistente guarda además una copia en `.env.setup-backup`;
+pásala a un gestor de contraseñas y bórrala del disco.
 
 ---
 
-## Parte 4: Uso Diario
+## 2. Acceso y roles
 
-### 4.1 Navegar por el Dashboard
+### 2.1 Direcciones
 
-**Menú principal** (barra lateral izquierda):
-- **Resumen** — Vista general con agentes, alertas por severidad
-- **Puntos finales** — Detalle de cada agente registrado
-- **Caza de amenazas** — Búsqueda avanzada de eventos
-- **MITRE ATT&CK** — Mapeo de técnicas detectadas
-- **Dashboards** — Dashboards personalizados (Cowrie, Reportes)
+| Servicio | Dirección | Usuario |
+|---|---|---|
+| **Consola Valhalla SOC** | `http://localhost:3000` | `admin` · `ADMIN_PASSWORD` |
+| API y su documentación | `http://localhost:8000/docs` | sesión de la consola |
+| Consola nativa de Wazuh | `https://localhost:5601` | `admin` · `INDEXER_PASSWORD` |
+| Honeypot (¡es la trampa!) | `ssh root@localhost -p 2222` | cualquiera |
 
-### 4.2 Ver el Dashboard de Cowrie
+La consola de Wazuh usa un certificado autofirmado: el navegador avisará la primera vez
+(«Configuración avanzada» → «Continuar»). Es esperado en un laboratorio.
 
-1. Menú lateral → **Dashboards**
-2. Seleccionar **"Valhalla SOC - Cowrie Honeypot"**
+Para entrar **desde el móvil o desde fuera de casa** se usa Tailscale con HTTPS; está en
+[6.6 Acceso remoto por VPN](#66-acceso-remoto-por-vpn-opcional).
 
-Aquí verás:
-- **Alertas Críticas** — Número total de alertas graves
-- **Alertas por Nivel** — Distribución por severidad
-- **Top IPs Atacantes** — Quién ataca más
-- **Timeline** — Evolución de ataques en el tiempo
-- **Comandos Ejecutados** — Qué comandos escribieron los atacantes
+### 2.2 Roles
 
-### 4.3 Ver análisis de la IA
+Cada permiso se comprueba **en el servidor**: si un rol intenta algo que no le corresponde, la API
+responde `403` aunque se salte la interfaz.
 
-Los análisis de Ollama aparecen en:
-- **Timeline de eventos** → Busca eventos etiquetados como "Ollama AI Insight"
-- **Tabla de reglas** → Regla 100200: "Ollama AI Insight para Alerta XXX"
-- **Discover** → Filtra por `rule.groups:ollama`
+| Rol | Qué puede hacer |
+|---|---|
+| **Administrador** | Todo: usuarios e invitaciones, activos, sistema (salud, monitores, auditoría), honeypots, Bifröst, ajustes globales e informes. |
+| **Analista** | Investiga alertas, gestiona incidentes, edita runbooks, ejecuta *threat hunting* y genera informes. |
+| **Reportero** | Crea incidentes y ve los suyos. |
+| **Lector** | Solo ve los incidentes que tiene asignados o que creó. |
 
-### 4.4 Generar reportes
+Salvaguardas: no se puede borrar a uno mismo, al usuario de sistema de la IA (`valhalla-ia`) ni
+dejar la plataforma sin ningún administrador.
 
-1. Abre cualquier dashboard
-2. Haz clic en **"Reportar"** (esquina superior derecha)
-3. Selecciona **PDF** o **CSV**
-4. El informe se descarga automáticamente
+### 2.3 Sesión
 
-### 4.5 Ver alertas en tiempo real
-
-1. Menú lateral → **Alerta** (o busca "Alerting")
-2. Pestaña **Alertas** — Ver alertas activas
-3. Pestaña **Monitores** — Configurar/modificar monitores
-
-### 4.6 Buscar eventos específicos
-
-1. Menú lateral → **Discover**
-2. Seleccionar index pattern: `wazuh-alerts-*`
-3. Usar la barra de búsqueda con sintaxis Lucene:
-
-**Búsquedas útiles:**
-```
-rule.groups:cowrie → Todos los eventos Cowrie
-rule.id:100111 → Solo fuerza bruta
-rule.level:[10 TO 15] → Solo alertas altas/críticas
-data.src_ip:185.220.101.1 → Eventos de una IP específica
-rule.id:100120 AND data.input:*wget* → Comandos con wget
-rule.mitre.id:T1110 → Técnica MITRE específica
-```
+- La sesión vive en cookies `HttpOnly` (el navegador no deja que ningún script las lea): el acceso dura
+  **2 horas** y se renueva solo durante **7 días**. Al cerrar sesión se revoca en el servidor.
+- El login admite **5 intentos por minuto** por dirección IP; después hay que esperar un minuto.
+- Contraseñas: al menos **8 caracteres** con mayúsculas, minúsculas y números (la de `admin`, al menos
+  12). Se cambian en **Mi perfil**.
 
 ---
 
-## Parte 5: Probar el sistema
+## 3. La consola, sección a sección
 
-### 5.1 Simulación manual de ataques
+El menú lateral solo muestra lo que tu rol puede usar. Con **`Ctrl + K`** (o `Cmd + K`) se abre el
+buscador de comandos para saltar a cualquier sección; con **`?`** se abre el centro de ayuda.
 
-Para ver el sistema en acción, puedes atacar el honeypot tú mismo:
+| Sección | Para qué sirve |
+|---|---|
+| **Vista general** | Alertas, críticas, agentes e incidentes del periodo; volumen, severidad y atacantes principales. Los widgets se pueden reordenar. |
+| **SIEM** | Alertas de Wazuh en vivo con filtros y técnicas MITRE ATT&CK. Desde cada alerta: crear incidente (**+INC**), investigar la IP o bloquearla. |
+| **Workspace** | Los incidentes en un *kanban* (triaje → investigación → contención → resuelto) o en tabla, con SLA, asignación, comentarios, historial y evidencias con huella SHA-256. |
+| **Informes** | Informe SOC, resumen ejecutivo e informe GRC (matriz de riesgo 5×5, NIST CSF 2.0, ATT&CK y correspondencia ENS · ISO 27001 · NIS2 · ISO 42001). Exportación a PDF, JSON y CSV. |
+| **Activos** | Equipos con agente Wazuh: estado, sistema, último contacto, inventario de paquetes y guía de protección de LSA en Windows. |
+| **Sistema** | Salud de cada integración, monitores de detección con umbrales editables y registro de auditoría. |
+| **Honeypots** | Sesiones de Cowrie reconstruidas paso a paso: contraseñas probadas, comandos, reglas que saltan y accesos tras fuerza bruta. |
+| **Inteligencia** | Reputación de IOCs (VirusTotal, AbuseIPDB) con lista de vigilancia, CVE explotadas (CISA KEV) priorizadas y mapa de origen de los ataques. |
+| **Bifröst** | Métricas del SOC (MTTR, antigüedad, tasa de resolución, cobertura ATT&CK) y consultas de *threat hunting* exportables. |
+| **Runbooks** | 20 procedimientos de respuesta con las 5 fases de NIST SP 800-61 y comandos reales; los analistas los editan. |
+| **Usuarios** | Alta de usuarios, roles, invitaciones de un solo uso y sesiones en línea por dispositivo y red. |
 
-**Login fallido (un intento):**
-```bash
-ssh root@localhost -p 2222
-# Cuando pida contraseña, escribe cualquier cosa y pulsa Enter
-# Verás que la conexión se cierra (en Cowrie, TODAS las contraseñas son "correctas"
-# con las que están en userdb.txt)
-```
+**Siempre visibles:** campana de notificaciones, **chat de equipo** (canal global y mensajes directos),
+selector de idioma **ES/EN**, tema claro/oscuro y color de acento, y el menú de usuario con **Mi perfil**.
 
-**Login "exitoso" (con credenciales trampa):**
-```bash
-ssh root@localhost -p 2222
-# Contraseña: admin (o root, o password)
-# ¡Estás dentro del honeypot! Todo lo que hagas se graba.
-# Prueba: ls, whoami, cat /etc/passwd, wget http://ejemplo.com
-# Escribe "exit" para salir
-```
-
-**Fuerza bruta simulada (con herramienta):**
-```bash
-# Si tienes hydra instalado:
-hydra -l root -P /ruta/a/lista_passwords.txt ssh://localhost:2222 -t 4
-```
-
-### 5.2 Verificar que las alertas llegan
-
-1. Espera 1-2 minutos después de atacar
-2. Ve al Dashboard de Cowrie → Debe mostrar nuevos eventos
-3. Recarga la página si no aparecen inmediatamente
+**Regla de oro de los datos:** ninguna cifra se inventa. Si una fuente no responde o no hay datos, la
+consola lo dice («sin datos») en lugar de rellenar el hueco.
 
 ---
 
-## Parte 6: Administración
+## 4. Flujo de trabajo de un incidente
 
-### 6.1 Parar los servicios (sin perder datos)
+1. **Detectar.** Llega una alerta al **SIEM** (o salta un monitor de **Sistema**). La campana avisa.
+2. **Abrir el incidente.** Pulsa **+INC** en la alerta: el incidente queda enlazado a ella.
+3. **Asignar.** Desde la campana (**Asignarme**) o desde el incidente en el **Workspace**.
+4. **Investigar.** Consulta la IP en **Inteligencia**, revisa la sesión en **Honeypots** si viene del
+   señuelo y añade evidencias (máx. 10 MB: imágenes, PDF, TXT/LOG, JSON, CSV, PCAP y ZIP). Cada
+   evidencia guarda su SHA-256 para demostrar que no se ha modificado.
+5. **Contener.** Sigue el **runbook** del tipo de ataque. Para bloquear una IP, **mantén pulsado** el
+   botón de bloqueo: la acción se aplica en Wazuh y solo se registra como bloqueada si Wazuh lo confirma.
+6. **Resolver.** Cierra el incidente con su clasificación (verdadero positivo, falso positivo o
+   benigno). Todo el recorrido queda en el historial y cuenta para el MTTR de Bifröst.
+7. **Informar.** En **Informes**, elige el periodo y genera el informe. Queda guardado con su
+   identificador, clasificación TLP y huella SHA-256: si alguien cambia el contenido, la huella deja
+   de coincidir.
+
+> Las acciones destructivas (borrar, bloquear, regenerar una invitación) exigen **mantener pulsado** el
+> botón, también con el teclado (Enter mantenido): un clic accidental no hace nada.
+
+---
+
+## 5. Asistente de IA
+
+La IA corre **en local** con Ollama (modelo `qwen2.5:3b-instruct`): ningún dato del SOC sale de la
+máquina y no hace falta ninguna clave.
+
+- **En el chat:** escribe `@ia` (o `@chatbot`, `@valhalla`, `@heimdall`) seguido de la pregunta. Con
+  «resumen del día» adjunta el informe del día.
+- **Triaje de alertas:** propone riesgo, técnica ATT&CK, acción y probabilidad de falso positivo,
+  apoyándose en los runbooks.
+- **Resumen ejecutivo** opcional en los informes.
+
+La IA **redacta, no aporta datos**: las cifras de paneles e informes las calcula el backend. En CPU
+genera unas 3 palabras por segundo; por eso el resumen de los informes es opcional. Contrasta siempre
+sus conclusiones con la evidencia antes de cerrar un incidente.
+
+---
+
+## 6. Administración
+
+### 6.1 Arrancar, parar y ver el estado
 
 ```bash
-docker compose down
-# Los datos se mantienen en los volúmenes de Docker
+docker compose --profile labs up -d     # arrancar (sin "--profile labs": sin atacante ni agente)
+docker compose ps                       # estado de cada contenedor
+docker compose logs -f backend          # registros de un servicio (Ctrl+C para salir)
+docker compose --profile labs down      # parar sin perder datos
 ```
 
-### 6.2 Reiniciar los servicios
+En Windows también puedes usar `Valhalla-Runner.bat` (arrancar) y `Apagar-Valhalla.bat` (parar).
+
+| Contenedor | Qué hace |
+|---|---|
+| `dashboard` | Consola web (puerto 3000) |
+| `backend` | API, WebSocket del chat y lógica del SOC (puerto 8000) |
+| `postgres` | Usuarios, incidentes, runbooks, informes, auditoría y chat |
+| `wazuh.manager` · `wazuh.indexer` · `wazuh.dashboard` | El SIEM: reglas, almacén de alertas y su consola nativa |
+| `cowrie` | Honeypot SSH/Telnet (puertos 2222 y 2223) |
+| `ollama` · `ollama-init` | IA local y la descarga inicial del modelo |
+| `attacker` · `wazuh.agent` | Solo con `--profile labs`: atacante automático aislado y agente |
+| `ts-whois` | Solo con `--profile tailscale`: identidad VPN de cada sesión |
+
+### 6.2 Usuarios e invitaciones
+
+En **Usuarios → Nuevo usuario**, elige el rol y deja marcada la **invitación**: Valhalla genera un
+**enlace de activación de un solo uso que caduca en 24 horas** para que la persona elija su contraseña.
+Se comparte por WhatsApp, correo o copiando el mensaje; en la base de datos solo se guarda su huella.
+Regenerar una invitación (mantener pulsado) anula la anterior.
+
+### 6.3 Ajustes globales
+
+En **Ajustes globales** (solo administradores):
+
+- **IA:** URL de Ollama, modelo, temperatura y nivel mínimo de alerta que se analiza.
+- **Claves de inteligencia:** VirusTotal, AlienVault OTX y AbuseIPDB. Se guardan **cifradas
+  (AES-256-GCM)** y nunca se vuelven a mostrar completas.
+- **Límites:** tamaño máximo de evidencias (1–50 MB) y retención de datos (7–365 días; vacío = sin
+  política).
+
+### 6.4 Contraseña de `admin` olvidada
 
 ```bash
-docker compose up -d
+docker compose exec backend python /opt/valhalla-scripts/reset_admin.py
 ```
 
-### 6.3 Ver logs de un servicio específico
+Te la pedirá dos veces sin mostrarla en pantalla.
+
+### 6.5 Volver a una instalación limpia
 
 ```bash
-docker compose logs wazuh.manager # Logs del SIEM
-docker compose logs cowrie # Logs del honeypot
-docker compose logs wazuh.dashboard # Logs del dashboard
-docker compose logs wazuh.indexer # Logs de la base de datos
+make factory-reset            # borra incidentes, chat y usuarios extra; conserva admin, runbooks y ajustes
+docker compose --profile labs down -v   # ⚠️ borra TODOS los datos (volúmenes) para empezar de cero
 ```
 
-### 6.4 Borrar todo y empezar de cero
-
-```bash
-docker compose down -v
-# CUIDADO: Este comando elimina todos los datos (alertas, configuraciones)
-```
-
-### 6.5 Actualizar el proyecto
+Actualizar a la última versión:
 
 ```bash
 git pull origin main
-docker compose down
-docker compose up -d --build
+docker compose --profile labs up -d --build
+```
+
+### 6.6 Acceso remoto por VPN (opcional)
+
+Con [Tailscale](https://tailscale.com) la consola se publica **solo por HTTPS** en
+`https://<máquina>.<tailnet>.ts.net`, y un cortafuegos cierra a la VPN todos los puertos de Docker.
+Los comandos exactos están en el [README](README.md#arranque-rápido) («Acceso remoto por VPN con
+HTTPS»). Cada sesión muestra la cuenta y el dispositivo de Tailscale; si alguien entra con una cuenta
+distinta de la vinculada, salta una alerta y queda en la auditoría.
+
+### 6.7 Despliegue con gateway HTTPS (perfil `prod`)
+
+Para exponer la consola fuera del laboratorio, el perfil `prod` añade un gateway nginx con TLS en el
+puerto **8443**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile prod up -d --build
+```
+
+Antes, en `.env`: `ENV=production`, `SESSION_COOKIE_SECURE=true`, `TLS_VERIFY_SSL=true` y secretos
+nuevos. Con `ENV=production` la API **no arranca** si no existe el usuario `admin` y falta
+`ADMIN_PASSWORD`.
+
+---
+
+## 7. Probar que todo funciona
+
+Con el perfil `labs`, el contenedor atacante lanza ataques periódicos, así que en pocos minutos verás
+actividad. Para hacerlo a mano:
+
+```bash
+ssh root@localhost -p 2222   # prueba varias contraseñas: todo lo que hagas queda grabado
+```
+
+En segundos aparece en **SIEM** y en **Honeypots**; tras varios intentos salta la regla de **fuerza
+bruta**. Las contraseñas más típicas (`root`, `admin`, `123456`…) se **rechazan a propósito** para que
+los bots insistan; cualquier otra entra en la shell simulada, y los comandos que escribas (`whoami`,
+`cat /etc/passwd`, `wget …`) se ven en la sesión reconstruida.
+
+Para los desarrolladores, la calidad se comprueba con las pruebas automáticas (también se ejecutan en
+GitHub en cada cambio):
+
+```bash
+bash scripts/run_tests.sh              # backend: pytest + matriz de trazabilidad (docs/TRAZABILIDAD.md)
+cd frontend && npm ci && npm test      # consola: pruebas unitarias con Vitest
+cd frontend && npm run typecheck       # consola: comprobación de tipos
 ```
 
 ---
 
-## Parte 7: Glosario de términos
+## 8. Problemas frecuentes
+
+| Síntoma | Causa probable y solución |
+|---|---|
+| `wazuh.indexer` se reinicia en bucle (Linux) | Falta `vm.max_map_count=262144`: ver [1.1](#11-requisitos). |
+| La consola no carga en `localhost:3000` | Aún está compilando: `docker compose logs -f dashboard`. Comprueba que el puerto 3000 no lo usa otro programa. |
+| No puedo entrar con `admin` | La contraseña es la de `ADMIN_PASSWORD` en `.env` **del momento de la primera instalación**. Si la cambiaste después en `.env`, no se aplica sola: usa [6.4](#64-contraseña-de-admin-olvidada). |
+| «Demasiados intentos» al iniciar sesión | Límite de 5 por minuto: espera un minuto. Queda registrado en Auditoría. |
+| Me saca de la sesión | Han pasado 7 días o se cerró la sesión en el servidor: vuelve a entrar. |
+| El panel no muestra alertas | **Sistema → Salud**: el indexador y el manager deben aparecer conectados. En una instalación nueva la primera alerta tarda unos minutos. |
+| La IA no responde | `docker compose exec ollama ollama list` debe mostrar `qwen2.5:3b-instruct`. Si no: `docker compose exec ollama ollama pull qwen2.5:3b-instruct`. |
+| Inteligencia sin reputación de IPs | Faltan las claves de VirusTotal / AbuseIPDB en **Ajustes globales**. |
+| El mapa no sitúa las IPs del laboratorio | Son IPs privadas y no se pueden geolocalizar: el mapa lo indica. |
+| Aviso de certificado en `https://localhost:5601` | Certificado autofirmado de Wazuh: esperado en el laboratorio. |
+
+Si el problema sigue, revisa los registros del servicio (`docker compose logs <servicio>`) y abre una
+*issue* en [GitHub](https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/issues).
+Las vulnerabilidades se notifican en privado según [`SECURITY.md`](SECURITY.md).
+
+---
+
+## 9. Glosario
 
 | Término | Explicación sencilla |
 |---|---|
-| **SOC** | Centro de Operaciones de Seguridad. Es el "cuartel general" de la ciberseguridad |
-| **SIEM** | Sistema que recoge, analiza y correlaciona logs de seguridad. Wazuh es un SIEM |
-| **Honeypot** | Trampa que simula un servidor real para atraer atacantes |
-| **Docker** | Programa que ejecuta aplicaciones en cajas aisladas (contenedores) |
-| **Contenedor** | Una "mini máquina virtual" que ejecuta un servicio |
-| **Volumen** | Espacio de almacenamiento permanente para un contenedor |
-| **Ollama** | Programa para ejecutar IA localmente sin internet |
-| **Modelo de IA** | El "cerebro" de la IA (en este caso, qwen2.5-coder:7b) |
-| **OpenSearch** | Base de datos de búsqueda rápida (almacena las alertas) |
-| **Decoder** | Regla que enseña a Wazuh cómo leer un tipo de log |
-| **Regla** | Condición que genera una alerta cuando se cumple |
-| **MITRE ATT&CK** | Catálogo universal de técnicas de ataque |
-| **Fuerza bruta** | Probar miles de contraseñas hasta acertar |
-| **Reverse shell** | Técnica para que un servidor hackeado se conecte de vuelta al atacante |
-| **Malware** | Software malicioso (virus, troyanos, ransomware) |
-| **TLS/SSL** | Cifrado de comunicaciones (el candado de HTTPS) |
-| **Certificado** | Archivo digital que prueba la identidad de un servidor |
-| **API** | Interfaz para que programas se comuniquen entre sí |
-| **Dashboard** | Panel visual con gráficas, tablas y métricas |
-| **FIM** | File Integrity Monitoring — detecta cambios en archivos del sistema |
-| **GeoIP** | Tecnología para averiguar la ubicación geográfica de una IP |
+| **SOC** | Centro de Operaciones de Seguridad: el equipo y las herramientas que vigilan y responden a ataques. |
+| **SIEM** | Sistema que recoge y correlaciona registros de seguridad. Aquí, **Wazuh**. |
+| **Honeypot** | Trampa que simula un servidor real para atraer y estudiar atacantes. Aquí, **Cowrie**. |
+| **Agente** | Programa de Wazuh instalado en cada equipo vigilado que envía sus registros. |
+| **Regla / monitor** | Condición que genera una alerta (regla de Wazuh) o abre un incidente (monitor de Valhalla). |
+| **Incidente** | Alerta (o conjunto de alertas) que un analista investiga hasta resolverla. |
+| **Runbook** | Procedimiento paso a paso para responder a un tipo de ataque. |
+| **MTTR** | Tiempo medio de resolución de los incidentes. |
+| **SLA** | Plazo máximo acordado para atender un incidente según su severidad. |
+| **IOC** | Indicador de compromiso: IP, dominio o hash asociado a un ataque. |
+| **CVE / KEV** | Identificador público de una vulnerabilidad / catálogo de CISA con las que se explotan activamente. |
+| **MITRE ATT&CK** | Catálogo universal de técnicas de ataque. |
+| **Threat hunting** | Búsqueda proactiva de amenazas que no han generado alerta. |
+| **TLP** | Etiqueta que indica con quién se puede compartir un informe (CLEAR, GREEN, AMBER, RED). |
+| **SHA-256** | Huella digital de un fichero: si cambia un solo bit, la huella cambia. |
+| **Docker / contenedor** | Programa que ejecuta cada servicio en una «caja» aislada. |
+| **Ollama** | Programa que ejecuta modelos de IA en local, sin Internet. |
+| **Tailscale / VPN** | Red privada cifrada para entrar a la consola desde otros dispositivos. |
+| **CSRF / XSS** | Ataques web que la consola bloquea: peticiones falsificadas desde otra web / inyección de código en la página. |
 
 ---
 
-## Parte 8: Contacto y soporte
-
-Si tienes problemas con la instalación o el uso:
-
-1. Revisa la **sección de Preguntas Frecuentes** en el README.md
-2. Consulta los **logs** del contenedor problemático (`docker compose logs <servicio>`)
-3. Abre un **issue** en GitHub: https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/issues
-
----
-
-> **Versión del manual:** 1.0
-> **Última actualización:** Abril 2026
-> **Autor:** Grupo Proyecto Valhalla
+Más documentación: [`README.md`](README.md) (visión general) ·
+[`docs/INSTALACION_PRIMERA_VEZ.md`](docs/INSTALACION_PRIMERA_VEZ.md) (instalación detallada) ·
+[`docs/REQUISITOS.md`](docs/REQUISITOS.md) y [`docs/TRAZABILIDAD.md`](docs/TRAZABILIDAD.md) (requisitos y pruebas) ·
+[`SECURITY.md`](SECURITY.md) (seguridad).

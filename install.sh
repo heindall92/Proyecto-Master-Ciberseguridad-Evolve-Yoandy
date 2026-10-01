@@ -76,7 +76,8 @@ cd "$INSTALL_DIR"
 step "3/7" "Configurando secretos (.env)"
 
 if [ -f ".env" ]; then
-    ok ".env ya existe — no se sobreescribe (exporta FORCE_ENV=1 para regenerar)"
+    # Regenerarlo cambia también las contraseñas de PostgreSQL y del indexador: solo en limpio
+    ok ".env ya existe — no se sobreescribe (regenerar desde cero: docker compose --profile labs down -v && python3 scripts/setup_env.py --force)"
 else
     python3 scripts/setup_env.py --yes
     ok ".env generado con secretos únicos"

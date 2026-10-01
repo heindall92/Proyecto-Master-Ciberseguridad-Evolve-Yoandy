@@ -49,9 +49,20 @@ riesgos residuales, está en [docs/STRIDE.md](docs/STRIDE.md). Los requisitos de
 | El contenedor atacante compartía red con la BD, el manager, el indexador y Ollama | Medio | Red `lab-net` solo con el honeypot. Comprobado con `nc` desde el atacante. |
 | Recrear el manager perdía el registro de agentes y el catálogo de vulnerabilidades | Medio (disponibilidad) | Volúmenes para `/var/ossec/etc` y `/var/ossec/queue`, como espera la imagen oficial; migrados con los datos actuales (el agente conserva su ID 001). |
 
+## Hallazgos corregidos el 01/10/2026
+
+| Hallazgo | Riesgo | Corrección y evidencia |
+|---|---|---|
+| CVE nuevas en PyJWT 2.13.0 (13, entre ellas confusión de algoritmo y ReDoS en `is_pem_format`) y urllib3 2.7.0 (3), publicadas después de la revisión anterior | Medio | PyJWT 2.15.1 y urllib3 2.8.0; `pip-audit` vuelve a 0. El uso de PyJWT del backend (HS256, `options` nuevo en cada llamada) no estaba expuesto a las de JWKS. |
+| Lista de proxies de confianza vacía durante los 5 minutos siguientes a encender la máquina (`time.monotonic()` cuenta desde el arranque y la caché empezaba en 0): IP real y cookies `Secure` incorrectas | Medio | Caché inicializada a `-inf`; prueba `test_proxies_de_confianza_disponibles_justo_tras_encender_la_maquina` (RNF-02). |
+| La consola cargaba sus fuentes de Google Fonts: Google recibía la IP, el navegador y la hora de cada acceso de cada analista | Bajo (privacidad) | Fuentes autoalojadas (`@fontsource`, OFL-1.1); CSP de backend y gateway sin dominios de Google; prueba de la consola y paso de CI que fallan si vuelven. |
+| La CSP del gateway nginx bloqueaba el script de arranque de `index.html` (inline) y los estilos que inyectan MUI/Emotion: la consola se veía distinta en producción | Bajo | Script movido a `boot-errors.js` (`script-src 'self'` sigue sin `unsafe-inline`); `style-src` admite estilos inline, que necesita React. Verificado en Chromium con la CSP real: 0 violaciones. |
+| `sanitizePlainText` pasaba el chat por DOMPurify: no protegía nada (React ya pinta texto) y mutilaba mensajes legítimos (`if (a<b && c>d)` → `if (ad)`) | Bajo | Se conserva el texto y se eliminan los caracteres invisibles de reordenación bidi (CVE-2021-42574, «Trojan Source») y de control; DOMPurify queda para HTML. Pruebas en `sanitize.test.tsx`. |
+| `reset_admin.py` solo aceptaba la contraseña como argumento (queda en el historial del shell y en `ps`) | Bajo | Sin argumento la pide sin eco y con confirmación. |
+
 ## Auditoría de dependencias e imágenes
 
-Se repite con `bash scripts/security_audit.sh`. Última ejecución: **26/09/2026**.
+Se repite con `bash scripts/security_audit.sh` y, desde el 01/10/2026, automáticamente en la integración continua (`.github/workflows/ci.yml`: `pip-audit` y `npm audit` en cada cambio y cada lunes). Última ejecución manual: **26/09/2026**.
 
 | Herramienta | Alcance | Hallazgos iniciales | Tras la corrección |
 |---|---|---|---|

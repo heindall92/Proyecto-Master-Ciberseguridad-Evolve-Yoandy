@@ -116,7 +116,7 @@
 
 <div class="kpis">
   <div class="kpi"><b>25</b><span>requisitos (16 RF · 9 RNF)</span></div>
-  <div class="kpi"><b>57/57</b><span>pruebas automáticas superadas</span></div>
+  <div class="kpi"><b>118/118</b><span>pruebas automáticas superadas (62 backend · 56 consola)</span></div>
   <div class="kpi"><b>0</b><span>vulnerabilidades en dependencias (pip-audit · npm audit)</span></div>
   <div class="kpi"><b>11</b><span>secciones de la consola rediseñadas</span></div>
 </div>
@@ -125,7 +125,7 @@
 <ul>
   <li><b>Producto instalable</b>: un instalador para Linux y otro para Windows generan secretos únicos y certificados TLS propios, levantan el stack, descargan el modelo de IA y configuran Wazuh. Se validó con una instalación desde cero a partir del repositorio público (capítulo 9).</li>
   <li><b>Seguridad revisada a fondo</b>: modelo STRIDE con fronteras de confianza; auditoría de dependencias e imágenes (de 11 paquetes Python y 26 avisos npm vulnerables a 0); corrección de credenciales de fábrica en Wazuh, aislamiento del laboratorio de ataque y limpieza de secretos del historial de Git.</li>
-  <li><b>Calidad demostrable</b>: suite de 57 pruebas etiquetadas por requisito que genera automáticamente la matriz de trazabilidad.</li>
+  <li><b>Calidad demostrable</b>: 62 pruebas del backend etiquetadas por requisito que generan automáticamente la matriz de trazabilidad, 56 pruebas unitarias de la consola e integración continua en GitHub que en cada cambio ejecuta pruebas, comprobación de tipos y auditoría de dependencias.</li>
   <li><b>Trabajo en equipo y acceso remoto seguro</b>: varios analistas a la vez con roles, chat privado, presencia y avisos en directo; invitaciones de un solo uso y acceso desde el móvil solo por HTTPS a través de una VPN (Tailscale).</li>
   <li><b>Datos honestos</b>: se encontraron y corrigieron fuentes de datos falsos (por ejemplo, el propio backend generaba unas 2.400 «sesiones de ataque» al día contra el honeypot) y cada métrica documenta su fórmula y sus limitaciones.</li>
 </ul>
@@ -303,6 +303,9 @@ flowchart LR
 <tr><td><code>X-Forwarded-For</code> aceptado de cualquiera: IP falsificable y un único cupo de login para todos</td><td>Medio</td><td>Solo desde proxies de confianza, recorriendo la cadena desde la derecha</td></tr>
 <tr><td>Mensajes directos enviados por WebSocket a todos los conectados</td><td>Medio</td><td>El servidor decide quién recibe cada evento</td></tr>
 <tr><td>Acceso por la VPN sin cifrar y a todos los puertos de Docker</td><td>Medio</td><td>Solo HTTPS (<code>tailscale serve</code>) y cortafuegos persistente para el resto</td></tr>
+<tr><td>Durante los 5 minutos siguientes a encender la máquina, la lista de proxies de confianza quedaba vacía: IP real y cookies <code>Secure</code> incorrectas</td><td>Medio</td><td>Caché inicializada correctamente; prueba que simula una máquina recién arrancada</td></tr>
+<tr><td>La consola cargaba sus fuentes de Google Fonts: Google recibía la IP y el navegador de cada analista en cada acceso</td><td>Bajo</td><td>Fuentes autoalojadas (paquetes <code>@fontsource</code>, licencia OFL) y CSP sin dominios de terceros; una prueba impide volver a introducirlas</td></tr>
+<tr><td>El saneado del chat mutilaba mensajes con <code>&lt;</code> o <code>&gt;</code> (comandos, payloads) sin aportar protección, porque React ya escapa el texto</td><td>Bajo</td><td>Se conserva el texto y se eliminan los caracteres invisibles de reordenación (suplantación tipo «Trojan Source»); DOMPurify queda para el HTML</td></tr>
 </tbody></table>
 
 <h3>7.3 Gestión de secretos</h3>
@@ -317,13 +320,14 @@ flowchart LR
 <tr><td>Trivy</td><td>Imagen de la consola</td><td>49 altos/críticos</td><td><b>0</b> (Node 22 LTS, Vite 7, <code>npm ci</code>)</td></tr>
 <tr><td>Trivy</td><td>Imagen del backend</td><td>44 altos</td><td>44 sin parche publicado por Debian (se recogen al reconstruir)</td></tr>
 </tbody></table>
+<p>La auditoría no es una foto fija: la integración continua (<code>.github/workflows/ci.yml</code>) repite <code>pip-audit</code> y <code>npm audit</code> en cada cambio y cada lunes. Así se detectaron CVE publicadas después de la revisión en PyJWT 2.13.0 y urllib3 2.7.0, que se actualizaron a 2.15.1 y 2.8.0.</p>
 <p>Además se revisaron las licencias de todas las dependencias (<code>THIRD_PARTY_NOTICES.md</code>): se eliminaron PyMuPDF (AGPL-3.0, incompatible con la GPLv2 del proyecto y sin uso) y <code>react-leaflet</code> (licencia Hippocratic, que añade restricciones de uso), y se fijaron por versión o digest las imágenes que usaban <code>latest</code>.</p>
 </section>
 
 <!-- ═══════════════════════════ 8. CALIDAD ═══════════════════════════ -->
 <section class="chapter" id="calidad">
 <h2>8. Calidad: pruebas y trazabilidad</h2>
-<p>Al empezar la práctica había 17 pruebas, y 11 de ellas ni siquiera arrancaban: el modelo usaba un tipo de columna de PostgreSQL que la base de datos de pruebas no entendía. La suite actual tiene <b>57 pruebas</b> que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos ni servicios reales.</p>
+<p>Al empezar la práctica había 17 pruebas, y 11 de ellas ni siquiera arrancaban: el modelo usaba un tipo de columna de PostgreSQL que la base de datos de pruebas no entendía. La suite actual del backend tiene <b>62 pruebas</b> que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos ni servicios reales.</p>
 <pre>bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md</pre>
 <table>
 <thead><tr><th>Bloque</th><th style="width:9%">Pruebas</th><th>Qué demuestra</th></tr></thead>
@@ -333,8 +337,13 @@ flowchart LR
 <tr><td>Incidentes, métricas y runbooks</td><td class="num">10</td><td>Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente</td></tr>
 <tr><td>Chat, presencia y red</td><td class="num">11</td><td>Privacidad de DMs, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS</td></tr>
 <tr><td>Informes, inteligencia y operaciones</td><td class="num">11</td><td>Huella que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh confirma, auditoría sin cuerpos</td></tr>
+<tr><td>Arranque y apagado del servicio</td><td class="num">5</td><td>Esquema, administrador y datos semilla sin duplicar; producción no arranca sin administrador; el apagado no pierde auditorías en curso</td></tr>
 </tbody></table>
-<p>Las pruebas también encontraron fallos reales: comparaciones de fechas sin zona horaria en invitaciones y métricas, que se corrigieron en el código.</p>
+<p>La consola tiene su propia suite de <b>56 pruebas unitarias</b> (Vitest y Testing Library): saneado frente a XSS, cliente de la API (token CSRF, una sola renovación de sesión aunque caduquen varias peticiones a la vez), estado global, el botón de «mantener pulsado» de las acciones destructivas y la ausencia de recursos de terceros.</p>
+<pre>cd frontend &amp;&amp; npm test        # pruebas de la consola
+cd frontend &amp;&amp; npm run typecheck   # comprobación de tipos (0 errores)</pre>
+<p>Las dos suites, la comprobación de tipos, el build de producción, la auditoría de dependencias y la construcción de las imágenes Docker se ejecutan en <b>GitHub Actions</b> en cada cambio; la matriz de trazabilidad de cada ejecución queda en el resumen del job.</p>
+<p>Las pruebas también encontraron fallos reales que se corrigieron en el código: comparaciones de fechas sin zona horaria en invitaciones y métricas, la lista de proxies de confianza vacía tras encender la máquina, traducciones de alertas que fallaban con paréntesis y el chat que borraba texto legítimo.</p>
 <h3>Matriz de trazabilidad</h3>
 <p>Cada prueba lleva la etiqueta de los requisitos que verifica; al ejecutar la suite se genera la matriz requisito → pruebas → resultado. Resultado de la última ejecución: <b>{{TRACE_SUMMARY}}</b></p>
 {{TRACE_TABLE}}

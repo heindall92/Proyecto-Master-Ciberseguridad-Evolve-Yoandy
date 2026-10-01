@@ -12,6 +12,7 @@
   <img alt="IA local" src="https://img.shields.io/badge/IA-LOCAL%20%C2%B7%20OLLAMA-000000?style=flat&logo=ollama&logoColor=white"/>
   <img alt="Interfaz ES/EN" src="https://img.shields.io/badge/UI-ES%20%2F%20EN-2E8B57?style=flat"/>
   <img alt="20 runbooks" src="https://img.shields.io/badge/20-RUNBOOKS%20NIST-CC8F00?style=flat"/>
+  <a href="https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/actions/workflows/ci.yml/badge.svg"/></a>
   <img alt="Cobertura ATT&CK" src="https://img.shields.io/badge/99%20de%20336-T%C3%89CNICAS%20ATT%26CK-8B1142?style=flat"/>
 </p>
 
@@ -202,7 +203,7 @@ docker compose exec ollama ollama list
 bash scripts/wazuh_post_install.sh
 ```
 
-Si la contraseña de administrador se pierde: `docker compose exec backend python /opt/valhalla-scripts/reset_admin.py`.
+Si la contraseña de administrador se pierde: `docker compose exec backend python /opt/valhalla-scripts/reset_admin.py` (la pide sin mostrarla).
 
 </details>
 
@@ -238,7 +239,7 @@ En `.env`: `VALHALLA_PUBLIC_URL=https://<máquina>.<tailnet>.ts.net`, esa misma 
 
 ## <img src="docs/assets/icons/list-checks.svg" width="20" height="20" valign="middle"/> Calidad
 
-Los [requisitos funcionales y no funcionales](docs/REQUISITOS.md) tienen criterios de aceptación comprobables. La suite del backend (57 pruebas) los verifica y genera la [matriz de trazabilidad](docs/TRAZABILIDAD.md) requisito → pruebas → resultado:
+Los [requisitos funcionales y no funcionales](docs/REQUISITOS.md) tienen criterios de aceptación comprobables. La suite del backend (62 pruebas) los verifica y genera la [matriz de trazabilidad](docs/TRAZABILIDAD.md) requisito → pruebas → resultado:
 
 ```bash
 bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md
@@ -251,8 +252,18 @@ bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDA
 | Incidentes, métricas y runbooks | 10 | Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente. |
 | Chat, presencia y red | 11 | Privacidad de mensajes directos, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS. |
 | Informes, inteligencia y operaciones | 11 | Huella SHA-256 que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh lo confirma, auditoría sin cuerpos. |
+| Arranque y apagado | 5 | Esquema y datos semilla sin duplicar, producción no arranca sin administrador, el apagado no pierde auditorías en curso. |
 
 Las pruebas usan SQLite en memoria y dobles de Wazuh, OpenSearch, Ollama y Tailscale: no tocan datos ni servicios reales. Lo que no se puede automatizar (instalación en limpio, diseño adaptable, IA) figura en la matriz con su verificación manual.
+
+La consola tiene además **56 pruebas unitarias** (Vitest + Testing Library): saneado frente a XSS, cliente de la API (CSRF y renovación de sesión), estado global, botón de «mantener pulsado» y ausencia de recursos de terceros.
+
+```bash
+cd frontend && npm ci && npm test   # pruebas de la consola
+npm run typecheck                   # comprobación de tipos
+```
+
+**Integración continua** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): en cada *push* y *pull request*, GitHub Actions ejecuta las dos suites, la comprobación de tipos, el build de producción, `pip-audit` y `npm audit`, y construye las imágenes Docker del backend y del gateway. La auditoría de dependencias se repite cada lunes aunque no haya cambios.
 
 ## <img src="docs/assets/icons/shield-check.svg" width="20" height="20" valign="middle"/> Seguridad
 
@@ -266,6 +277,7 @@ Un SOC es un objetivo en sí mismo. Resumen de los controles:
 - **Auditoría** de toda acción que modifica datos, con usuario, IP real y resultado; nunca se guarda el cuerpo de la petición (contraseñas, claves).
 - **Secretos fuera del repositorio**: `.env` y certificados se generan en cada instalación; los enlaces de invitación se guardan como SHA-256.
 - **Acciones destructivas** (borrar, bloquear) exigen mantener pulsado el botón.
+- **Sin terceros al cargar la consola**: las fuentes van autoalojadas (antes Google Fonts recibía la IP de cada analista) y la CSP del gateway mantiene `script-src 'self'` sin scripts inline.
 
 ## <img src="docs/assets/icons/triangle-alert.svg" width="20" height="20" valign="middle"/> Limitaciones conocidas
 

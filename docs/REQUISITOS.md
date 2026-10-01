@@ -37,6 +37,6 @@ y enlaza cada requisito con sus pruebas y su resultado.
 | RNF-04 | Auditoría | Cada acción que modifica datos queda registrada con usuario, IP y código de resultado, sin guardar el cuerpo de la petición. | Automática |
 | RNF-05 | Datos reales | Ninguna métrica se inventa: sin datos se muestra 0 o «sin datos», y las limitaciones se declaran. | Automática (métricas con BD vacía) + Manual: revisión de paneles |
 | RNF-06 | Privacidad | Los mensajes directos no son legibles por terceros (tampoco por el administrador) y la IA corre en local. | Automática |
-| RNF-07 | Instalación reproducible | `install.sh` / `install.ps1` instalan desde cero: secretos, certificados, stack, modelo y keystore de Wazuh. | Manual: instalación desde cero el 01/10/2026 desde el repositorio público, correcta (memoria, §9.2) |
+| RNF-07 | Instalación reproducible | `install.sh` / `install.ps1` instalan desde cero: secretos, certificados, stack, modelo y keystore de Wazuh. | Automática (arranque: esquema, administrador y datos semilla sin duplicar) + Manual: instalación desde cero el 01/10/2026 desde el repositorio público, correcta (memoria, §9.2) |
 | RNF-08 | Usabilidad y diseño adaptable | La consola funciona a 390 px (móvil), 1280 px y 1700 px sin desbordes; tema claro y oscuro; ES/EN. | Manual: capturas en `docs/img/readme` |
 | RNF-09 | Rendimiento de la API | Las lecturas habituales del panel responden en menos de 1 s con el stack local. | Manual: medición del 01/10/2026 con `curl`: 10 lecturas habituales entre 0,005 y 0,058 s |

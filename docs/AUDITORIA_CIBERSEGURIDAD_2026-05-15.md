@@ -215,9 +215,9 @@ Internet → Gateway :8443 (recomendado único punto de entrada prod)
 | # | Acción | Estado |
 |---|--------|--------|
 | 11 | JWT access 120 min + refresh 7 días + denylist `revoked_tokens` + `/api/auth/refresh` | ✅ |
-| 12 | CSP nginx sin `unsafe-inline`; `sanitize.ts` + DOMPurify en chat | ✅ |
+| 12 | CSP nginx sin `unsafe-inline`; `sanitize.ts` + DOMPurify en chat | ✅ · *Revisado el 01/10/2026: `script-src` sigue sin `unsafe-inline` (el script de arranque pasó a fichero), `style-src` lo admite porque React/MUI necesitan estilos inline; el chat ya no usa DOMPurify (React escapa el texto) y elimina caracteres bidi. Ver SECURITY.md.* |
 | 13 | Tests ampliados (refresh, logout revoca, jti) — 12 tests | ✅ |
-| 14 | CI `.github/workflows/security.yml` (`pip-audit`, `npm audit`, pytest) | ✅ |
+| 14 | CI `.github/workflows/security.yml` (`pip-audit`, `npm audit`, pytest) | ✅ · *Sustituido el 01/10/2026 por `ci.yml`: `security.yml` ejecutaba un `tests/test_security.py` que ya no existía.* |
 | 15 | `/docs` deshabilitado con `ENV=production` | ✅ |
 
 ---

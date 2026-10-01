@@ -5,6 +5,7 @@ Valhalla SOC se distribuye bajo **GPLv2** (ver [LICENSE](LICENSE)). Incluye o us
 ## Revisión de compatibilidad
 
 - Todas las dependencias usan licencias permisivas (MIT, BSD, Apache-2.0, ISC, PSF, 0BSD) o de copyleft débil compatibles con el uso que se hace de ellas: **psycopg** (LGPL-3.0, enlazada como biblioteca sin modificar), **certifi** y **DOMPurify** (MPL-2.0; DOMPurify con doble licencia MPL-2.0 / Apache-2.0).
+- **Tipografías** de la consola (Rajdhani, JetBrains Mono y Share Tech Mono, vía los paquetes `@fontsource`, 01/10/2026): **SIL Open Font License 1.1**, que permite empaquetarlas y redistribuirlas con software de cualquier licencia siempre que no se vendan por separado. Se sirven desde la propia consola en lugar de Google Fonts.
 - **Eliminadas por incompatibilidad** en esta revisión: **PyMuPDF** (AGPL-3.0: incompatible con GPLv2 y no se usaba en el código) y **react-leaflet** (Hippocratic-2.1: añade restricciones de uso, prohibidas por la GPLv2; sustituido por Leaflet, BSD-2-Clause).
 - **Modelo de IA**: Qwen2.5-3B-Instruct se distribuye bajo la *Qwen Research License* (uso de investigación, no comercial). No se incluye en el repositorio: el contenedor `ollama-init` lo descarga en la instalación. Para un uso comercial hay que cambiar `OLLAMA_MODEL` por un modelo con licencia permisiva.
 
@@ -80,7 +81,7 @@ Valhalla SOC se distribuye bajo **GPLv2** (ver [LICENSE](LICENSE)). Incluye o us
 | pydantic-settings | 2.14.2 | MIT | https://github.com/pydantic/pydantic-settings |
 | pydantic_core | 2.46.2 | MIT | https://github.com/pydantic |
 | Pygments | 2.20.0 | BSD-2-Clause | https://pygments.org |
-| PyJWT | 2.13.0 | MIT | https://github.com/jpadilla/pyjwt |
+| PyJWT | 2.15.1 | MIT | https://github.com/jpadilla/pyjwt |
 | pyparsing | 3.3.2 | MIT | https://github.com/pyparsing/pyparsing/ |
 | pytest | 9.0.3 | MIT | https://docs.pytest.org/en/latest/ |
 | pytest-asyncio | 1.3.0 | Apache-2.0 | https://github.com/pytest-dev/pytest-asyncio |
@@ -101,14 +102,14 @@ Valhalla SOC se distribuye bajo **GPLv2** (ver [LICENSE](LICENSE)). Incluye o us
 | typing-inspection | 0.4.2 | MIT | https://github.com/pydantic/typing-inspection |
 | typing_extensions | 4.15.0 | PSF-2.0 | https://github.com/python/typing_extensions |
 | tzdata | 2026.1 | Apache-2.0 | https://github.com/python/tzdata |
-| urllib3 | 2.7.0 | MIT | https://github.com/urllib3/urllib3/blob/main/CHANGES.rst |
+| urllib3 | 2.8.0 | MIT | https://github.com/urllib3/urllib3/blob/main/CHANGES.rst |
 | uvicorn | 0.44.0 | BSD-3-Clause | https://uvicorn.dev/ |
 | watchfiles | 1.1.1 | MIT License | https://github.com/samuelcolvin/watchfiles |
 | websockets | 16.0 | BSD-3-Clause | https://github.com/python-websockets/websockets |
 | Werkzeug | 3.1.8 | BSD-3-Clause | https://github.com/pallets/werkzeug/ |
 | wrapt | 2.1.2 | BSD-2-Clause | https://github.com/GrahamDumpleton/wrapt |
 
-## Consola (npm, dependencias de producción) — 133 paquetes
+## Consola (npm, dependencias de producción) — 136 paquetes
 
 | Paquete | Licencia | Repositorio |
 |---|---|---|
@@ -136,6 +137,9 @@ Valhalla SOC se distribuye bajo **GPLv2** (ver [LICENSE](LICENSE)). Incluye o us
 | @emotion/use-insertion-effect-with-fallbacks@1.2.0 | MIT | https://github.com/emotion-js/emotion/tree/main/packages/use-insertion-effect-with-fallbacks |
 | @emotion/utils@1.4.2 | MIT | https://github.com/emotion-js/emotion/tree/main/packages/utils |
 | @emotion/weak-memoize@0.4.0 | MIT | https://github.com/emotion-js/emotion/tree/main/packages/weak-memoize |
+| @fontsource/jetbrains-mono@5.3.0 | OFL-1.1 | https://github.com/fontsource/font-files |
+| @fontsource/rajdhani@5.3.0 | OFL-1.1 | https://github.com/fontsource/font-files |
+| @fontsource/share-tech-mono@5.3.0 | OFL-1.1 | https://github.com/fontsource/font-files |
 | @jridgewell/gen-mapping@0.3.13 | MIT | https://github.com/jridgewell/sourcemaps |
 | @jridgewell/resolve-uri@3.1.2 | MIT | https://github.com/jridgewell/resolve-uri |
 | @jridgewell/sourcemap-codec@1.5.5 | MIT | https://github.com/jridgewell/sourcemaps |
