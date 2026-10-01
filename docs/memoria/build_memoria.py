@@ -3,7 +3,7 @@
 Las tablas de requisitos y de trazabilidad se leen de docs/REQUISITOS.md y
 docs/TRAZABILIDAD.md, así la memoria no se desincroniza del proyecto.
 
-Uso:  python docs/memoria/build_memoria.py [--grupo 07]
+Uso:  python docs/memoria/build_memoria.py [--grupo "Proyecto Valhalla"]
 Requiere Playwright (Chromium o Edge):  pip install playwright
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ def build(grupo: str) -> Path:
     out_html.write_text(page, encoding="utf-8")
 
     from playwright.sync_api import sync_playwright
-    pdf = HERE / f"P3_Grupo{grupo}_Memoria.pdf"
+    pdf = HERE / f"P3_Grupo{grupo.replace(' ', '')}_Memoria.pdf"  # P3_GrupoProyectoValhalla_Memoria.pdf
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch()
@@ -96,5 +96,5 @@ def build(grupo: str) -> Path:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grupo", default="XX")
+    ap.add_argument("--grupo", default="Proyecto Valhalla")
     print(build(ap.parse_args().grupo))

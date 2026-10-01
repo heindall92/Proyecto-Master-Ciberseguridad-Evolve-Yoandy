@@ -72,14 +72,14 @@
     <p style="margin-top:18px;color:#cfeedd;max-width:150mm;text-align:left">Centro de operaciones de seguridad con SIEM Wazuh, honeypot Cowrie, inteligencia de amenazas e IA local: detecta ataques reales, los investiga y los convierte en informes defendibles.</p>
   </div>
   <div class="meta">
-    <b>Grupo {{GRUPO}}</b> · Entrega: 16 de octubre de 2026<br>
+    <b>Grupo: {{GRUPO}}</b> · Entrega: 16 de octubre de 2026<br>
     Repositorio: github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy · etiqueta <b>v1.0-practica3</b>
     <div class="team">
-      <span><b>Yoandy Ramírez Delgado</b> (coordinación y desarrollo)</span>
-      <span>Rosalino Martínez</span>
-      <span>Julieta Tenti</span>
-      <span>Santiago de Prada</span>
-      <span>svisomar-SP</span>
+      <span><b>Santiago Visso</b> · jefe de proyecto</span>
+      <span><b>Yoandy Ramírez Delgado</b> · arquitectura y desarrollo</span>
+      <span><b>Santiago de Prada</b> · honeypot</span>
+      <span><b>Julieta Tenti</b> · informes ejecutivos</span>
+      <span><b>Rosalino Martínez</b> · integraciones de IA</span>
     </div>
   </div>
 </div>
@@ -415,8 +415,18 @@ cd valhalla-soc
 <tr><td>Práctica 3</td><td>sept.–oct. 2026</td><td>Rediseño completo, datos reales, seguridad, pruebas, instalación desde cero y acceso remoto seguro.</td></tr>
 </tbody></table>
 <p>El repositorio acumula 204 commits; unos 55 corresponden a la Práctica 3. El trabajo se organizó en ramas (<code>ui/premium-redesign</code> para la Práctica 3) y se unió a <code>main</code> por avance directo una vez revisado. Cada commit describe el problema, la causa y la corrección, de modo que el historial sirve también como registro de decisiones.</p>
-<h3>12.2 Equipo</h3>
-<p>El proyecto lo firman cinco miembros. En la Práctica 3, la coordinación, el desarrollo y la documentación los llevó principalmente Yoandy Ramírez Delgado; el resto del equipo revisó y aprobó el trabajo realizado. Las contribuciones de las prácticas anteriores quedan reflejadas en el historial de Git.</p>
+<h3>12.2 Equipo y reparto del trabajo</h3>
+<p>El grupo <b>Proyecto Valhalla</b> está formado por cinco miembros. Cada uno se hizo cargo de un área del producto; el reparto se puede seguir en el historial de Git, donde quedan los commits de cada autor.</p>
+<table>
+<thead><tr><th style="width:22%">Miembro</th><th style="width:20%">Rol</th><th>Aportaciones principales</th></tr></thead>
+<tbody>
+<tr><td><b>Santiago Visso</b></td><td>Jefe de proyecto</td><td>Coordinación del grupo y seguimiento de las entregas. Contenedor atacante del laboratorio con Kali Linux y herramientas de pentesting, estado global de la consola con Redux Toolkit e informe de la migración del atacante.</td></tr>
+<tr><td><b>Yoandy Ramírez Delgado</b></td><td>Arquitectura, desarrollo e integración</td><td>Arquitectura del SOC e integración de Wazuh, Cowrie, Ollama, backend y consola. En la Práctica 3: rediseño de la consola, trabajo en equipo y acceso por VPN, seguridad (STRIDE, auditoría y correcciones), pruebas y trazabilidad, instaladores y documentación.</td></tr>
+<tr><td><b>Santiago de Prada</b></td><td>Honeypot</td><td>Stack del honeypot Cowrie, verificación automática de extremo a extremo, simulación de ataques en tiempo real y memoria técnica del honeypot.</td></tr>
+<tr><td><b>Julieta Tenti</b></td><td>Informes ejecutivos</td><td>Módulo generador de informes ejecutivos en PDF: maquetación y cabecera con logo, selector de rango de fechas, análisis con puntos dinámicos y documentación del módulo. Es la base del Centro de Informes actual.</td></tr>
+<tr><td><b>Rosalino Martínez</b></td><td>Integraciones de IA</td><td>Integración con Ollama: asistente del chat, informes con IA y su caché, bucle proactivo de inteligencia de amenazas, webhook en tiempo real y análisis forense en tiempo real. Documentación de las integraciones y licencia GPLv2.</td></tr>
+</tbody></table>
+<p>En la Práctica 3 el trabajo partió de estas piezas: el honeypot, el generador de informes, las integraciones de IA y el laboratorio de ataque se integraron, se revisaron y se ampliaron, y el equipo validó los cambios antes de la entrega.</p>
 <h3>12.3 Metodología</h3>
 <p>Se trabajó en ciclos cortos: identificar un problema (a menudo al intentar demostrar un requisito), corregirlo, verificarlo en pantalla a varios anchos (móvil, 1280 y 1700 píxeles) o con pruebas, y documentarlo en el commit. Los cambios con impacto en la interfaz se validaban con el responsable del producto antes de aplicarse.</p>
 </section>
@@ -471,7 +481,7 @@ bash scripts/run_tests.sh
 # Auditoría de dependencias e imágenes
 bash scripts/security_audit.sh
 # Regenerar esta memoria
-python docs/memoria/build_memoria.py --grupo {{GRUPO}}</pre>
+python docs/memoria/build_memoria.py --grupo "{{GRUPO}}"</pre>
 <h3>C. Credenciales y accesos</h3>
 <p>Ninguna credencial se publica. Tras la instalación, las contraseñas están en el <code>.env</code> generado: <code>ADMIN_PASSWORD</code> para la consola de Valhalla (usuario <code>admin</code>) e <code>INDEXER_PASSWORD</code> para la consola de Wazuh (usuario <code>admin</code>, <code>https://localhost:5601</code>).</p>
 </section>

@@ -19,7 +19,7 @@
   <img src="docs/img/readme/overview.png" alt="Vista general de Valhalla SOC" width="880"/>
 </p>
 
-> Proyecto del Máster en Ciberseguridad (Evolve Academy) · Práctica 3: de prototipo a producto · Septiembre de 2026
+> Grupo **Proyecto Valhalla** · Máster en Ciberseguridad (Evolve Academy) · Práctica 3: de prototipo a producto · Octubre de 2026
 
 **Valhalla SOC es un centro de operaciones de seguridad para laboratorio y equipos pequeños.** Un honeypot recibe ataques de verdad, Wazuh los detecta y los correlaciona, y una consola propia los convierte en trabajo de analista: triaje, incidentes con SLA, runbooks, caza de amenazas, inteligencia de vulnerabilidades e informes ejecutivos y de cumplimiento. Todo corre en local con Docker; la IA también, así que ningún dato del SOC sale de la máquina.
 
@@ -311,7 +311,7 @@ valhalla-soc/
 
 ## <img src="docs/assets/icons/scale.svg" width="20" height="20" valign="middle"/> Licencia
 
-Distribuido bajo licencia [GPLv2](LICENSE) · © 2026 Equipo Valhalla SOC.
+Distribuido bajo licencia [GPLv2](LICENSE) · © 2026 Grupo Proyecto Valhalla.
 
 Componentes de terceros: Wazuh (GPLv2), Cowrie (BSD-3-Clause), Ollama (MIT), el modelo Qwen2.5-3B-Instruct ([Qwen Research License](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/main/LICENSE): uso de investigación, no comercial; para un despliegue comercial hay que cambiar de modelo con `OLLAMA_MODEL`), FastAPI (MIT), React (MIT), OpenSearch (Apache 2.0), Leaflet (BSD-2) con teselas de Esri. Iconografía de la consola y de este README: [Lucide](https://lucide.dev) (ISC).
 
@@ -320,38 +320,42 @@ Componentes de terceros: Wazuh (GPLv2), Cowrie (BSD-3-Clause), Ollama (MIT), el 
 <table>
 <tr>
 <td align="center" width="50%" valign="top">
-<img src="https://avatars.githubusercontent.com/u/238087465?v=4" alt="Yoandy Ramírez Delgado" width="96"/><br/>
-<b>Yoandy Ramírez Delgado</b><br/>
-<sub>Creador y mantenedor · Junior Pentester · eJPTv2 · AI Governance (ISO 42001) · SysAdmin</sub><br/>
-<a href="https://www.linkedin.com/in/yoandyrd92/">LinkedIn</a> · <a href="https://github.com/heindall92">GitHub</a> · <a href="https://yoandyramirez.com">Portafolio</a> · <a href="https://profile.hackthebox.com/profile/019c5812-b4ca-7315-b12f-14db6d2b42fa">HackTheBox</a>
-</td>
-<td align="center" width="50%" valign="top">
-<img src="docs/img/equipo/santiago-de-prada.jpg" alt="Santiago de Prada" width="96"/><br/>
-<b>Santiago de Prada</b><br/>
-<sub>Computer Engineering · Cybersecurity · eJPTv2 · Pentesting · Cyber Threat Intelligence · Incident Response</sub><br/>
-<a href="https://github.com/saantiidp">GitHub</a>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%" valign="top">
-<img src="https://avatars.githubusercontent.com/u/153531806?v=4" alt="Rosalino Martínez" width="96"/><br/>
-<b>Rosalino Martínez</b><br/>
-<sub>Full Stack Dev &amp; Cybersecurity Analyst</sub><br/>
-<a href="https://github.com/Rosalinowastaken">GitHub</a>
-</td>
-<td align="center" width="50%" valign="top">
-<img src="https://avatars.githubusercontent.com/u/240470051?v=4" alt="svisomar-SP" width="96"/><br/>
-<b>svisomar-SP</b><br/>
-<sub>Equipo Valhalla SOC</sub><br/>
+<img src="https://avatars.githubusercontent.com/u/240470051?v=4" alt="Santiago Visso" width="96"/><br/>
+<b>Santiago Visso</b><br/>
+<sub><b>Jefe de proyecto</b></sub><br/>
+<sub>Coordinación del grupo · laboratorio de ataque (Kali)</sub><br/>
 <a href="https://github.com/svisomar-SP">GitHub</a>
 </td>
-</tr>
-<tr>
 <td align="center" width="50%" valign="top">
 <img src="https://avatars.githubusercontent.com/u/206676927?v=4" alt="Julieta Tenti" width="96"/><br/>
 <b>Julieta Tenti</b><br/>
-<sub>Equipo Valhalla SOC</sub><br/>
+<sub><b>Informes ejecutivos (PDF)</b></sub><br/>
 <a href="https://github.com/julitenti">GitHub</a>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%" valign="top">
+<img src="https://avatars.githubusercontent.com/u/238087465?v=4" alt="Yoandy Ramírez Delgado" width="96"/><br/>
+<b>Yoandy Ramírez Delgado</b><br/>
+<sub><b>Arquitectura, desarrollo e integración</b></sub><br/>
+<sub>Junior Pentester · eJPTv2 · AI Governance (ISO 42001) · SysAdmin</sub><br/>
+<a href="https://www.linkedin.com/in/yoandyrd92/">LinkedIn</a> · <a href="https://github.com/heindall92">GitHub</a> · <a href="https://yoandyramirez.com">Portafolio</a> · <a href="https://profile.hackthebox.com/profile/019c5812-b4ca-7315-b12f-14db6d2b42fa">HackTheBox</a>
+</td>
+<td align="center" width="50%" valign="top">
+<img src="https://avatars.githubusercontent.com/u/153531806?v=4" alt="Rosalino Martínez" width="96"/><br/>
+<b>Rosalino Martínez</b><br/>
+<sub><b>Integraciones de IA</b></sub><br/>
+<sub>Full Stack Dev &amp; Cybersecurity Analyst</sub><br/>
+<a href="https://github.com/Rosalinowastaken">GitHub</a>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%" valign="top">
+<img src="docs/img/equipo/santiago-de-prada.jpg" alt="Santiago de Prada" width="96"/><br/>
+<b>Santiago de Prada</b><br/>
+<sub><b>Honeypot Cowrie</b></sub><br/>
+<sub>Computer Engineering · Cybersecurity · eJPTv2 · Pentesting · Cyber Threat Intelligence · Incident Response</sub><br/>
+<a href="https://github.com/saantiidp">GitHub</a>
 </td>
 <td align="center" width="50%" valign="top">
 

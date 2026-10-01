@@ -395,4 +395,4 @@ Si tienes problemas con la instalación o el uso:
 
 > **Versión del manual:** 1.0
 > **Última actualización:** Abril 2026
-> **Autor:** Equipo Valhalla SOC
+> **Autor:** Grupo Proyecto Valhalla
