@@ -159,6 +159,10 @@ const AlexanaWord = ({ word, color = "#fff", height = "40px" }: { word: string, 
 const DM_LIST_KEY = (uid: number) => `valhalla.dm.list.${uid}`;
 const makeDmId = (a: number, b: number) => `dm:${Math.min(a,b)}-${Math.max(a,b)}`;
 
+/** Manual de usuario (MANUAL.md renderizado en GitHub). Antes apuntaba a "/MANUAL.md", que la
+ * consola no publica: el enlace abría otra copia de la propia aplicación. */
+const MANUAL_URL = "https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy/blob/main/MANUAL.md";
+
 export default function App() {
   const dispatch = useAppDispatch();
 
@@ -811,7 +815,7 @@ export default function App() {
                  </div>
                  <button type="submit" className="login-btn">{t('login_btn')}</button>
                  <div className="login-footer">
-                     <a className="login-manual-link" href="/MANUAL.md" target="_blank" rel="noopener noreferrer">{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
+                     <a className="login-manual-link" href={MANUAL_URL} target="_blank" rel="noopener noreferrer">{lang === 'es' ? '¿Primera vez? Ver manual' : 'First time? See manual'}</a>
                   </div>
                  <div className="login-lang-wrap">
                     <button type="button" className="login-lang-btn" onClick={toggleLang}>
@@ -854,11 +858,13 @@ export default function App() {
   );
 
   const isAdminRole = user?.role === 'admin';
+  // Informes: el backend solo los permite a admin y analista (_require_report_role)
+  const canReports = ['admin', 'analyst', 'analista'].includes(user?.role ?? '');
   const NAV_ITEMS: Array<{ id: string; es: string; en: string; show: boolean }> = [
     { id: 'overview', es: 'Vista general', en: 'Overview', show: true },
     { id: 'siem', es: 'SIEM', en: 'SIEM', show: true },
     { id: 'workspace', es: 'Workspace', en: 'Workspace', show: true },
-    { id: 'reports', es: 'Informes', en: 'Reports', show: user?.role !== 'viewer' },
+    { id: 'reports', es: 'Informes', en: 'Reports', show: canReports },
     { id: 'assets', es: 'Activos', en: 'Assets', show: isAdminRole },
     { id: 'system', es: 'Sistema', en: 'System', show: isAdminRole },
     { id: 'cowrie', es: 'Honeypots', en: 'Honeypots', show: isAdminRole },
@@ -868,7 +874,7 @@ export default function App() {
     { id: 'users', es: 'Usuarios', en: 'Users', show: isAdminRole },
   ];
   const MOBILE_LABEL: Record<string, [string, string]> = { overview: ['Inicio', 'Home'], workspace: ['Casos', 'Cases'] };
-  const TAB_IDS = ['overview', 'siem', 'workspace', user?.role !== 'viewer' ? 'reports' : 'intel'];
+  const TAB_IDS = ['overview', 'siem', 'workspace', canReports ? 'reports' : 'intel'];
   const goTo = (id: string) => { dispatch(setView(id)); setMoreOpen(false); };
 
   const incidentCount = stats?.metrics?.tickets_open || 0;
@@ -881,7 +887,7 @@ export default function App() {
   const initials = (user.username || '?').slice(0, 2).toUpperCase();
 
   // Módulos navegables desde el buscador (mismos permisos que el menú lateral).
-  const navCommands: Array<{ id: string; es: string; en: string; icon: PaletteCommand['icon']; admin?: boolean; kw?: string }> = [
+  const navCommands: Array<{ id: string; es: string; en: string; icon: PaletteCommand['icon']; admin?: boolean; reports?: boolean; kw?: string }> = [
     { id: 'overview', es: 'Vista general', en: 'Overview', icon: LayoutDashboard, kw: 'dashboard panel' },
     { id: 'siem', es: 'SIEM · Alertas Wazuh', en: 'SIEM · Wazuh alerts', icon: Layers, kw: 'alertas alerts wazuh' },
     { id: 'assets', es: 'Activos', en: 'Assets', icon: Monitor, admin: true, kw: 'agentes endpoints agents' },
@@ -896,13 +902,13 @@ export default function App() {
     { id: 'cveintel', es: 'CVE Intel', en: 'CVE Intel', icon: ShieldCheck, kw: 'kev exploit vulnerabilidad' },
     { id: 'runbooks', es: 'Runbooks', en: 'Runbooks', icon: BookOpen, kw: 'playbooks procedimientos' },
     { id: 'workspace', es: 'Workspace de incidentes', en: 'Incident workspace', icon: Briefcase, kw: 'incidentes incidents tickets tabla kanban' },
-    { id: 'reports', es: 'Centro de informes', en: 'Reports center', icon: FileText, kw: 'informe ejecutivo tecnico pdf grc riesgo cumplimiento mitre iso ens nist report' },
+    { id: 'reports', es: 'Centro de informes', en: 'Reports center', icon: FileText, reports: true, kw: 'informe ejecutivo tecnico pdf grc riesgo cumplimiento mitre iso ens nist report' },
     { id: 'users', es: 'Usuarios', en: 'Users', icon: Users, admin: true },
     { id: 'profile', es: 'Mi perfil', en: 'My profile', icon: UserRound, kw: 'contraseña password avatar' },
     { id: 'settings', es: 'Ajustes globales', en: 'Global settings', icon: SlidersHorizontal, admin: true, kw: 'api keys ollama' },
   ];
   const paletteCommands: PaletteCommand[] = [
-    ...navCommands.filter((c) => !c.admin || isAdmin).map((c) => ({
+    ...navCommands.filter((c) => (!c.admin || isAdmin) && (!c.reports || canReports)).map((c) => ({
       id: `nav-${c.id}`, label: es ? c.es : c.en, group: es ? 'Ir a' : 'Go to', icon: c.icon, keywords: c.kw,
       run: () => dispatch(setView(c.id)),
     })),
@@ -1194,8 +1200,8 @@ export default function App() {
                 {view === 'settings' && <SystemSettingsView lang={lang} />}
                 {view === 'siem' && <SiemView lang={lang} />}
                 {INTEL_VIEWS.includes(view) && <IntelHub lang={lang} initialIp={intelIp} initialTab={view === 'cveintel' ? 'vulns' : view === 'threatmap' ? 'map' : 'iocs'} />}
-                {view === 'cowrie' && <CowrieView lang={lang} />}
-                {view === 'runbooks' && <RunbooksView lang={lang} />}
+                {view === 'cowrie' && <CowrieView />}
+                {view === 'runbooks' && <RunbooksView />}
                 {view === 'bifrost' && <SocMaturityView lang={lang} />}
                 {/* "Incidentes" se fusionó en el Workspace (vista tabla) */}
                 {(view === 'workspace' || view === 'incidents') && <AnalystWorkspace lang={lang} currentUser={user!} initialData={workspaceData} onClearInitialData={() => dispatch(clearWorkspaceData())} initialMode={view === 'incidents' ? 'table' : undefined} />}
@@ -1347,13 +1353,13 @@ export default function App() {
                         <button
                           type="button"
                           className="chat-report-card"
-                          disabled={user?.role === 'viewer'}
+                          disabled={!canReports}
                           onClick={() => {
                             try { sessionStorage.setItem('valhalla.openReport', msg.attachment!.name); } catch { /* sin almacenamiento */ }
                             dispatch(setView('reports'));
                             if (isMobile) dispatch(setChatOpen(false));
                           }}
-                          title={user?.role === 'viewer' ? (lang === 'es' ? 'Requiere rol analista' : 'Analyst role required') : undefined}
+                          title={!canReports ? (lang === 'es' ? 'Requiere rol analista' : 'Analyst role required') : undefined}
                         >
                           <FileBarChart size={16} />
                           <span><b>{lang === 'es' ? 'Abrir informe' : 'Open report'}</b>{msg.attachment.name}</span>

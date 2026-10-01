@@ -37,6 +37,7 @@ __pycache__/
 
 # ── Node.js ──────────────────────────────────────────────────────────────────
 frontend/node_modules/
+frontend/app/node_modules/
 backend/node_modules/
 backend/package-lock.json
 frontend/.vite/

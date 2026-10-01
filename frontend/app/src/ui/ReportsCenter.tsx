@@ -275,7 +275,7 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
     if (!doc) return;
     const host = document.createElement("div");
     host.id = "rc-print-host";
-    host.innerHTML = doc.outerHTML;
+    host.appendChild(doc.cloneNode(true)); // copia del DOM ya pintado, sin re-interpretar HTML
     document.body.appendChild(host);
     document.body.classList.add("rc-printing");
     const prevTitle = document.title;

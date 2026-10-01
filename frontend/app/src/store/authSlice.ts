@@ -61,7 +61,7 @@ const authSlice = createSlice({
         is_active: true,
         is_superuser: true,
         role: "admin",
-        rank: "L3 Blue Team",
+        security_rank: "L3 Blue Team",
       };
       state.loading = false;
     },

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
@@ -32,5 +32,20 @@ export default defineConfig({
     include: ["framer-motion"]
   },
   preview: { host: true, port: 3000 },
+  // Pruebas unitarias de la consola (Vitest + Testing Library): `npm test`
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["src/test-setup.ts"],
+    restoreMocks: true,
+    unstubEnvs: true,
+    unstubGlobals: true,
+    coverage: {
+      provider: "v8",
+      include: ["src/lib/**", "src/store/**", "src/ui/premium/widgets.tsx"],
+      reporter: ["text", "html"],
+      reportsDirectory: "../coverage",
+    },
+  },
 });
 

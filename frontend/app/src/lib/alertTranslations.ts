@@ -29,8 +29,12 @@ export function translateAlertDescription(description: string | null | undefined
   if (!description || lang === "en") return description || "";
   const key = description.trim().toLowerCase();
   if (ALERT_ES[key]) return ALERT_ES[key];
+  // Sustitución por posición, no con RegExp: las claves llevan caracteres como "(" que
+  // en una expresión regular son sintaxis y hacían fallar la traducción parcial.
+  const lower = description.toLowerCase();
   for (const [en, es] of Object.entries(ALERT_ES)) {
-    if (key.includes(en)) return description.replace(new RegExp(en, "i"), es);
+    const at = lower.indexOf(en);
+    if (at !== -1) return description.slice(0, at) + es + description.slice(at + en.length);
   }
   return description;
 }

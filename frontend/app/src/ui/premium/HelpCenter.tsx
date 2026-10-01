@@ -20,7 +20,7 @@ const CONTENT: Record<Lang, Group[]> = {
       faqs: [
         { q: "¿Qué es Valhalla SOC?", a: "Una consola de **Security Operations Center** que centraliza las alertas de **Wazuh**, la telemetría del honeypot **Cowrie** y la inteligencia de amenazas (VirusTotal, OTX, CISA KEV). Permite convertir alertas en incidentes, trabajarlos en el Workspace con runbooks y generar informes ejecutivos, con un asistente de IA local (Ollama) de apoyo." },
         { q: "¿Cómo se pone en marcha desde cero?", a: "Clona el repositorio, ejecuta `python scripts/setup_env.py` para generar `.env` con secretos aleatorios, genera los certificados de Wazuh y levanta el stack con `docker compose --profile labs up -d --build`. El panel queda en el puerto `3000`. El README detalla cada paso." },
-        { q: "¿Qué diferencia hay entre administrador y analista?", a: "El **analista** ve alertas, incidentes, Threat Intel, runbooks y su Workspace. El **administrador** además gestiona usuarios, activos, monitores, integraciones, auditoría, ajustes globales y el informe ejecutivo. Los permisos se comprueban también en el backend: una llamada a la API sin el rol adecuado devuelve `403`." },
+        { q: "¿Qué diferencia hay entre administrador y analista?", a: "El **analista** ve alertas, incidentes, Threat Intel, runbooks, su Workspace y los informes. El **administrador** además gestiona usuarios, activos, monitores, integraciones, auditoría y ajustes globales. El **reportero** crea incidentes y ve los suyos; el **lector** solo ve los que tiene asignados o creó. Los permisos se comprueban también en el backend: una llamada a la API sin el rol adecuado devuelve `403`." },
         { q: "¿Cómo cambio mi contraseña o mi foto?", a: "Menú de usuario (arriba a la derecha) → **Perfil**. Desde ahí puedes subir un avatar y cambiar la contraseña, que debe cumplir la política de complejidad del sistema." },
       ],
     },
@@ -41,7 +41,7 @@ const CONTENT: Record<Lang, Group[]> = {
         { q: "¿Cómo convierto una alerta en incidente?", a: "En la tabla de alertas pulsa **+INC**. Se crea un ticket con la alerta asociada, que aparece en **Incidentes**, en las notificaciones y en el contador superior." },
         { q: "¿Cómo me asigno un incidente?", a: "Desde el panel de **notificaciones** (campana) → **Asignarme**, o desde el propio incidente en el **Workspace**, donde también puedes adjuntar evidencias (máx. 10 MB: imágenes, PDF, TXT/LOG, JSON, CSV, PCAP y ZIP)." },
         { q: "¿Qué son los runbooks?", a: "Procedimientos paso a paso para responder a cada tipo de amenaza (fuerza bruta SSH, malware, exfiltración…). Cada alerta del **LSA Monitor** sugiere el runbook más adecuado." },
-        { q: "¿Cómo genero el informe ejecutivo?", a: "Menú lateral → **Informe ejecutivo** (solo administradores). Elige el rango de fechas y exporta el PDF ejecutivo o el técnico. Los datos salen de las alertas e incidentes reales del periodo." },
+        { q: "¿Cómo genero el informe ejecutivo?", a: "Menú lateral → **Informes** → pestaña **Ejecutivo** (administradores y analistas). Elige el rango de fechas y exporta el PDF ejecutivo o el técnico. Los datos salen de las alertas e incidentes reales del periodo." },
       ],
     },
     {
@@ -81,7 +81,7 @@ const CONTENT: Record<Lang, Group[]> = {
       faqs: [
         { q: "What is Valhalla SOC?", a: "A **Security Operations Center** console that centralises **Wazuh** alerts, **Cowrie** honeypot telemetry and threat intelligence (VirusTotal, OTX, CISA KEV). Turn alerts into incidents, work them in the Workspace with runbooks and produce executive reports, supported by a local AI assistant (Ollama)." },
         { q: "How do I set it up from scratch?", a: "Clone the repository, run `python scripts/setup_env.py` to create `.env` with random secrets, generate the Wazuh certificates and start the stack with `docker compose --profile labs up -d --build`. The console runs on port `3000`. The README covers every step." },
-        { q: "What is the difference between admin and analyst?", a: "**Analysts** see alerts, incidents, Threat Intel, runbooks and their Workspace. **Admins** also manage users, assets, monitors, integrations, audit, global settings and the executive report. Permissions are enforced in the backend too: an API call without the right role returns `403`." },
+        { q: "What is the difference between admin and analyst?", a: "**Analysts** see alerts, incidents, Threat Intel, runbooks, their Workspace and reports. **Admins** also manage users, assets, monitors, integrations, audit and global settings. **Reporters** create incidents and see their own; **viewers** only see the ones assigned to or created by them. Permissions are enforced in the backend too: an API call without the right role returns `403`." },
         { q: "How do I change my password or picture?", a: "User menu (top right) → **Profile**. Upload an avatar or change your password there; it must meet the system complexity policy." },
       ],
     },
@@ -102,7 +102,7 @@ const CONTENT: Record<Lang, Group[]> = {
         { q: "How do I turn an alert into an incident?", a: "Press **+INC** in the alerts table. A ticket linked to the alert is created and appears in **Incidents**, in notifications and in the top counter." },
         { q: "How do I assign an incident to myself?", a: "From the **notifications** panel (bell) → **Assign to me**, or from the incident in the **Workspace**, where you can also attach evidence (max 10 MB: images, PDF, TXT/LOG, JSON, CSV, PCAP and ZIP)." },
         { q: "What are runbooks?", a: "Step-by-step procedures to respond to each threat type (SSH brute force, malware, exfiltration…). Every **LSA Monitor** alert suggests the most suitable runbook." },
-        { q: "How do I produce the executive report?", a: "Sidebar → **Executive report** (admins only). Pick the date range and export the executive or technical PDF. Data comes from the real alerts and incidents of the period." },
+        { q: "How do I produce the executive report?", a: "Sidebar → **Reports** → **Executive** tab (admins and analysts). Pick the date range and export the executive or technical PDF. Data comes from the real alerts and incidents of the period." },
       ],
     },
     {

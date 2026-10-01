@@ -1,8 +1,9 @@
 # Stage 1 — Build React dashboard
-FROM node:20-alpine AS frontend-builder
+# Node 22 LTS (Node 20 sin soporte desde el 30/04/2026) y `npm ci` con el lockfile: build reproducible
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app
-COPY frontend/package.json frontend/tsconfig.json frontend/vite.config.ts ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json frontend/tsconfig.json frontend/vite.config.ts ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/app ./app
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
