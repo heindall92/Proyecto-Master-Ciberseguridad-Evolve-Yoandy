@@ -113,7 +113,9 @@ flowchart LR
 
 ## 3. Riesgos residuales priorizados
 
-Corregidos en esta revisión: S7 (credencial de fábrica de la API de Wazuh), S8 (usuarios de demostración del indexador), S9 (contraseña de PostgreSQL de ejemplo) y el acceso del contenedor atacante al núcleo del SOC (D4).
+Corregidos en esta revisión: S7 (credencial de fábrica de la API de Wazuh), S8 (usuarios de demostración del indexador), S9 (contraseña de PostgreSQL de ejemplo) y el acceso del contenedor atacante al núcleo del SOC (D4). Las 22 vulnerabilidades del binario de `esbuild` desaparecen con la migración a Vite 7.
+
+| 🟡 Baja | 44 CVE sin parche publicado en la imagen base Debian del backend | Reconstruir periódicamente: el Dockerfile ya aplica `apt-get upgrade`. |
 
 | Prioridad | Riesgo | Acción |
 |---|---|---|
@@ -122,4 +124,3 @@ Corregidos en esta revisión: S7 (credencial de fábrica de la API de Wazuh), S8
 | 🟠 Media | Vinculación VPN por confianza en el primer uso (S5) | Vincular solo la cuenta que acepta la invitación de Tailscale (ya se hace cuando hay `TAILSCALE_API_KEY`). |
 | 🟠 Media | Auditoría modificable por el administrador de la BD (R1) | Exportar la auditoría al SIEM (append-only) o firmarla. |
 | 🟠 Media | Sin límites de recursos por contenedor (D4) | `mem_limit`/`cpus` en `docker-compose.yml`. |
-| 🟡 Baja | 44 CVE sin parche en la imagen base Debian del backend y 22 en el binario de `esbuild` (Go 1.23) | Reconstruir periódicamente (el Dockerfile ya aplica `apt-get upgrade`); pasar a Vite 7 cuando se valide. |

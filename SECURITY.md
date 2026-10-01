@@ -58,12 +58,9 @@ Se repite con `bash scripts/security_audit.sh`. Última ejecución: **26/09/2026
 | `pip-audit` | 84 dependencias Python del backend | 11 paquetes vulnerables (Starlette, PyJWT, cryptography, Pillow, python-multipart, urllib3, idna, anyio, click, msgpack, pydantic-settings) | **0** · actualizados a versiones corregidas; 56/56 pruebas en verde |
 | `npm audit` | 535 paquetes de la consola (incl. desarrollo) | 26 (1 crítico, 21 altos): DOMPurify, react-router, Vite, tar, Electron… | **0** · `npm audit fix` sin saltos de versión mayor |
 | Trivy | Imagen del backend (Debian 13) | 44 altos en paquetes del sistema base | 44 · **sin parche publicado por Debian**; el Dockerfile aplica `apt-get upgrade` para recogerlos al reconstruir |
-| Trivy | Imagen de la consola | 47 altos y 2 críticos (Node 20 sin soporte, OpenSSL, npm interno, paquetes antiguos) | 21 altos y 1 crítico, **todos en el binario de `esbuild`** (compilado con Go 1.23) · base Node 22 LTS, `npm ci` con lockfile |
+| Trivy | Imagen de la consola | 47 altos y 2 críticos (Node 20 sin soporte, OpenSSL, npm interno, paquetes antiguos) | **0** · base Node 22 LTS, `npm ci` con lockfile y Vite 7 (su `esbuild` 0.28 ya está compilado con un Go corregido) |
 
-**Riesgo aceptado — `esbuild`:** la corrección exige pasar de Vite 6 a Vite 7 (salto de versión
-mayor). `esbuild` solo transforma el código de la consola dentro del contenedor y no escucha en la
-red, por lo que las vulnerabilidades de la biblioteca estándar de Go (en su mayoría de red y
-análisis de certificados) no son alcanzables desde fuera. Se revisará al migrar a Vite 7.
+**`esbuild` (resuelto):** la versión que traía Vite 6 estaba compilada con Go 1.23 (22 avisos). Se migró a Vite 7.3.6 y `@vitejs/plugin-react` 5, que usan `esbuild` 0.28; la consola se verificó en escritorio y móvil.
 
 ### Cambios de cadena de suministro aplicados
 

@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import logger from "../lib/logger";
 import { sanitizePlainText } from "../lib/sanitize";
@@ -313,6 +313,13 @@ export default function App() {
       window.removeEventListener('navigate-to-view', handleNavigateView);
     };
   }, []);
+
+  // Foto de perfil: el sufijo anti-caché se calcula solo cuando cambia la foto. Antes usaba
+  // Date.now() en cada render y el navegador la descargaba de nuevo varias veces por segundo.
+  const avatarSrc = useMemo(
+    () => (profilePic ? `${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}` : null),
+    [profilePic],
+  );
 
   // Enlace de invitación (/activar#token): sustituye el formulario de login hasta activar la cuenta
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
@@ -1003,7 +1010,7 @@ export default function App() {
                 <span className="vp-user__rank">{user.security_rank?.toUpperCase() || 'ANALISTA'}</span>
               </div>
               <span className="vp-avatar">
-                {profilePic ? <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="" /> : initials}
+                {avatarSrc ? <img src={avatarSrc} alt="" /> : initials}
               </span>
               <ChevronDown size={14} color="var(--tb-fg-dim)" />
             </button>
@@ -1016,7 +1023,7 @@ export default function App() {
             <div className="vp-pop" style={{ width: 272 }} role="menu" onClick={e => e.stopPropagation()}>
               <div className="vp-pop__head">
                 <span className="vp-avatar vp-avatar--lg">
-                  {profilePic ? <img src={`${profilePic}${profilePic.includes('?') ? '&' : '?'}t=${Date.now()}`} alt="" /> : initials}
+                  {avatarSrc ? <img src={avatarSrc} alt="" /> : initials}
                 </span>
                 <div style={{ minWidth: 0 }}>
                   <div className="vp-pop__title" style={{ letterSpacing: 1 }}>{user.username.toUpperCase()}</div>
