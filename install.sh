@@ -128,7 +128,7 @@ echo -e "  ${GR}║           VALHALLA SOC  instalado con éxito           ║${
 echo -e "  ${GR}╚═══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Panel SOC:         ${GR}http://localhost:3000${NC}"
-echo -e "  Wazuh Dashboard:   ${GR}https://localhost${NC}  (admin / admin)"
+echo -e "  Wazuh Dashboard:   ${GR}https://localhost:5601${NC}  (admin / INDEXER_PASSWORD del .env)"
 echo -e "  API Backend:       ${GR}http://localhost:8000/docs${NC}"
 echo -e "  Cowrie Honeypot:   SSH puerto 2222"
 echo ""

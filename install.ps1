@@ -164,7 +164,7 @@ Write-Host "  ║           VALHALLA SOC  instalado con éxito           ║" -F
 Write-Host "  ╚═══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Panel SOC:         http://localhost:3000" -ForegroundColor White
-Write-Host "  Wazuh Dashboard:   https://localhost (admin / admin)" -ForegroundColor White
+Write-Host "  Wazuh Dashboard:   https://localhost:5601 (admin / INDEXER_PASSWORD del .env)" -ForegroundColor White
 Write-Host "  API Backend:       http://localhost:8000/docs" -ForegroundColor White
 Write-Host "  Cowrie Honeypot:   SSH puerto 2222" -ForegroundColor White
 Write-Host ""

@@ -76,7 +76,7 @@ flowchart LR
 | `postgres` | Usuarios, incidentes, runbooks, informes, auditoría, chat | — (solo red interna) |
 | `wazuh.manager` | Reglas, agentes, API de Wazuh | `1514`, `1515` · API en `127.0.0.1:55000` |
 | `wazuh.indexer` | Almacén de alertas e inventario (OpenSearch) | — (solo red interna) |
-| `wazuh.dashboard` | Consola nativa de Wazuh | `443` |
+| `wazuh.dashboard` | Consola nativa de Wazuh | `5601` (HTTPS) |
 | `cowrie` | Honeypot SSH/Telnet | `2222`, `2223` |
 | `ollama` + `ollama-init` | Modelo de IA local y su descarga inicial | `127.0.0.1:11434` |
 | `attacker`, `wazuh.agent` | Laboratorio: atacante automático (red aislada `lab-net`, solo ve el honeypot) y agente | perfil `labs` |
@@ -212,7 +212,7 @@ Si la contraseña de administrador se pierde: `docker compose exec backend pytho
 |---|---|---|
 | Consola Valhalla SOC | `http://localhost:3000` | `admin` · `ADMIN_PASSWORD` |
 | API y documentación | `http://localhost:8000/docs` | token de sesión |
-| Consola de Wazuh | `https://localhost` | `admin` · `INDEXER_PASSWORD` |
+| Consola de Wazuh | `https://localhost:5601` | `admin` · `INDEXER_PASSWORD` |
 | Honeypot (¡es la trampa!) | `ssh root@localhost -p 2222` | cualquiera |
 
 <details>
@@ -272,7 +272,7 @@ Un SOC es un objetivo en sí mismo. Resumen de los controles:
 - **Catálogo de vulnerabilidades de Wazuh**: se carga desde una instantánea del CTI de Wazuh (`offline-url` en `wazuh_config/ossec.conf`, 16/09/2026), porque el catálogo que trae la imagen es de 2024 y ponerlo al día cambio a cambio tardaba días. Mientras no se cambie ese enlace, las CVE publicadas después no se detectan. El manager no envía inventario de paquetes, así que aparece como «no analizado». Las CVE aún sin CVSS se muestran como «sin puntuar».
 - **Mapa de ataques**: en el laboratorio todas las IPs son privadas y no se pueden geolocalizar; el mapa lo indica en lugar de situarlas en un país.
 - **IA en CPU**: el modelo de 3B es rápido de desplegar pero lento generando (~3 palabras/s) y limitado en razonamiento; sirve para redactar, no para decidir.
-- **Consola de Wazuh** con certificado autofirmado (aviso del navegador en `https://localhost`).
+- **Consola de Wazuh** con certificado autofirmado (aviso del navegador en `https://localhost:5601`).
 - **Comandos en el honeypot**: los accesos por Telnet no están dejando registro de los comandos ejecutados; está en revisión.
 
 ## <img src="docs/assets/icons/folder-tree.svg" width="20" height="20" valign="middle"/> Estructura
@@ -326,9 +326,9 @@ Componentes de terceros: Wazuh (GPLv2), Cowrie (BSD-3-Clause), Ollama (MIT), el 
 <a href="https://www.linkedin.com/in/yoandyrd92/">LinkedIn</a> · <a href="https://github.com/heindall92">GitHub</a> · <a href="https://yoandyramirez.com">Portafolio</a> · <a href="https://profile.hackthebox.com/profile/019c5812-b4ca-7315-b12f-14db6d2b42fa">HackTheBox</a>
 </td>
 <td align="center" width="50%" valign="top">
-<img src="https://avatars.githubusercontent.com/u/90797615?v=4" alt="Santi Prada" width="96"/><br/>
-<b>Santi Prada</b><br/>
-<sub>Equipo Valhalla SOC</sub><br/>
+<img src="docs/img/equipo/santiago-de-prada.jpg" alt="Santiago de Prada" width="96"/><br/>
+<b>Santiago de Prada</b><br/>
+<sub>Computer Engineering · Cybersecurity · eJPTv2 · Pentesting · Cyber Threat Intelligence · Incident Response</sub><br/>
 <a href="https://github.com/saantiidp">GitHub</a>
 </td>
 </tr>

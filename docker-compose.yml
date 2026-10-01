@@ -226,7 +226,9 @@ services:
     hostname: wazuh.dashboard
     restart: always
     ports:
-      - "443:443"
+      # 5601 en el host: el 443 lo usa tailscale serve (HTTPS de la VPN) y, si arranca antes que
+      # Docker, la consola de Wazuh no podía publicarse y no arrancaba tras reiniciar la VM
+      - "${WAZUH_DASHBOARD_PORT:-5601}:443"
     environment:
       - INDEXER_USERNAME=${INDEXER_USERNAME:-admin}
       - INDEXER_PASSWORD=${INDEXER_PASSWORD:-admin}
@@ -236,6 +238,9 @@ services:
       - API_PASSWORD=${WAZUH_API_PASSWORD:-}
       # Usuario interno con el que la consola habla con el indexador (antes kibanaserver/kibanaserver)
       - KIBANASERVER_PASSWORD=${DASHBOARD_PASSWORD:-kibanaserver}
+      # El entrypoint de la imagen guarda estas credenciales en su keystore (prevalece sobre el .yml)
+      - DASHBOARD_USERNAME=kibanaserver
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-kibanaserver}
       - SERVER_SSL_CERTIFICATE=/etc/wazuh-dashboard/certs/dashboard.pem
       - SERVER_SSL_KEY=/etc/wazuh-dashboard/certs/dashboard-key.pem
       # Permite que el plugin Wazuh conecte a la API del manager sin validar su cert auto-firmado
@@ -250,6 +255,7 @@ services:
       chown -R 1000:1000 /etc/wazuh-dashboard/certs/ &&
       chmod 555 /etc/wazuh-dashboard/certs/ &&
       chmod 444 /etc/wazuh-dashboard/certs/* &&
+      chown 1000:0 /etc/wazuh-dashboard &&
       sed -i 's|opensearch.hosts:.*|opensearch.hosts: https://wazuh.indexer:9200|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       sed -i 's|#opensearch.username:|opensearch.username: kibanaserver|' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
       sed -i \"s|#opensearch.password:.*|opensearch.password: $$KIBANASERVER_PASSWORD|; s|^opensearch.password:.*|opensearch.password: $$KIBANASERVER_PASSWORD|\" /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml &&
