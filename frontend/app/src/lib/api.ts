@@ -241,6 +241,11 @@ export function listUsers() {
   return http<UserOut[]>("/api/users");
 }
 
+/** Directorio del equipo (cualquier usuario con sesión): nombre, rol y foto, sin emails. */
+export function listTeam() {
+  return http<UserOut[]>("/api/team");
+}
+
 export function createUser(data: any) {
   return http<UserOut>("/api/users", { method: "POST", body: JSON.stringify(data) });
 }

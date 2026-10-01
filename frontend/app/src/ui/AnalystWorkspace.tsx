@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import logger from '../lib/logger';
 import {
   listTickets, createTicket, updateTicket, assignTicket, resolveTicket, deleteTicket, purgeResolvedTickets,
-  listUsers, listRunbooks, uploadEvidence, getEvidenceDownloadUrl, getTicketTimeline, addTicketComment, verifyEvidence, vtCheckIp,
+  listTeam, listRunbooks, uploadEvidence, getEvidenceDownloadUrl, getTicketTimeline, addTicketComment, verifyEvidence, vtCheckIp,
   type TicketOut, type UserOut, type Runbook, type RunbookStep, type TicketEventOut, type TicketClassification,
 } from '../lib/api';
 import { playNotificationSound, playResolvedSound } from './audio';
@@ -134,7 +134,7 @@ export default function AnalystWorkspace({ lang = 'es', initialData, onClearInit
   const fetchData = useCallback(async () => {
     const [tk, us, rb] = await Promise.all([
       listTickets(undefined, undefined, 500, 0, false).catch((e) => { logger.error('[Workspace] tickets', e); return null; }),
-      listUsers().catch(() => null),
+      listTeam().catch(() => null),
       listRunbooks().catch(() => null),
     ]);
     if (tk) setTickets(tk);

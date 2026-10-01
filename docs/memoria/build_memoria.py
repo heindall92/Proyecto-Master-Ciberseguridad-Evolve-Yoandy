@@ -63,13 +63,18 @@ def trace_table() -> tuple[str, str]:
     return table, (summary.group(1) if summary else "")
 
 
-def build(grupo: str) -> Path:
+def render(grupo: str) -> str:
+    """HTML final de la memoria (también lo usa build_docx.py)."""
     tpl = (HERE / "memoria.html").read_text(encoding="utf-8")
     trace, trace_summary = trace_table()
-    page = (tpl.replace("{{GRUPO}}", grupo)
+    return (tpl.replace("{{GRUPO}}", grupo)
                .replace("{{REQ_TABLES}}", req_tables())
                .replace("{{TRACE_TABLE}}", trace)
                .replace("{{TRACE_SUMMARY}}", html.escape(trace_summary)))
+
+
+def build(grupo: str) -> Path:
+    page = render(grupo)
     out_html = HERE / "_memoria_render.html"
     out_html.write_text(page, encoding="utf-8")
 

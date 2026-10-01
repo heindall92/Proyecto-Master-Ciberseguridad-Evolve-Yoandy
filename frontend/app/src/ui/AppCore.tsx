@@ -15,7 +15,7 @@ import {
   getOpenTicketsCount,
   listTickets,
   assignTicket,
-  listUsers,
+  listTeam,
   UserOut,
   getChatHistory,
   clearChatHistory,
@@ -483,7 +483,7 @@ export default function App() {
   // Load team users & DM list
   useEffect(() => {
     if (!user) return;
-    listUsers().then(u => dispatch(setTeamUsers(u))).catch(() => {});
+    listTeam().then(u => dispatch(setTeamUsers(u))).catch(() => {});
     try {
       dispatch(setDmUserIds(JSON.parse(localStorage.getItem(DM_LIST_KEY(user.id)) || '[]')));
     } catch {}

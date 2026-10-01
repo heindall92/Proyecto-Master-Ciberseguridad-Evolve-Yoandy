@@ -238,7 +238,7 @@ En `.env`: `VALHALLA_PUBLIC_URL=https://<máquina>.<tailnet>.ts.net`, esa misma 
 
 ## <img src="docs/assets/icons/list-checks.svg" width="20" height="20" valign="middle"/> Calidad
 
-Los [requisitos funcionales y no funcionales](docs/REQUISITOS.md) tienen criterios de aceptación comprobables. La suite del backend (56 pruebas) los verifica y genera la [matriz de trazabilidad](docs/TRAZABILIDAD.md) requisito → pruebas → resultado:
+Los [requisitos funcionales y no funcionales](docs/REQUISITOS.md) tienen criterios de aceptación comprobables. La suite del backend (57 pruebas) los verifica y genera la [matriz de trazabilidad](docs/TRAZABILIDAD.md) requisito → pruebas → resultado:
 
 ```bash
 bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md
@@ -247,7 +247,7 @@ bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDA
 | Suite | Pruebas | Qué demuestra |
 |---|---|---|
 | Autenticación y sesión | 11 | Login, revocación, *refresh*, CSRF, cookies `HttpOnly`/`Secure` según HTTP/HTTPS, cabeceras de seguridad. |
-| Usuarios, roles e invitaciones | 13 | Permisos por rol en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad. |
+| Usuarios, roles e invitaciones | 14 | Permisos por rol en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad. |
 | Incidentes, métricas y runbooks | 10 | Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente. |
 | Chat, presencia y red | 11 | Privacidad de mensajes directos, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS. |
 | Informes, inteligencia y operaciones | 11 | Huella SHA-256 que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh lo confirma, auditoría sin cuerpos. |

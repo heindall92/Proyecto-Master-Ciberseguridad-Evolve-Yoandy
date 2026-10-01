@@ -22,6 +22,17 @@ async def test_solo_admin_lista_usuarios():
             assert (await ac.get("/api/users")).status_code == 403, who
 
 
+@pytest.mark.req("RF-02", "RF-08", "RNF-06")
+async def test_directorio_de_equipo_para_todos_sin_datos_privados():
+    # El chat y las asignaciones necesitan la lista de compañeros también para analistas y lectores
+    async with client_as("lector") as ac:
+        r = await ac.get("/api/team")
+    assert r.status_code == 200
+    nombres = {u["username"] for u in r.json()}
+    assert {"admin", "analista", "lector"} <= nombres
+    assert all("email" not in u and "tailscale_login" not in u for u in r.json())
+
+
 @pytest.mark.req("RF-02")
 async def test_lector_y_reportero_no_crean_runbooks():
     body = {"name": "RB prueba roles", "category": "other", "description": "x"}

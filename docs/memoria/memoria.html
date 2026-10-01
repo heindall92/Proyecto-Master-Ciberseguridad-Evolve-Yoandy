@@ -116,7 +116,7 @@
 
 <div class="kpis">
   <div class="kpi"><b>25</b><span>requisitos (16 RF · 9 RNF)</span></div>
-  <div class="kpi"><b>56/56</b><span>pruebas automáticas superadas</span></div>
+  <div class="kpi"><b>57/57</b><span>pruebas automáticas superadas</span></div>
   <div class="kpi"><b>0</b><span>vulnerabilidades en dependencias (pip-audit · npm audit)</span></div>
   <div class="kpi"><b>11</b><span>secciones de la consola rediseñadas</span></div>
 </div>
@@ -125,7 +125,7 @@
 <ul>
   <li><b>Producto instalable</b>: un instalador para Linux y otro para Windows generan secretos únicos y certificados TLS propios, levantan el stack, descargan el modelo de IA y configuran Wazuh. Se validó con una instalación desde cero a partir del repositorio público (capítulo 9).</li>
   <li><b>Seguridad revisada a fondo</b>: modelo STRIDE con fronteras de confianza; auditoría de dependencias e imágenes (de 11 paquetes Python y 26 avisos npm vulnerables a 0); corrección de credenciales de fábrica en Wazuh, aislamiento del laboratorio de ataque y limpieza de secretos del historial de Git.</li>
-  <li><b>Calidad demostrable</b>: suite de 56 pruebas etiquetadas por requisito que genera automáticamente la matriz de trazabilidad.</li>
+  <li><b>Calidad demostrable</b>: suite de 57 pruebas etiquetadas por requisito que genera automáticamente la matriz de trazabilidad.</li>
   <li><b>Trabajo en equipo y acceso remoto seguro</b>: varios analistas a la vez con roles, chat privado, presencia y avisos en directo; invitaciones de un solo uso y acceso desde el móvil solo por HTTPS a través de una VPN (Tailscale).</li>
   <li><b>Datos honestos</b>: se encontraron y corrigieron fuentes de datos falsos (por ejemplo, el propio backend generaba unas 2.400 «sesiones de ataque» al día contra el honeypot) y cada métrica documenta su fórmula y sus limitaciones.</li>
 </ul>
@@ -323,13 +323,13 @@ flowchart LR
 <!-- ═══════════════════════════ 8. CALIDAD ═══════════════════════════ -->
 <section class="chapter" id="calidad">
 <h2>8. Calidad: pruebas y trazabilidad</h2>
-<p>Al empezar la práctica había 17 pruebas, y 11 de ellas ni siquiera arrancaban: el modelo usaba un tipo de columna de PostgreSQL que la base de datos de pruebas no entendía. La suite actual tiene <b>56 pruebas</b> que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos ni servicios reales.</p>
+<p>Al empezar la práctica había 17 pruebas, y 11 de ellas ni siquiera arrancaban: el modelo usaba un tipo de columna de PostgreSQL que la base de datos de pruebas no entendía. La suite actual tiene <b>57 pruebas</b> que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos ni servicios reales.</p>
 <pre>bash scripts/run_tests.sh   # pytest en el contenedor backend + docs/TRAZABILIDAD.md</pre>
 <table>
 <thead><tr><th>Bloque</th><th style="width:9%">Pruebas</th><th>Qué demuestra</th></tr></thead>
 <tbody>
 <tr><td>Autenticación y sesión</td><td class="num">11</td><td>Login, revocación, <i>refresh</i>, CSRF, cookies según HTTP/HTTPS, cabeceras de seguridad</td></tr>
-<tr><td>Usuarios, roles e invitaciones</td><td class="num">13</td><td>Permisos en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad</td></tr>
+<tr><td>Usuarios, roles e invitaciones</td><td class="num">14</td><td>Permisos en el servidor, salvaguardas del último administrador, invitaciones de un solo uso y caducidad</td></tr>
 <tr><td>Incidentes, métricas y runbooks</td><td class="num">10</td><td>Ciclo de vida con historial, MTTR con la fecha de resolución, métricas sin datos inventados, semilla idempotente</td></tr>
 <tr><td>Chat, presencia y red</td><td class="num">11</td><td>Privacidad de DMs, adjuntos validados, IP real no falsificable, detección de VPN y HTTPS</td></tr>
 <tr><td>Informes, inteligencia y operaciones</td><td class="num">11</td><td>Huella que detecta manipulación, fórmula de prioridad de CVE, bloqueo solo si Wazuh confirma, auditoría sin cuerpos</td></tr>
@@ -363,7 +363,7 @@ cd valhalla-soc
 <tr><td>Consola de Wazuh (<code>https://localhost:5601</code>)</td><td>Responde</td></tr>
 <tr><td>Modelo de IA descargado</td><td>qwen2.5:3b-instruct (1,9 GB)</td></tr>
 <tr><td>Agente del laboratorio registrado y honeypot recibiendo ataques</td><td>Sí (35 eventos en los primeros minutos)</td></tr>
-<tr><td>Suite de pruebas en la instalación limpia</td><td>56/56</td></tr>
+<tr><td>Suite de pruebas en la instalación limpia</td><td>56/56 (la suite tenía entonces 56 pruebas)</td></tr>
 </tbody></table>
 <p>No se esperó a que el escáner de vulnerabilidades terminara de cargar su catálogo (unos 30 minutos tras la instalación); esa parte se verificó en la instalación principal, donde el índice contiene las vulnerabilidades reales del agente.</p>
 <h3>9.3 Acceso remoto seguro</h3>

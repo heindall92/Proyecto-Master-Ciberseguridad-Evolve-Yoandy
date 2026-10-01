@@ -781,6 +781,18 @@ async def list_users_ep(db: AsyncSession = Depends(get_db), current: User = Depe
     rows = (await db.execute(select(User))).scalars().all()
     return rows
 
+
+@app.get("/api/team")
+async def team_directory(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    """Directorio del equipo para el chat y las asignaciones: cualquier usuario con sesión.
+
+    Antes el chat usaba /api/users (solo admin): un analista o un lector veía la lista de
+    contactos vacía. Aquí solo datos de presentación; email y vinculación VPN siguen siendo de admin.
+    """
+    rows = (await db.execute(select(User).order_by(User.username))).scalars().all()
+    return [{"id": u.id, "username": u.username, "role": u.role, "security_rank": u.security_rank,
+             "avatar_url": u.avatar_url} for u in rows]
+
 # Roles que entiende el control de acceso (antes el rol era texto libre)
 VALID_ROLES = {"admin", "analista", "analyst", "reporter", "viewer"}
 SYSTEM_USERS = {"valhalla-ia"}

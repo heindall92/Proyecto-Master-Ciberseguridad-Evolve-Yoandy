@@ -100,10 +100,10 @@ Probar cuatro o cinco contraseñas incorrectas (`123456`, `admin`, `password`…
 bash scripts/run_tests.sh
 ```
 
-Mostrar `56 passed` → abrir `docs/TRAZABILIDAD.md`.
+Mostrar `57 passed` → abrir `docs/TRAZABILIDAD.md`.
 
 **Voz:**
-> Revisamos el propio SOC con mentalidad de atacante, con un análisis STRIDE. Encontramos credenciales de fábrica en Wazuh, certificados publicados en el repositorio y el laboratorio de ataque con acceso a la base de datos. Todo está corregido, y el historial de Git limpio. Las dependencias pasaron de decenas de vulnerabilidades a cero. Y cada requisito tiene pruebas: 56 automáticas que generan la matriz de trazabilidad.
+> Revisamos el propio SOC con mentalidad de atacante, con un análisis STRIDE. Encontramos credenciales de fábrica en Wazuh, certificados publicados en el repositorio y el laboratorio de ataque con acceso a la base de datos. Todo está corregido, y el historial de Git limpio. Las dependencias pasaron de decenas de vulnerabilidades a cero. Y cada requisito tiene pruebas: 57 automáticas que generan la matriz de trazabilidad.
 
 ## 12. Cierre — 11:15 a 12:00
 
@@ -119,5 +119,5 @@ Mostrar `56 passed` → abrir `docs/TRAZABILIDAD.md`.
 - [ ] Dura 10 minutos o más.
 - [ ] No aparece ninguna contraseña, ni el `.env`, ni datos personales (correos reales, IPs públicas propias).
 - [ ] Se ve un ataque real detectado de principio a fin.
-- [ ] Se muestran las pruebas (`56 passed`) y la matriz de trazabilidad.
+- [ ] Se muestran las pruebas (`57 passed`) y la matriz de trazabilidad.
 - [ ] El audio se entiende y el texto de la pantalla es legible: grabar a 1080p.
