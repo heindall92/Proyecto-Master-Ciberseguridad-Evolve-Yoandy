@@ -282,13 +282,18 @@ export default function UsersView({ lang = "es" }: { lang?: string }) {
                   }}><Unlink size={12} />Desvincular</button>}
                 </div>
                 <div className="us-access__actions">
-                  <button type="button" className="vp-btn" disabled={busy} onClick={() => doInvite(form.id!)}><Send size={13} />{busy ? "Generando…" : invState?.status === "pending" ? "Generar nueva invitación" : "Invitar"}</button>
+                  {invState?.status === "pending" ? (
+                    // Regenerar anula los enlaces ya enviados: se exige mantener pulsado (antes bastaba un clic)
+                    <HoldButton className="vp-btn" onConfirm={() => doInvite(form.id!)} title="Mantén pulsado: anula los enlaces que ya enviaste"><Send size={13} />{busy ? "Generando…" : "Generar nueva invitación"}</HoldButton>
+                  ) : (
+                    <button type="button" className="vp-btn" disabled={busy} onClick={() => doInvite(form.id!)}><Send size={13} />{busy ? "Generando…" : "Invitar"}</button>
+                  )}
                   {invState?.status === "pending" && <button type="button" className="vp-btn" onClick={async () => {
                     try { await revokeInvite(form.id!); toast("Invitación anulada.", "ok"); setInvite(null); load(); refreshInvState(form.id!); }
                     catch { toast("No se pudo anular.", "err"); }
                   }}><X size={13} />Anular</button>}
                 </div>
-                {invState?.status === "pending" && !invite && <p className="in-muted us-hint"><Info size={12} /> El enlace completo solo se muestra al crearlo; generar uno nuevo anula el anterior.</p>}
+                {invState?.status === "pending" && !invite && <p className="in-muted us-hint us-hint--warn"><Info size={12} /> Ya hay una invitación enviada. Generar otra <b>anula los dos enlaces anteriores</b> (VPN y activación): hazlo solo si el invitado no recibió el mensaje o caducó.</p>}
               </div>
             )}
             {invite && <InvitePanel inv={invite} />}
