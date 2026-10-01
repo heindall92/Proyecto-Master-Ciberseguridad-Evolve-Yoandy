@@ -67,15 +67,16 @@ async def test_refresh_exige_cookie():
 async def test_logout_revoca_el_token():
     async with raw_client() as ac:
         login = await ac.post("/api/auth/login", json={"username": "analista", "password": PASSWORD})
-        cookies = login.cookies
-        assert (await ac.get("/api/auth/me", cookies=cookies)).status_code == 200
-        await ac.post("/api/auth/logout", cookies=cookies,
-                      headers={"X-CSRF-Token": cookies.get("csrf_token") or ""})
-        assert (await ac.get("/api/auth/me", cookies=cookies)).status_code == 401
+        stolen = dict(login.cookies)  # copia de las cookies, como si alguien las hubiera robado
+        assert (await ac.get("/api/auth/me")).status_code == 200
+        await ac.post("/api/auth/logout", headers={"X-CSRF-Token": stolen.get("csrf_token") or ""})
+    # El servidor revoca el token: reutilizar la cookie antigua desde otro cliente ya no sirve
+    async with raw_client(cookies=stolen) as other:
+        assert (await other.get("/api/auth/me")).status_code == 401
 
 
 @pytest.mark.req("RF-01")
-def test_tokens_de_acceso_llevan_jti_y_tipo():
+async def test_tokens_de_acceso_llevan_jti_y_tipo():  # async por el pytestmark del módulo
     token, jti, _ = create_access_token_with_meta("analista")
     payload = decode_token_payload(token)
     assert payload["jti"] == jti and payload["typ"] == "access"

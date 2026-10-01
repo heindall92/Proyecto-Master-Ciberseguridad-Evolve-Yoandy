@@ -15,7 +15,9 @@ import struct
 import time
 
 _PROXY_HOSTS = [h.strip() for h in os.getenv("TRUSTED_PROXY_HOSTS", "dashboard,nginx").split(",") if h.strip()]
-_cache: dict[str, object] = {"at": 0.0, "ips": set()}
+# "at" empieza en -inf: time.monotonic() cuenta desde el arranque de la máquina, así que con 0.0
+# la primera consulta en los 5 minutos siguientes a encender la VM devolvía un conjunto vacío.
+_cache: dict[str, object] = {"at": float("-inf"), "ips": set()}
 
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")  # CGNAT que usa Tailscale
 

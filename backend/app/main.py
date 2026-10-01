@@ -8,6 +8,7 @@ import shutil
 import re as _re
 import hmac
 import hashlib
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -75,6 +76,36 @@ from app.threat_map import get_threat_map_data
 from app.runbooks_seed import seed_runbooks_if_empty
 from app.http_tls import httpx_verify
 
+# --- TAREAS EN SEGUNDO PLANO ---
+
+# asyncio solo guarda una referencia débil a las tareas: sin esta, una tarea "fire and forget"
+# (auditoría, respuesta de la IA en el chat...) podía ser recolectada a medio ejecutar.
+# Además, al apagar el backend se cancelan de forma ordenada en lugar de quedar colgadas.
+_background_tasks: set[asyncio.Task[Any]] = set()
+_background_loops: set[asyncio.Task[Any]] = set()  # bucles sin fin: se cancelan sin esperar
+
+
+def _spawn(coro, *, loop: bool = False) -> asyncio.Task[Any]:
+    task = asyncio.create_task(coro)
+    registry = _background_loops if loop else _background_tasks
+    registry.add(task)
+    task.add_done_callback(registry.discard)
+    return task
+
+
+async def _drain_background_tasks(grace: float = 5.0) -> None:
+    """Apagado ordenado: cancela los bucles y da `grace` segundos al resto (p. ej. una
+    escritura de auditoría a medias) antes de cancelarlo."""
+    for task in list(_background_loops):
+        task.cancel()
+    pending = list(_background_tasks)
+    if pending:
+        _, still_running = await asyncio.wait(pending, timeout=grace)
+        for task in still_running:
+            task.cancel()
+    await asyncio.gather(*_background_loops, *pending, return_exceptions=True)
+
+
 # --- MIDDLEWARES ---
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -108,10 +139,26 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         await db.commit()
                 except Exception as e:  # noqa: BLE001
                     logger.error("No se pudo registrar la auditoría de %s %s: %s", request.method, request.url.path, e)
-            asyncio.create_task(log_action())
+            _spawn(log_action())
         return response
 
 # --- APP INIT ---
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Ciclo de vida de la API (sustituye a los obsoletos @app.on_event startup/shutdown).
+
+    Arranque: esquema y migraciones, ajustes, usuarios y datos semilla, sincronización con
+    Wazuh. Apagado: termina o cancela las tareas en segundo plano y cierra el pool de la base de datos.
+    """
+    try:
+        await _startup()  # si falla, también se cierran el pool y las tareas ya lanzadas
+        yield
+    finally:
+        await _drain_background_tasks()
+        await engine.dispose()
+        logger.info("Valhalla SOC API detenida")
+
 
 def _limiter_key(request: Request) -> str:
     # Por IP real: con la del proxy todos los usuarios compartían el mismo cupo (p. ej. 5 logins/min)
@@ -121,7 +168,7 @@ def _limiter_key(request: Request) -> str:
 limiter = Limiter(key_func=_limiter_key)
 _docs_url = None if settings.env.lower() == "production" else "/docs"
 _openapi_url = None if settings.env.lower() == "production" else "/openapi.json"
-app = FastAPI(title="Valhalla SOC API", version="2.0.0", docs_url=_docs_url, openapi_url=_openapi_url)
+app = FastAPI(title="Valhalla SOC API", version="2.0.0", docs_url=_docs_url, openapi_url=_openapi_url, lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -462,8 +509,8 @@ async def _ingest_alert(db: AsyncSession, alert: dict[str, Any], actor: "User | 
     return ticket, "created"
 
 
-@app.on_event("startup")
-async def on_startup():
+async def _startup() -> None:
+    """Preparación previa a servir peticiones (la invoca `lifespan`)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_users_rank_column)
@@ -520,7 +567,7 @@ async def on_startup():
         await db.commit()
     
     if settings.auto_sync_wazuh_tickets:
-        asyncio.create_task(_auto_sync_loop())
+        _spawn(_auto_sync_loop(), loop=True)
     logger.info("Valhalla SOC API Started")
 
 # --- WEBSOCKET CHAT ---
@@ -2222,7 +2269,7 @@ async def save_chat_message(msg: ChatMessageIn, db: AsyncSession = Depends(get_d
 
     # Chatbot IA: si mencionan al asistente, responde en background.
     if _AI_CHAT_TRIGGER.search(msg.text or ""):
-        asyncio.create_task(_ai_chat_reply(chat_id, current.id, msg.text or ""))
+        _spawn(_ai_chat_reply(chat_id, current.id, msg.text or ""))
 
     return new_msg
 
@@ -2748,7 +2795,7 @@ async def wazuh_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                     logger.info("AI Insight %s: rs=%s %s", rule_id, res.data.get("risk_score"), res.data.get("summary"))
             except Exception:
                 pass
-        asyncio.create_task(run_ai())
+        _spawn(run_ai())
 
     risk_score = int(ai.get("risk_score", 0)) if ai else None
     mitre_ttp = ai.get("mitre_ttp", []) if ai else []
