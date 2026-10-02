@@ -281,7 +281,8 @@ def build(grupo: str) -> Path:
     cs.set(qn("w:val"), "15")
     compat.append(cs)
 
-    out = Path(OUT_DIR or HERE) / f"P3_Grupo{grupo.replace(' ', '')}_Memoria.docx"
+    # El .docx oficial lo retoca el grupo a mano: el generado va aparte para no pisarlo
+    out = Path(OUT_DIR or HERE) / f"P3_Grupo{grupo.replace(' ', '')}_Memoria_generado.docx"
     doc.save(str(out))
     return out
 
