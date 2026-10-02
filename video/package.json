@@ -1,0 +1,27 @@
+{
+  "name": "valhalla-soc-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Vídeo de demostración de Valhalla SOC (Práctica 3) generado con Remotion y voz en off sintetizada o grabada",
+  "license": "GPL-2.0-only",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts ValhallaSOC out/valhalla_soc_practica3.mp4",
+    "still": "remotion still src/index.ts ValhallaSOC",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/rajdhani": "5.3.0",
+    "@fontsource/share-tech-mono": "5.3.0",
+    "@remotion/cli": "4.0.532",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.532"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

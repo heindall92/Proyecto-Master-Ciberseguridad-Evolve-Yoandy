@@ -1,0 +1,8 @@
+node_modules/
+build/
+out/
+public/generated/
+public/clips/*.mp4
+voz_propia/
+src/generated/
+__pycache__/
