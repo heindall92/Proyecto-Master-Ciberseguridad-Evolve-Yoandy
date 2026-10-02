@@ -222,7 +222,7 @@ def main() -> None:
             "duracion": f(item["fin"]) - ini_e,
             "frases": [{"inicio": f(fr["inicio"]) - ini_e, "fin": f(fr["fin"]) - ini_e} for fr in item["frases"]],
             "subtitulos": subs,
-            "clip": clips.get(e["id"]),
+            "clip": clips.get(e.get("clip", e["id"])),
         })
     GENERADO.mkdir(parents=True, exist_ok=True)
     (GENERADO / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")

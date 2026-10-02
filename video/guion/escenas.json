@@ -13,7 +13,9 @@
       "id": "s01_portada",
       "bloque": "presentacion",
       "titulo": "Valhalla SOC",
-      "visual": { "tipo": "portada" },
+      "visual": {
+        "tipo": "portada"
+      },
       "frases": [
         "Hola. Soy Yoandy Ramírez y os presento Valhalla SOC, el trabajo del grupo Proyecto Valhalla para la Práctica 3 del máster en Ciberseguridad de Evolve Academy.",
         "Valhalla es un centro de operaciones de seguridad completo que cabe en un portátil: detecta ataques reales, los investiga con inteligencia artificial local y los convierte en informes que se pueden defender."
@@ -26,11 +28,36 @@
       "visual": {
         "tipo": "equipo",
         "miembros": [
-          { "nombre": "Santiago Visso", "rol": "Jefe de proyecto", "detalle": "Coordinación · laboratorio de ataque (Kali)", "en": 0 },
-          { "nombre": "Julieta Tenti", "rol": "Informes ejecutivos", "detalle": "Generador de informes PDF", "en": 1 },
-          { "nombre": "Rosalino Martínez", "rol": "Integraciones de IA", "detalle": "Ollama · asistente · webhook", "en": 2 },
-          { "nombre": "Santiago de Prada", "rol": "Honeypot Cowrie", "detalle": "Señuelo · simulación de ataques", "en": 3 },
-          { "nombre": "Yoandy Ramírez Delgado", "rol": "Arquitectura y desarrollo", "detalle": "Integración · seguridad · pruebas", "en": 4 }
+          {
+            "nombre": "Santiago Visso",
+            "rol": "Jefe de proyecto",
+            "detalle": "Coordinación · laboratorio de ataque (Kali)",
+            "en": 0
+          },
+          {
+            "nombre": "Julieta Tenti",
+            "rol": "Informes ejecutivos",
+            "detalle": "Generador de informes PDF",
+            "en": 1
+          },
+          {
+            "nombre": "Rosalino Martínez",
+            "rol": "Integraciones de IA",
+            "detalle": "Ollama · asistente · webhook",
+            "en": 2
+          },
+          {
+            "nombre": "Santiago de Prada",
+            "rol": "Honeypot Cowrie",
+            "detalle": "Señuelo · simulación de ataques",
+            "en": 3
+          },
+          {
+            "nombre": "Yoandy Ramírez Delgado",
+            "rol": "Arquitectura y desarrollo",
+            "detalle": "Integración · seguridad · pruebas",
+            "en": 4
+          }
         ]
       },
       "frases": [
@@ -51,9 +78,21 @@
         "kicker": "El problema",
         "titular": "Los ataques llegan igual, tengas o no un SOC",
         "puntos": [
-          { "en": 0, "icono": "alert", "texto": "Un SOC comercial está fuera del alcance de un equipo pequeño" },
-          { "en": 1, "icono": "puzzle", "texto": "Las herramientas abiertas existen, pero están sueltas" },
-          { "en": 2, "icono": "shield", "texto": "Valhalla las une en un producto: un comando, todo en local" }
+          {
+            "en": 0,
+            "icono": "alert",
+            "texto": "Un SOC comercial está fuera del alcance de un equipo pequeño"
+          },
+          {
+            "en": 1,
+            "icono": "puzzle",
+            "texto": "Las herramientas abiertas existen, pero están sueltas"
+          },
+          {
+            "en": 2,
+            "icono": "shield",
+            "texto": "Valhalla las une en un producto: un comando, todo en local"
+          }
         ]
       },
       "frases": [
@@ -70,8 +109,18 @@
         "tipo": "antesdespues",
         "kicker": "Práctica 3",
         "titular": "Del prototipo al producto",
-        "antes": ["Pantallas con datos de ejemplo", "Instalación solo en nuestra máquina", "Secretos en el historial de Git", "Ninguna prueba"],
-        "despues": ["Ningún dato inventado", "Instalación desde cero con un comando", "Seguridad analizada (STRIDE)", "Cada requisito, con su prueba"],
+        "antes": [
+          "Pantallas con datos de ejemplo",
+          "Instalación solo en nuestra máquina",
+          "Secretos en el historial de Git",
+          "Ninguna prueba"
+        ],
+        "despues": [
+          "Ningún dato inventado",
+          "Instalación desde cero con un comando",
+          "Seguridad analizada (STRIDE)",
+          "Cada requisito, con su prueba"
+        ],
         "enAntes": 1,
         "enDespues": 2
       },
@@ -89,10 +138,30 @@
       "visual": {
         "tipo": "cifras",
         "cifras": [
-          { "valor": 25, "etiqueta": "requisitos", "detalle": "16 funcionales · 9 no funcionales", "en": 0 },
-          { "valor": 118, "etiqueta": "pruebas superadas", "detalle": "62 backend · 56 consola", "en": 1 },
-          { "valor": 0, "etiqueta": "vulnerabilidades", "detalle": "pip-audit · npm audit", "en": 2 },
-          { "valor": 11, "etiqueta": "secciones", "detalle": "consola rediseñada", "en": 2.5 }
+          {
+            "valor": 25,
+            "etiqueta": "requisitos",
+            "detalle": "16 funcionales · 9 no funcionales",
+            "en": 0
+          },
+          {
+            "valor": 118,
+            "etiqueta": "pruebas superadas",
+            "detalle": "62 backend · 56 consola",
+            "en": 1
+          },
+          {
+            "valor": 0,
+            "etiqueta": "vulnerabilidades",
+            "detalle": "pip-audit · npm audit",
+            "en": 2
+          },
+          {
+            "valor": 11,
+            "etiqueta": "secciones",
+            "detalle": "consola rediseñada",
+            "en": 2.5
+          }
         ]
       },
       "frases": [
@@ -105,7 +174,12 @@
       "id": "s06_requisitos",
       "bloque": "requisitos",
       "titulo": "Requisitos",
-      "visual": { "tipo": "requisitos", "enRF": 1, "enRNF": 2, "enBadge": 3 },
+      "visual": {
+        "tipo": "requisitos",
+        "enRF": 1,
+        "enRNF": 2,
+        "enBadge": 3
+      },
       "frases": [
         "Empiezo por los requisitos. Partimos de la lista de la práctica uno, la numeramos y le dimos a cada requisito un criterio de aceptación comprobable.",
         "Los funcionales cubren el ciclo completo de un SOC: autenticación y roles, gestión de usuarios con invitaciones, ingesta de alertas de Wazuh, incidentes, runbooks, chat de equipo, presencia, informes con integridad, caza de amenazas, inteligencia de vulnerabilidades, bloqueo de direcciones IP, métricas, asistente de inteligencia artificial y acceso remoto por VPN.",
@@ -122,9 +196,21 @@
         "kicker": "Cambios respecto a la Práctica 1",
         "titular": "Mismo proyecto, otro nivel de exigencia",
         "puntos": [
-          { "en": 1, "icono": "layout", "texto": "6 vistas solapadas → 11 secciones · tema claro/oscuro · ES/EN · móvil" },
-          { "en": 2, "icono": "users", "texto": "Multiusuario: roles en el servidor, invitaciones, chat privado, VPN" },
-          { "en": 3, "icono": "database", "texto": "Regla nueva: ningún dato inventado; si falta, se dice" }
+          {
+            "en": 1,
+            "icono": "layout",
+            "texto": "6 vistas solapadas → 11 secciones · tema claro/oscuro · ES/EN · móvil"
+          },
+          {
+            "en": 2,
+            "icono": "users",
+            "texto": "Multiusuario: roles en el servidor, invitaciones, chat privado, VPN"
+          },
+          {
+            "en": 3,
+            "icono": "database",
+            "texto": "Regla nueva: ningún dato inventado; si falta, se dice"
+          }
         ]
       },
       "frases": [
@@ -138,7 +224,9 @@
       "id": "s08_arquitectura",
       "bloque": "arquitectura",
       "titulo": "Arquitectura",
-      "visual": { "tipo": "arquitectura" },
+      "visual": {
+        "tipo": "arquitectura"
+      },
       "frases": [
         "Pasemos a la arquitectura. Todo corre en local con Docker Compose.",
         "Un atacante llega al señuelo: Cowrie, un honeypot que simula un servidor SSH y Telnet, y registra cada conexión, cada contraseña y cada comando.",
@@ -153,7 +241,10 @@
       "id": "s09_contenedores",
       "bloque": "arquitectura",
       "titulo": "Contenedores y decisiones",
-      "visual": { "tipo": "contenedores", "enDecisiones": 3 },
+      "visual": {
+        "tipo": "contenedores",
+        "enDecisiones": 3
+      },
       "frases": [
         "Cada pieza es un contenedor, y la exposición está pensada desde la seguridad.",
         "La base de datos y el indexador solo existen en la red interna. La API de Wazuh y Ollama escuchan únicamente en localhost.",
@@ -166,22 +257,68 @@
       "id": "s10_instalacion",
       "bloque": "arquitectura",
       "titulo": "Instalación desde cero",
-      "req": ["RNF-07"],
+      "req": [
+        "RNF-07"
+      ],
       "visual": {
         "tipo": "terminal",
         "titulo": "valhalla-soc — instalación desde cero",
         "lineas": [
-          { "en": 0, "tipo": "cmd", "texto": "git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc" },
-          { "en": 0.4, "tipo": "cmd", "texto": "cd valhalla-soc && ./install.sh" },
-          { "en": 1, "tipo": "ok", "texto": "[1/7] Requisitos: Docker, Compose v2, Python 3, vm.max_map_count" },
-          { "en": 1.15, "tipo": "ok", "texto": "[2/7] Repositorio preparado" },
-          { "en": 1.3, "tipo": "ok", "texto": "[3/7] .env con secretos únicos generado" },
-          { "en": 1.45, "tipo": "ok", "texto": "[4/7] Certificados TLS de Wazuh generados" },
-          { "en": 1.6, "tipo": "ok", "texto": "[5/7] Stack levantado (perfil labs)" },
-          { "en": 1.75, "tipo": "ok", "texto": "[6/7] Modelo qwen2.5:3b-instruct descargado (1,9 GB)" },
-          { "en": 1.9, "tipo": "ok", "texto": "[7/7] Conector de vulnerabilidades de Wazuh configurado" },
-          { "en": 2.2, "tipo": "err", "texto": "1.er intento (clon limpio): ./install.sh: Permission denied  → corregido en e03a3ec" },
-          { "en": 3, "tipo": "info", "texto": "2.º intento: completado en 5 min 12 s · 11 servicios en marcha" }
+          {
+            "en": 0,
+            "tipo": "cmd",
+            "texto": "git clone https://github.com/heindall92/Proyecto-Master-Ciberseguridad-Evolve-Yoandy.git valhalla-soc"
+          },
+          {
+            "en": 0.4,
+            "tipo": "cmd",
+            "texto": "cd valhalla-soc && ./install.sh"
+          },
+          {
+            "en": 1,
+            "tipo": "ok",
+            "texto": "[1/7] Requisitos: Docker, Compose v2, Python 3, vm.max_map_count"
+          },
+          {
+            "en": 1.15,
+            "tipo": "ok",
+            "texto": "[2/7] Repositorio preparado"
+          },
+          {
+            "en": 1.3,
+            "tipo": "ok",
+            "texto": "[3/7] .env con secretos únicos generado"
+          },
+          {
+            "en": 1.45,
+            "tipo": "ok",
+            "texto": "[4/7] Certificados TLS de Wazuh generados"
+          },
+          {
+            "en": 1.6,
+            "tipo": "ok",
+            "texto": "[5/7] Stack levantado (perfil labs)"
+          },
+          {
+            "en": 1.75,
+            "tipo": "ok",
+            "texto": "[6/7] Modelo qwen2.5:3b-instruct descargado (1,9 GB)"
+          },
+          {
+            "en": 1.9,
+            "tipo": "ok",
+            "texto": "[7/7] Conector de vulnerabilidades de Wazuh configurado"
+          },
+          {
+            "en": 2.2,
+            "tipo": "err",
+            "texto": "1.er intento (clon limpio): ./install.sh: Permission denied  → corregido en e03a3ec"
+          },
+          {
+            "en": 3,
+            "tipo": "info",
+            "texto": "2.º intento: completado en 5 min 12 s · 11 servicios en marcha"
+          }
         ]
       },
       "frases": [
@@ -189,59 +326,283 @@
         "El instalador comprueba los requisitos, genera secretos únicos y certificados propios, levanta el stack, descarga el modelo de inteligencia artificial y configura el conector de vulnerabilidades de Wazuh.",
         "Lo probamos desde un clon limpio del repositorio público. El primer intento falló: los scripts no tenían permiso de ejecución en Git, así que nadie que siguiera el README habría podido instalar.",
         "Lo corregimos, repetimos la prueba desde cero, y terminó en cinco minutos y doce segundos, con once servicios en marcha. Eso cubre el requisito no funcional siete."
+      ],
+      "clip": "c01_instalacion"
+    },
+    {
+      "id": "s10b_servicios",
+      "bloque": "arquitectura",
+      "titulo": "Servicios en marcha",
+      "req": [
+        "RNF-07"
+      ],
+      "clip": "c02_servicios",
+      "visual": {
+        "tipo": "terminal",
+        "titulo": "valhalla-soc — docker compose ps",
+        "lineas": [
+          {
+            "en": 0,
+            "tipo": "cmd",
+            "texto": "docker compose --profile labs ps"
+          },
+          {
+            "en": 0.3,
+            "tipo": "ok",
+            "texto": "dashboard        Up (healthy)   0.0.0.0:3000"
+          },
+          {
+            "en": 0.4,
+            "tipo": "ok",
+            "texto": "backend          Up (healthy)   0.0.0.0:8000"
+          },
+          {
+            "en": 0.5,
+            "tipo": "ok",
+            "texto": "postgres         Up (healthy)   red interna"
+          },
+          {
+            "en": 0.6,
+            "tipo": "ok",
+            "texto": "wazuh.manager    Up             1514 · 1515 · API 127.0.0.1:55000"
+          },
+          {
+            "en": 0.7,
+            "tipo": "ok",
+            "texto": "wazuh.indexer    Up             red interna"
+          },
+          {
+            "en": 0.8,
+            "tipo": "ok",
+            "texto": "wazuh.dashboard  Up             5601 (HTTPS)"
+          },
+          {
+            "en": 0.9,
+            "tipo": "ok",
+            "texto": "cowrie           Up             2222 · 2223"
+          },
+          {
+            "en": 1.0,
+            "tipo": "ok",
+            "texto": "ollama           Up             127.0.0.1:11434"
+          },
+          {
+            "en": 1.1,
+            "tipo": "ok",
+            "texto": "attacker · wazuh.agent   Up   perfil labs (lab-net aislada)"
+          },
+          {
+            "en": 2,
+            "tipo": "cmd",
+            "texto": "curl -s localhost:8000/health"
+          },
+          {
+            "en": 2.3,
+            "tipo": "pass",
+            "texto": "{\"status\":\"ok\"}"
+          }
+        ]
+      },
+      "frases": [
+        "Con el stack levantado, comprobamos los servicios: la consola, el backend, PostgreSQL, el manager, el indexador y la consola de Wazuh, el honeypot y Ollama.",
+        "En el perfil de laboratorio se añaden el atacante automático y el agente de Wazuh, para que siempre haya actividad real que analizar.",
+        "La API responde, y la consola ya está disponible en el puerto tres mil."
+      ]
+    },
+    {
+      "id": "s10c_wazuh",
+      "bloque": "arquitectura",
+      "titulo": "Wazuh: el motor de detección",
+      "req": [
+        "RF-05"
+      ],
+      "clip": "c03_wazuh",
+      "visual": {
+        "tipo": "titular",
+        "kicker": "Wazuh 4.9.2",
+        "titular": "El motor de detección, con reglas propias",
+        "puntos": [
+          {
+            "en": 0,
+            "icono": "server",
+            "texto": "Consola nativa de Wazuh en https://localhost:5601"
+          },
+          {
+            "en": 1,
+            "icono": "shield",
+            "texto": "Reglas propias: fuerza bruta, acceso tras fuerza bruta, escaneo"
+          },
+          {
+            "en": 2,
+            "icono": "layout",
+            "texto": "Valhalla lee el indexador y convierte las alertas en trabajo"
+          }
+        ]
+      },
+      "frases": [
+        "Antes de entrar en Valhalla, un vistazo a Wazuh, el motor de detección. Su consola nativa sigue disponible para quien la necesite.",
+        "Aquí están los agentes, las alertas y nuestras reglas propias para el honeypot: fuerza bruta, acceso tras fuerza bruta y escaneo, todas mapeadas a MITRE ATT&CK.",
+        "Pero un analista no debería tener que vivir en esta consola. Valhalla lee el indexador de Wazuh y convierte esas alertas en trabajo: triaje, incidentes, respuesta e informes."
       ]
     },
     {
       "id": "s11_login",
       "bloque": "demo",
       "titulo": "Acceso",
-      "req": ["RF-01", "RNF-01"],
+      "req": [
+        "RF-01",
+        "RNF-01"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "login.png",
         "camara": [
-          { "en": 0, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 1, "x": 1015, "y": 450, "zoom": 1.55 },
-          { "en": 2.6, "x": 1015, "y": 470, "zoom": 1.3 }
+          {
+            "en": 0,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 1,
+            "x": 1015,
+            "y": 450,
+            "zoom": 1.55
+          },
+          {
+            "en": 2.6,
+            "x": 1015,
+            "y": 470,
+            "zoom": 1.3
+          }
         ],
         "marcas": [
-          { "en": 1, "caja": [831, 375, 368, 127], "texto": "JWT en cookies HttpOnly + CSRF" },
-          { "en": 2, "caja": [831, 532, 368, 50], "texto": "401 si falla · límite por IP real" }
+          {
+            "en": 1,
+            "caja": [
+              831,
+              375,
+              368,
+              127
+            ],
+            "texto": "JWT en cookies HttpOnly + CSRF"
+          },
+          {
+            "en": 2,
+            "caja": [
+              831,
+              532,
+              368,
+              50
+            ],
+            "texto": "401 si falla · límite por IP real"
+          }
         ],
         "cursor": [
-          { "en": 0.5, "x": 1000, "y": 395 },
-          { "en": 1.6, "x": 1015, "y": 556, "clic": true }
+          {
+            "en": 0.5,
+            "x": 1000,
+            "y": 395
+          },
+          {
+            "en": 1.6,
+            "x": 1015,
+            "y": 556,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "Vamos con la demostración. Esta es la pantalla de acceso.",
         "Al iniciar sesión, el backend emite un token JWT que viaja en cookies HttpOnly, invisibles para JavaScript, con protección CSRF de doble cookie.",
         "Con credenciales incorrectas, la respuesta es un 401, y los intentos se limitan por la IP real del cliente. Al cerrar sesión, el token queda revocado."
-      ]
+      ],
+      "clip": "c04_login"
     },
     {
       "id": "s12_vista_general",
       "bloque": "demo",
       "titulo": "Vista general",
-      "req": ["RNF-05"],
+      "req": [
+        "RNF-05"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "overview.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 200, "zoom": 1.45 },
-          { "en": 1, "x": 900, "y": 560, "zoom": 1.1 },
-          { "en": 2, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 3, "x": 1225, "y": 810, "zoom": 1.6 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 200,
+            "zoom": 1.45
+          },
+          {
+            "en": 1,
+            "x": 900,
+            "y": 560,
+            "zoom": 1.1
+          },
+          {
+            "en": 2,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 3,
+            "x": 1225,
+            "y": 810,
+            "zoom": 1.6
+          }
         ],
         "marcas": [
-          { "en": 0.2, "caja": [276, 143, 1136, 112], "texto": "Indicadores del periodo" },
-          { "en": 1, "caja": [1042, 270, 370, 445], "texto": "Volumen y severidad" },
-          { "en": 3, "caja": [1042, 732, 370, 110], "texto": "El backend era el «atacante nº 1»: corregido" }
+          {
+            "en": 0.2,
+            "caja": [
+              276,
+              143,
+              1136,
+              112
+            ],
+            "texto": "Indicadores del periodo"
+          },
+          {
+            "en": 1,
+            "caja": [
+              1042,
+              270,
+              370,
+              445
+            ],
+            "texto": "Volumen y severidad"
+          },
+          {
+            "en": 3,
+            "caja": [
+              1042,
+              732,
+              370,
+              110
+            ],
+            "texto": "El backend era el «atacante nº 1»: corregido"
+          }
         ],
         "cursor": [
-          { "en": 0.3, "x": 420, "y": 205 },
-          { "en": 1.2, "x": 1220, "y": 400 },
-          { "en": 3.1, "x": 1100, "y": 805 }
+          {
+            "en": 0.3,
+            "x": 420,
+            "y": 205
+          },
+          {
+            "en": 1.2,
+            "x": 1220,
+            "y": 400
+          },
+          {
+            "en": 3.1,
+            "x": 1100,
+            "y": 805
+          }
         ]
       },
       "frases": [
@@ -249,89 +610,387 @@
         "Debajo, las últimas alertas de Wazuh, el volumen por hora, la distribución por severidad y los atacantes principales.",
         "Fijaos en el principio que aplicamos: todo sale del SIEM. Si un dato no existe, la consola muestra cero, o «sin datos», en lugar de rellenarlo.",
         "Esa regla destapó un problema serio: el propio backend comprobaba la salud del honeypot abriendo conexiones a su puerto SSH, y generaba unas dos mil cuatrocientas sesiones de ataque falsas al día. Lo corregimos, y limpiamos esos eventos del SIEM."
+      ],
+      "clip": "c05_vista_general"
+    },
+    {
+      "id": "s12b_interfaz",
+      "bloque": "demo",
+      "titulo": "Interfaz y personalización",
+      "req": [
+        "RNF-08"
+      ],
+      "clip": "c06_interfaz",
+      "visual": {
+        "tipo": "pantalla",
+        "captura": "overview.png",
+        "camara": [
+          {
+            "en": 0,
+            "x": 760,
+            "y": 60,
+            "zoom": 2.2
+          },
+          {
+            "en": 1,
+            "x": 1170,
+            "y": 60,
+            "zoom": 2.4
+          },
+          {
+            "en": 2,
+            "x": 1000,
+            "y": 60,
+            "zoom": 2.4
+          },
+          {
+            "en": 3,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          }
+        ],
+        "marcas": [
+          {
+            "en": 0,
+            "caja": [
+              630,
+              22,
+              268,
+              36
+            ],
+            "texto": "Ctrl + K: buscador de comandos"
+          },
+          {
+            "en": 1,
+            "caja": [
+              1150,
+              22,
+              36,
+              36
+            ],
+            "texto": "Notificaciones en directo"
+          },
+          {
+            "en": 1.5,
+            "caja": [
+              1192,
+              22,
+              36,
+              36
+            ],
+            "texto": "Centro de ayuda"
+          },
+          {
+            "en": 2,
+            "caja": [
+              907,
+              22,
+              74,
+              36
+            ],
+            "texto": "Español · inglés"
+          },
+          {
+            "en": 2.4,
+            "caja": [
+              988,
+              22,
+              78,
+              36
+            ],
+            "texto": "Tema claro/oscuro · 9 acentos"
+          }
+        ],
+        "cursor": [
+          {
+            "en": 0.2,
+            "x": 760,
+            "y": 40,
+            "clic": true
+          },
+          {
+            "en": 1.1,
+            "x": 1167,
+            "y": 40,
+            "clic": true
+          },
+          {
+            "en": 2.1,
+            "x": 960,
+            "y": 40,
+            "clic": true
+          },
+          {
+            "en": 2.5,
+            "x": 1047,
+            "y": 40,
+            "clic": true
+          }
+        ]
+      },
+      "frases": [
+        "Antes de seguir, la interfaz. Con control más K se abre el buscador de comandos: escribimos el nombre de una sección o de una acción, y vamos directos.",
+        "La campana muestra las notificaciones en directo, con sonido: alertas críticas, incidentes asignados o accesos nuevos. Y el centro de ayuda explica cada sección.",
+        "La consola está en español y en inglés, y se cambia al momento. Tiene tema oscuro y claro, nueve colores de acento, efecto de monitor CRT y un modo TV para la pantalla de la sala del SOC.",
+        "Las preferencias se guardan en el navegador de cada analista."
       ]
     },
     {
       "id": "s13_siem",
       "bloque": "demo",
       "titulo": "SIEM",
-      "req": ["RF-05"],
+      "req": [
+        "RF-05"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "siem.png",
         "camara": [
-          { "en": 0, "x": 680, "y": 450, "zoom": 1.25 },
-          { "en": 1, "x": 560, "y": 300, "zoom": 1.5 },
-          { "en": 2, "x": 1250, "y": 420, "zoom": 1.55 }
+          {
+            "en": 0,
+            "x": 680,
+            "y": 450,
+            "zoom": 1.25
+          },
+          {
+            "en": 1,
+            "x": 560,
+            "y": 300,
+            "zoom": 1.5
+          },
+          {
+            "en": 2,
+            "x": 1250,
+            "y": 420,
+            "zoom": 1.55
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [275, 100, 290, 30], "texto": "En directo" },
-          { "en": 1, "caja": [275, 215, 805, 345], "texto": "Webhook con secreto o firma HMAC" },
-          { "en": 2, "caja": [1095, 145, 318, 190], "texto": "Técnicas ATT&CK observadas" },
-          { "en": 2.5, "caja": [1095, 520, 318, 100], "texto": "Atacantes" }
+          {
+            "en": 0.3,
+            "caja": [
+              275,
+              100,
+              290,
+              30
+            ],
+            "texto": "En directo"
+          },
+          {
+            "en": 1,
+            "caja": [
+              275,
+              215,
+              805,
+              345
+            ],
+            "texto": "Webhook con secreto o firma HMAC"
+          },
+          {
+            "en": 2,
+            "caja": [
+              1095,
+              145,
+              318,
+              190
+            ],
+            "texto": "Técnicas ATT&CK observadas"
+          },
+          {
+            "en": 2.5,
+            "caja": [
+              1095,
+              520,
+              318,
+              100
+            ],
+            "texto": "Atacantes"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 1200, "y": 114, "clic": true },
-          { "en": 1.3, "x": 700, "y": 284 },
-          { "en": 2.1, "x": 1250, "y": 266 }
+          {
+            "en": 0.4,
+            "x": 1200,
+            "y": 114,
+            "clic": true
+          },
+          {
+            "en": 1.3,
+            "x": 700,
+            "y": 284
+          },
+          {
+            "en": 2.1,
+            "x": 1250,
+            "y": 266
+          }
         ]
       },
       "frases": [
         "En la sección SIEM vemos las alertas en directo, agrupadas y con filtros por periodo.",
         "Las alertas llegan por un webhook que solo acepta peticiones con el secreto compartido, o con firma HMAC. Es el requisito funcional cinco.",
-        "A la derecha, las técnicas de MITRE ATT&CK observadas: cuentas válidas, adivinación de contraseñas y fuerza bruta. Y debajo, el ranking de direcciones atacantes."
-      ]
+        "A la derecha, las técnicas de MITRE ATT&CK observadas: cuentas válidas, adivinación de contraseñas y fuerza bruta. Y debajo, el ranking de direcciones atacantes.",
+        "Y si una alerta merece investigarse, el botón «escalar» la convierte en un incidente, con la alerta y su contexto adjuntos."
+      ],
+      "clip": "c07_siem"
     },
     {
       "id": "s14_ataque",
       "bloque": "demo",
       "titulo": "Ataque al honeypot",
-      "req": ["RF-05"],
+      "req": [
+        "RF-05"
+      ],
       "visual": {
         "tipo": "terminal",
         "titulo": "atacante@lab-net — ataque al honeypot",
         "lineas": [
-          { "en": 0, "tipo": "cmd", "texto": "ssh root@192.168.235.130 -p 2222" },
-          { "en": 0.35, "tipo": "out", "texto": "root@192.168.235.130's password: 123456" },
-          { "en": 0.5, "tipo": "err", "texto": "Permission denied, please try again." },
-          { "en": 0.62, "tipo": "out", "texto": "root@192.168.235.130's password: admin" },
-          { "en": 0.75, "tipo": "err", "texto": "Permission denied, please try again." },
-          { "en": 0.87, "tipo": "out", "texto": "root@192.168.235.130's password: password" },
-          { "en": 1.0, "tipo": "err", "texto": "Permission denied, please try again." },
-          { "en": 1.3, "tipo": "warn", "texto": "Wazuh · regla de fuerza bruta → T1110 Brute Force (ALTO)" },
-          { "en": 1.7, "tipo": "crit", "texto": "Wazuh · acceso tras fuerza bruta → T1078 Valid Accounts (CRÍTICO)" },
-          { "en": 2.1, "tipo": "info", "texto": "Evento indexado en OpenSearch · visible en SIEM y Honeypots" }
+          {
+            "en": 0,
+            "tipo": "cmd",
+            "texto": "ssh root@192.168.235.130 -p 2222"
+          },
+          {
+            "en": 0.35,
+            "tipo": "out",
+            "texto": "root@192.168.235.130's password: 123456"
+          },
+          {
+            "en": 0.5,
+            "tipo": "err",
+            "texto": "Permission denied, please try again."
+          },
+          {
+            "en": 0.62,
+            "tipo": "out",
+            "texto": "root@192.168.235.130's password: admin"
+          },
+          {
+            "en": 0.75,
+            "tipo": "err",
+            "texto": "Permission denied, please try again."
+          },
+          {
+            "en": 0.87,
+            "tipo": "out",
+            "texto": "root@192.168.235.130's password: password"
+          },
+          {
+            "en": 1.0,
+            "tipo": "err",
+            "texto": "Permission denied, please try again."
+          },
+          {
+            "en": 1.3,
+            "tipo": "warn",
+            "texto": "Wazuh · regla de fuerza bruta → T1110 Brute Force (ALTO)"
+          },
+          {
+            "en": 1.7,
+            "tipo": "crit",
+            "texto": "Wazuh · acceso tras fuerza bruta → T1078 Valid Accounts (CRÍTICO)"
+          },
+          {
+            "en": 2.1,
+            "tipo": "info",
+            "texto": "Evento indexado en OpenSearch · visible en SIEM y Honeypots"
+          }
         ]
       },
       "frases": [
         "Ahora, un ataque. Desde un terminal se intenta entrar por SSH al honeypot, en el puerto 2222, probando contraseñas típicas.",
         "Cada intento llega a Wazuh en segundos. Tras varios fallos salta nuestra regla de fuerza bruta, y si el atacante consigue entrar después, se dispara la regla crítica de acceso tras fuerza bruta.",
         "Es actividad registrada por el honeypot y detectada por Wazuh, no datos simulados en la consola."
-      ]
+      ],
+      "clip": "c08_ataque"
     },
     {
       "id": "s15_honeypots",
       "bloque": "demo",
       "titulo": "Honeypots",
-      "req": ["RF-05", "RNF-05"],
+      "req": [
+        "RF-05",
+        "RNF-05"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "honeypots.png",
         "camara": [
-          { "en": 0, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 1, "x": 845, "y": 270, "zoom": 1.35 },
-          { "en": 2, "x": 605, "y": 640, "zoom": 1.5 },
-          { "en": 3, "x": 1195, "y": 620, "zoom": 1.7 }
+          {
+            "en": 0,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 1,
+            "x": 845,
+            "y": 270,
+            "zoom": 1.35
+          },
+          {
+            "en": 2,
+            "x": 605,
+            "y": 640,
+            "zoom": 1.5
+          },
+          {
+            "en": 3,
+            "x": 1195,
+            "y": 620,
+            "zoom": 1.7
+          }
         ],
         "marcas": [
-          { "en": 1, "caja": [257, 140, 1173, 100], "texto": "Sesiones · fallos · accesos · IPs" },
-          { "en": 2, "caja": [257, 500, 696, 80], "texto": "Sesión reconstruida: intentos y acceso" },
-          { "en": 3, "caja": [967, 518, 463, 197], "texto": "Credenciales más probadas" }
+          {
+            "en": 1,
+            "caja": [
+              257,
+              140,
+              1173,
+              100
+            ],
+            "texto": "Sesiones · fallos · accesos · IPs"
+          },
+          {
+            "en": 2,
+            "caja": [
+              257,
+              500,
+              696,
+              80
+            ],
+            "texto": "Sesión reconstruida: intentos y acceso"
+          },
+          {
+            "en": 3,
+            "caja": [
+              967,
+              518,
+              463,
+              197
+            ],
+            "texto": "Credenciales más probadas"
+          }
         ],
         "cursor": [
-          { "en": 1.2, "x": 900, "y": 195 },
-          { "en": 2.2, "x": 820, "y": 516, "clic": true },
-          { "en": 3.2, "x": 1100, "y": 588 }
+          {
+            "en": 1.2,
+            "x": 900,
+            "y": 195
+          },
+          {
+            "en": 2.2,
+            "x": 820,
+            "y": 516,
+            "clic": true
+          },
+          {
+            "en": 3.2,
+            "x": 1100,
+            "y": 588
+          }
         ]
       },
       "frases": [
@@ -339,122 +998,366 @@
         "Arriba, las sesiones, los inicios de sesión fallidos, los accesos logrados y las direcciones atacantes. Debajo, la actividad por hora.",
         "Cada sesión se reconstruye: duración, número de intentos, y si el atacante consiguió acceso.",
         "A la derecha, las credenciales más probadas: root, admin, 123456… y hasta un intento de descargar un payload."
-      ]
+      ],
+      "clip": "c09_honeypots"
     },
     {
       "id": "s16_workspace",
       "bloque": "demo",
       "titulo": "Gestión de incidentes",
-      "req": ["RF-06"],
+      "req": [
+        "RF-06"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "workspace.png",
         "camara": [
-          { "en": 0, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 1, "x": 845, "y": 300, "zoom": 1.15 },
-          { "en": 2, "x": 560, "y": 380, "zoom": 1.65 },
-          { "en": 2.6, "x": 845, "y": 190, "zoom": 1.45 },
-          { "en": 3, "x": 845, "y": 450, "zoom": 1.05 }
+          {
+            "en": 0,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 1,
+            "x": 845,
+            "y": 300,
+            "zoom": 1.15
+          },
+          {
+            "en": 2,
+            "x": 560,
+            "y": 380,
+            "zoom": 1.65
+          },
+          {
+            "en": 2.6,
+            "x": 845,
+            "y": 190,
+            "zoom": 1.45
+          },
+          {
+            "en": 3,
+            "x": 845,
+            "y": 450,
+            "zoom": 1.05
+          }
         ],
         "marcas": [
-          { "en": 0.4, "caja": [1326, 104, 88, 36], "texto": "Nuevo incidente" },
-          { "en": 1, "caja": [275, 240, 1138, 40], "texto": "Triaje → Investigación → Contención → Resuelto" },
-          { "en": 2, "caja": [575, 293, 252, 150], "texto": "Severidad · SLA · activo · analista" },
-          { "en": 2.6, "caja": [275, 155, 1138, 70], "texto": "Activos · fuera de SLA · MTTR · falsos positivos" }
+          {
+            "en": 0.4,
+            "caja": [
+              1326,
+              104,
+              88,
+              36
+            ],
+            "texto": "Nuevo incidente"
+          },
+          {
+            "en": 1,
+            "caja": [
+              275,
+              240,
+              1138,
+              40
+            ],
+            "texto": "Triaje → Investigación → Contención → Resuelto"
+          },
+          {
+            "en": 2,
+            "caja": [
+              575,
+              293,
+              252,
+              150
+            ],
+            "texto": "Severidad · SLA · activo · analista"
+          },
+          {
+            "en": 2.6,
+            "caja": [
+              275,
+              155,
+              1138,
+              70
+            ],
+            "texto": "Activos · fuera de SLA · MTTR · falsos positivos"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 1370, "y": 122, "clic": true },
-          { "en": 2.1, "x": 700, "y": 350 },
-          { "en": 3.2, "x": 802, "y": 421, "clic": true }
+          {
+            "en": 0.4,
+            "x": 1370,
+            "y": 122,
+            "clic": true
+          },
+          {
+            "en": 2.1,
+            "x": 700,
+            "y": 350
+          },
+          {
+            "en": 3.2,
+            "x": 802,
+            "y": 421,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "Desde cualquier alerta, el botón «más incidente» abre un caso. Pasamos al Workspace.",
         "Es un tablero kanban con las fases de respuesta: triaje, investigación, contención y resuelto.",
         "Cada tarjeta lleva su severidad, el tiempo frente al SLA, el activo afectado y el analista asignado. Arriba, los indicadores: activos, fuera de SLA, sin asignar, tiempo medio de resolución y falsos positivos.",
-        "Cada cambio de fase queda en el historial del incidente. Al resolverlo, se clasifica como verdadero positivo, falso positivo o benigno, y esa clasificación alimenta las métricas."
-      ]
+        "Cada cambio de fase queda en el historial del incidente. Si no se puede contener a tiempo, se escala a contención. Al resolverlo, se clasifica como verdadero positivo, falso positivo o benigno, y esa clasificación alimenta las métricas."
+      ],
+      "clip": "c10_workspace"
     },
     {
       "id": "s17_runbooks",
       "bloque": "demo",
       "titulo": "Runbooks",
-      "req": ["RF-07"],
+      "req": [
+        "RF-07"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "runbooks.png",
         "camara": [
-          { "en": 0, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 1, "x": 760, "y": 160, "zoom": 1.6 },
-          { "en": 2, "x": 695, "y": 447, "zoom": 1.9 }
+          {
+            "en": 0,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 1,
+            "x": 760,
+            "y": 160,
+            "zoom": 1.6
+          },
+          {
+            "en": 2,
+            "x": 695,
+            "y": 447,
+            "zoom": 1.9
+          }
         ],
         "marcas": [
-          { "en": 0.4, "caja": [256, 139, 1012, 28], "texto": "20 runbooks por categoría" },
-          { "en": 2, "caja": [553, 357, 284, 180], "texto": "Brute Force SSH/Telnet · 12 pasos en 5 fases" }
+          {
+            "en": 0.4,
+            "caja": [
+              256,
+              139,
+              1012,
+              28
+            ],
+            "texto": "20 runbooks por categoría"
+          },
+          {
+            "en": 2,
+            "caja": [
+              553,
+              357,
+              284,
+              180
+            ],
+            "texto": "Brute Force SSH/Telnet · 12 pasos en 5 fases"
+          }
         ],
         "cursor": [
-          { "en": 0.5, "x": 292, "y": 152, "clic": true },
-          { "en": 2.1, "x": 680, "y": 420, "clic": true }
+          {
+            "en": 0.5,
+            "x": 292,
+            "y": 152,
+            "clic": true
+          },
+          {
+            "en": 2.1,
+            "x": 680,
+            "y": 420,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "Para responder, el analista no improvisa: tiene veinte runbooks.",
         "Cada uno sigue las cinco fases de NIST 800-61: preparación, detección, contención, erradicación y recuperación, con comandos reales.",
         "Para nuestro ataque abriríamos el de fuerza bruta SSH y Telnet: doce pasos en cinco fases. Los runbooks se pueden crear y editar, con validación de datos y nombres únicos."
-      ]
+      ],
+      "clip": "c11_runbooks"
     },
     {
       "id": "s18_bloqueo",
       "bloque": "demo",
       "titulo": "Bloqueo de IPs",
-      "req": ["RF-13", "RNF-05"],
+      "req": [
+        "RF-13",
+        "RNF-05"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "overview.png",
         "camara": [
-          { "en": 0, "x": 880, "y": 440, "zoom": 1.9 },
-          { "en": 1, "x": 900, "y": 470, "zoom": 1.5 },
-          { "en": 2, "x": 720, "y": 450, "zoom": 1.05 }
+          {
+            "en": 0,
+            "x": 880,
+            "y": 440,
+            "zoom": 1.9
+          },
+          {
+            "en": 1,
+            "x": 900,
+            "y": 470,
+            "zoom": 1.5
+          },
+          {
+            "en": 2,
+            "x": 720,
+            "y": 450,
+            "zoom": 1.05
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [929, 365, 73, 25], "texto": "Mantener pulsado para bloquear" },
-          { "en": 1.2, "caja": [276, 360, 752, 50], "texto": "Solo bloqueado si Wazuh lo confirma" }
+          {
+            "en": 0.3,
+            "caja": [
+              929,
+              365,
+              73,
+              25
+            ],
+            "texto": "Mantener pulsado para bloquear"
+          },
+          {
+            "en": 1.2,
+            "caja": [
+              276,
+              360,
+              752,
+              50
+            ],
+            "texto": "Solo bloqueado si Wazuh lo confirma"
+          }
         ],
         "cursor": [
-          { "en": 0.2, "x": 966, "y": 378, "clic": true },
-          { "en": 0.6, "x": 966, "y": 378, "clic": true }
+          {
+            "en": 0.2,
+            "x": 966,
+            "y": 378,
+            "clic": true
+          },
+          {
+            "en": 0.6,
+            "x": 966,
+            "y": 378,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "Contención: bloqueamos la IP atacante con el botón «block». Es una acción destructiva, así que exige mantener pulsado el botón.",
         "Valhalla la aplica en Wazuh, en una lista CDB y con respuesta activa. Y aquí está el detalle importante: si Wazuh no confirma el bloqueo, Valhalla no lo registra como bloqueado.",
         "Preferimos decir que algo falló antes que mostrar una protección que no existe. Es el requisito funcional trece, y tiene pruebas automáticas para los dos casos."
-      ]
+      ],
+      "clip": "c12_bloqueo"
     },
     {
       "id": "s19_inteligencia",
       "bloque": "demo",
       "titulo": "Inteligencia de vulnerabilidades",
-      "req": ["RF-12"],
+      "req": [
+        "RF-12"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "intel_vulns.png",
         "camara": [
-          { "en": 0, "x": 720, "y": 450, "zoom": 1 },
-          { "en": 1, "x": 840, "y": 200, "zoom": 1.35 },
-          { "en": 2, "x": 1050, "y": 360, "zoom": 1.75 },
-          { "en": 3, "x": 1270, "y": 105, "zoom": 1.8 }
+          {
+            "en": 0,
+            "x": 720,
+            "y": 450,
+            "zoom": 1
+          },
+          {
+            "en": 1,
+            "x": 840,
+            "y": 200,
+            "zoom": 1.35
+          },
+          {
+            "en": 2,
+            "x": 1050,
+            "y": 360,
+            "zoom": 1.75
+          },
+          {
+            "en": 3,
+            "x": 1270,
+            "y": 105,
+            "zoom": 1.8
+          }
         ],
         "marcas": [
-          { "en": 0.4, "caja": [257, 140, 283, 100], "texto": "CVE explotadas · CISA KEV" },
-          { "en": 1.3, "caja": [1300, 345, 80, 28], "texto": "KEV 40 + CVSS×4 + exploit 15 + ransomware 5" },
-          { "en": 2, "caja": [257, 335, 1173, 47], "texto": "MikroTik: 2 exploits públicos → prioridad 83" },
-          { "en": 3, "caja": [1122, 92, 74, 28], "texto": "IOCs: VirusTotal · AbuseIPDB" }
+          {
+            "en": 0.4,
+            "caja": [
+              257,
+              140,
+              283,
+              100
+            ],
+            "texto": "CVE explotadas · CISA KEV"
+          },
+          {
+            "en": 1.3,
+            "caja": [
+              1300,
+              345,
+              80,
+              28
+            ],
+            "texto": "KEV 40 + CVSS×4 + exploit 15 + ransomware 5"
+          },
+          {
+            "en": 2,
+            "caja": [
+              257,
+              335,
+              1173,
+              47
+            ],
+            "texto": "MikroTik: 2 exploits públicos → prioridad 83"
+          },
+          {
+            "en": 3,
+            "caja": [
+              1122,
+              92,
+              74,
+              28
+            ],
+            "texto": "IOCs: VirusTotal · AbuseIPDB"
+          }
         ],
         "cursor": [
-          { "en": 0.3, "x": 1275, "y": 106, "clic": true },
-          { "en": 2.1, "x": 1338, "y": 360 },
-          { "en": 3.1, "x": 1160, "y": 106, "clic": true }
+          {
+            "en": 0.3,
+            "x": 1275,
+            "y": 106,
+            "clic": true
+          },
+          {
+            "en": 2.1,
+            "x": 1338,
+            "y": 360
+          },
+          {
+            "en": 3.1,
+            "x": 1160,
+            "y": 106,
+            "clic": true
+          }
         ]
       },
       "frases": [
@@ -462,60 +1365,184 @@
         "Se enriquecen con NVD, GitHub y Exploit-DB, y se priorizan con una fórmula documentada: cuarenta puntos por estar explotada, el CVSS multiplicado por cuatro, quince si hay exploit público y cinco si la usa el ransomware, con un máximo de cien.",
         "Así, esta vulnerabilidad de MikroTik, con dos exploits públicos, sube a prioridad alta. La fórmula tiene su propia prueba automática.",
         "Y en la pestaña de indicadores se consulta la reputación de una IP, un dominio o un hash en VirusTotal y AbuseIPDB, con una lista de vigilancia."
-      ]
+      ],
+      "clip": "c13_inteligencia"
     },
     {
       "id": "s20_activos",
       "bloque": "demo",
       "titulo": "Activos",
-      "req": ["RNF-05"],
+      "req": [
+        "RNF-05"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "assets.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 360, "zoom": 1.3 },
-          { "en": 1, "x": 990, "y": 300, "zoom": 1.6 },
-          { "en": 2, "x": 1100, "y": 370, "zoom": 1.9 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 360,
+            "zoom": 1.3
+          },
+          {
+            "en": 1,
+            "x": 990,
+            "y": 300,
+            "zoom": 1.6
+          },
+          {
+            "en": 2,
+            "x": 1100,
+            "y": 370,
+            "zoom": 1.9
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [257, 305, 1173, 125], "texto": "Equipos con agente de Wazuh" },
-          { "en": 1.2, "caja": [851, 140, 283, 100], "texto": "12 vulnerabilidades reales" },
-          { "en": 2, "caja": [1240, 345, 120, 28], "texto": "«no analizado»: se dice tal cual" }
+          {
+            "en": 0.3,
+            "caja": [
+              257,
+              305,
+              1173,
+              125
+            ],
+            "texto": "Equipos con agente de Wazuh"
+          },
+          {
+            "en": 1.2,
+            "caja": [
+              851,
+              140,
+              283,
+              100
+            ],
+            "texto": "12 vulnerabilidades reales"
+          },
+          {
+            "en": 2,
+            "caja": [
+              1240,
+              345,
+              120,
+              28
+            ],
+            "texto": "«no analizado»: se dice tal cual"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 340, "y": 405 },
-          { "en": 1.3, "x": 1289, "y": 406, "clic": true }
+          {
+            "en": 0.4,
+            "x": 340,
+            "y": 405
+          },
+          {
+            "en": 1.3,
+            "x": 1289,
+            "y": 406,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "En Activos están los equipos con agente de Wazuh: estado, sistema operativo, último contacto y vulnerabilidades reales.",
         "Al principio el escáner de vulnerabilidades nunca llegaba a analizar: el catálogo de la imagen era de 2024, y ponerlo al día tardaba días. Cargamos la instantánea más reciente, y el índice pasó de cero a las doce vulnerabilidades reales del equipo.",
         "El manager aparece como «no analizado», y la interfaz lo dice tal cual."
-      ]
+      ],
+      "clip": "c14_activos"
     },
     {
       "id": "s21_bifrost",
       "bloque": "demo",
       "titulo": "Métricas y caza de amenazas",
-      "req": ["RF-14", "RF-11"],
+      "req": [
+        "RF-14",
+        "RF-11"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "bifrost.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 200, "zoom": 1.4 },
-          { "en": 1, "x": 400, "y": 200, "zoom": 2 },
-          { "en": 2, "x": 1290, "y": 200, "zoom": 2 },
-          { "en": 3, "x": 840, "y": 670, "zoom": 1.25 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 200,
+            "zoom": 1.4
+          },
+          {
+            "en": 1,
+            "x": 400,
+            "y": 200,
+            "zoom": 2
+          },
+          {
+            "en": 2,
+            "x": 1290,
+            "y": 200,
+            "zoom": 2
+          },
+          {
+            "en": 3,
+            "x": 840,
+            "y": 670,
+            "zoom": 1.25
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [257, 140, 1173, 100], "texto": "MTTR · antigüedad · resolución · cobertura" },
-          { "en": 1, "caja": [257, 140, 283, 100], "texto": "MTTR con la fecha real de resolución" },
-          { "en": 2, "caja": [1148, 140, 282, 100], "texto": "99 de 336 técnicas: 30 %" },
-          { "en": 3, "caja": [265, 505, 283, 380], "texto": "7 consultas de threat hunting" }
+          {
+            "en": 0.3,
+            "caja": [
+              257,
+              140,
+              1173,
+              100
+            ],
+            "texto": "MTTR · antigüedad · resolución · cobertura"
+          },
+          {
+            "en": 1,
+            "caja": [
+              257,
+              140,
+              283,
+              100
+            ],
+            "texto": "MTTR con la fecha real de resolución"
+          },
+          {
+            "en": 2,
+            "caja": [
+              1148,
+              140,
+              282,
+              100
+            ],
+            "texto": "99 de 336 técnicas: 30 %"
+          },
+          {
+            "en": 3,
+            "caja": [
+              265,
+              505,
+              283,
+              380
+            ],
+            "texto": "7 consultas de threat hunting"
+          }
         ],
         "cursor": [
-          { "en": 3.2, "x": 400, "y": 528, "clic": true },
-          { "en": 3.6, "x": 1355, "y": 527, "clic": true }
+          {
+            "en": 3.2,
+            "x": 400,
+            "y": 528,
+            "clic": true
+          },
+          {
+            "en": 3.6,
+            "x": 1355,
+            "y": 527,
+            "clic": true
+          }
         ]
       },
       "frases": [
@@ -523,33 +1550,111 @@
         "El MTTR se calcula con la fecha real de resolución. Antes usaba la de última modificación, y un simple comentario posterior lo falseaba.",
         "La cobertura es de noventa y nueve técnicas con regla sobre trescientas treinta y seis: un treinta por ciento, dicho con honestidad.",
         "Abajo están las siete consultas de caza de amenazas: IPs más activas, reincidentes, comandos ejecutados, usuarios más probados, o las credenciales que funcionaron. Los identificadores y las ventanas fuera de rango se rechazan."
-      ]
+      ],
+      "clip": "c15_bifrost"
     },
     {
       "id": "s22_informes",
       "bloque": "demo",
       "titulo": "Informes con integridad",
-      "req": ["RF-10"],
+      "req": [
+        "RF-10"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "report_soc.png",
         "camara": [
-          { "en": 0, "x": 425, "y": 340, "zoom": 1.7 },
-          { "en": 1, "x": 900, "y": 340, "zoom": 1.45 },
-          { "en": 2, "x": 1150, "y": 300, "zoom": 1.6 },
-          { "en": 3, "x": 425, "y": 450, "zoom": 1.8 }
+          {
+            "en": 0,
+            "x": 425,
+            "y": 340,
+            "zoom": 1.7
+          },
+          {
+            "en": 1,
+            "x": 900,
+            "y": 340,
+            "zoom": 1.45
+          },
+          {
+            "en": 2,
+            "x": 1150,
+            "y": 300,
+            "zoom": 1.6
+          },
+          {
+            "en": 3,
+            "x": 425,
+            "y": 450,
+            "zoom": 1.8
+          }
         ],
         "marcas": [
-          { "en": 0.4, "caja": [289, 385, 270, 28], "texto": "Clasificación TLP" },
-          { "en": 1, "caja": [600, 165, 325, 30], "texto": "Identificador + huella SHA-256" },
-          { "en": 2, "caja": [1231, 163, 36, 36], "texto": "Verificar integridad" },
-          { "en": 3, "caja": [289, 428, 270, 40], "texto": "Resumen con IA: opcional" }
+          {
+            "en": 0.4,
+            "caja": [
+              289,
+              385,
+              270,
+              28
+            ],
+            "texto": "Clasificación TLP"
+          },
+          {
+            "en": 1,
+            "caja": [
+              600,
+              165,
+              325,
+              30
+            ],
+            "texto": "Identificador + huella SHA-256"
+          },
+          {
+            "en": 2,
+            "caja": [
+              1231,
+              163,
+              36,
+              36
+            ],
+            "texto": "Verificar integridad"
+          },
+          {
+            "en": 3,
+            "caja": [
+              289,
+              428,
+              270,
+              40
+            ],
+            "texto": "Resumen con IA: opcional"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 458, "y": 399, "clic": true },
-          { "en": 0.8, "x": 423, "y": 496, "clic": true },
-          { "en": 2.1, "x": 1249, "y": 181, "clic": true },
-          { "en": 3.1, "x": 532, "y": 446 }
+          {
+            "en": 0.4,
+            "x": 458,
+            "y": 399,
+            "clic": true
+          },
+          {
+            "en": 0.8,
+            "x": 423,
+            "y": 496,
+            "clic": true
+          },
+          {
+            "en": 2.1,
+            "x": 1249,
+            "y": 181,
+            "clic": true
+          },
+          {
+            "en": 3.1,
+            "x": 532,
+            "y": 446
+          }
         ]
       },
       "frases": [
@@ -557,64 +1662,212 @@
         "Cada informe queda congelado con un identificador y una huella SHA-256 de su contenido.",
         "Con el botón del escudo se verifica la integridad: si alguien altera el informe, la huella deja de coincidir, y la verificación lo detecta.",
         "El resumen con inteligencia artificial es opcional, porque en CPU tarda unos cuarenta segundos. Y aunque la IA redacte, las cifras siempre las calcula el backend."
-      ]
+      ],
+      "clip": "c16_informes"
     },
     {
       "id": "s23_grc",
       "bloque": "demo",
       "titulo": "Informe GRC",
-      "req": ["RF-10"],
+      "req": [
+        "RF-10"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "report_grc.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 330, "zoom": 1.25 },
-          { "en": 1, "x": 620, "y": 690, "zoom": 1.55 },
-          { "en": 1.6, "x": 1175, "y": 690, "zoom": 1.6 },
-          { "en": 2, "x": 700, "y": 250, "zoom": 1.7 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 330,
+            "zoom": 1.25
+          },
+          {
+            "en": 1,
+            "x": 620,
+            "y": 690,
+            "zoom": 1.55
+          },
+          {
+            "en": 1.6,
+            "x": 1175,
+            "y": 690,
+            "zoom": 1.6
+          },
+          {
+            "en": 2,
+            "x": 700,
+            "y": 250,
+            "zoom": 1.7
+          }
         ],
         "marcas": [
-          { "en": 1, "caja": [295, 510, 650, 330], "texto": "Matriz de riesgo 5×5" },
-          { "en": 1.6, "caja": [960, 510, 435, 330], "texto": "Madurez NIST CSF 2.0" },
-          { "en": 2, "caja": [383, 243, 560, 20], "texto": "ENS · ISO 27001 · NIS2 · ISO 42001" }
+          {
+            "en": 1,
+            "caja": [
+              295,
+              510,
+              650,
+              330
+            ],
+            "texto": "Matriz de riesgo 5×5"
+          },
+          {
+            "en": 1.6,
+            "caja": [
+              960,
+              510,
+              435,
+              330
+            ],
+            "texto": "Madurez NIST CSF 2.0"
+          },
+          {
+            "en": 2,
+            "caja": [
+              383,
+              243,
+              560,
+              20
+            ],
+            "texto": "ENS · ISO 27001 · NIS2 · ISO 42001"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 1350, "y": 122, "clic": true },
-          { "en": 1.2, "x": 877, "y": 575 }
+          {
+            "en": 0.4,
+            "x": 1350,
+            "y": 122,
+            "clic": true
+          },
+          {
+            "en": 1.2,
+            "x": 877,
+            "y": 575
+          }
         ]
       },
       "frases": [
         "El informe GRC traduce lo técnico al lenguaje de gobierno, riesgo y cumplimiento.",
         "Incluye una matriz de riesgo de cinco por cinco con umbrales documentados, la madurez por función del NIST CSF 2.0, y un plan de tratamiento.",
         "Y la correspondencia con varias normas: el Esquema Nacional de Seguridad, ISO 27001, NIS2, e ISO 42001, la norma de gestión de la inteligencia artificial."
-      ]
+      ],
+      "clip": "c17_grc"
     },
     {
       "id": "s24_usuarios",
       "bloque": "demo",
       "titulo": "Usuarios, roles e invitaciones",
-      "req": ["RF-02", "RF-03", "RF-04", "RF-09"],
+      "req": [
+        "RF-02",
+        "RF-03",
+        "RF-04",
+        "RF-09"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "users.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 500, "zoom": 1.35 },
-          { "en": 1, "x": 840, "y": 500, "zoom": 1.55 },
-          { "en": 2, "x": 840, "y": 200, "zoom": 1.5 },
-          { "en": 3, "x": 1250, "y": 120, "zoom": 2 },
-          { "en": 4, "x": 640, "y": 395, "zoom": 1.8 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 500,
+            "zoom": 1.35
+          },
+          {
+            "en": 1,
+            "x": 840,
+            "y": 500,
+            "zoom": 1.55
+          },
+          {
+            "en": 2,
+            "x": 840,
+            "y": 200,
+            "zoom": 1.5
+          },
+          {
+            "en": 3,
+            "x": 1250,
+            "y": 120,
+            "zoom": 2
+          },
+          {
+            "en": 4,
+            "x": 640,
+            "y": 395,
+            "zoom": 1.8
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [257, 470, 1173, 62], "texto": "Administrador · analista · reportero · lector" },
-          { "en": 1.2, "caja": [742, 341, 103, 18], "texto": "Rol comprobado en el servidor: 403" },
-          { "en": 2, "caja": [851, 140, 283, 100], "texto": "Mínimo 1 administrador, siempre" },
-          { "en": 3, "caja": [1302, 92, 128, 28], "texto": "Invitación de un solo uso · 24 h" },
-          { "en": 4, "caja": [318, 380, 640, 66], "texto": "Sesiones por dispositivo y red" }
+          {
+            "en": 0.3,
+            "caja": [
+              257,
+              470,
+              1173,
+              62
+            ],
+            "texto": "Administrador · analista · reportero · lector"
+          },
+          {
+            "en": 1.2,
+            "caja": [
+              742,
+              341,
+              103,
+              18
+            ],
+            "texto": "Rol comprobado en el servidor: 403"
+          },
+          {
+            "en": 2,
+            "caja": [
+              851,
+              140,
+              283,
+              100
+            ],
+            "texto": "Mínimo 1 administrador, siempre"
+          },
+          {
+            "en": 3,
+            "caja": [
+              1302,
+              92,
+              128,
+              28
+            ],
+            "texto": "Invitación de un solo uso · 24 h"
+          },
+          {
+            "en": 4,
+            "caja": [
+              318,
+              380,
+              640,
+              66
+            ],
+            "texto": "Sesiones por dispositivo y red"
+          }
         ],
         "cursor": [
-          { "en": 0.4, "x": 594, "y": 512 },
-          { "en": 3.1, "x": 1366, "y": 106, "clic": true },
-          { "en": 4.1, "x": 690, "y": 413 }
+          {
+            "en": 0.4,
+            "x": 594,
+            "y": 512
+          },
+          {
+            "en": 3.1,
+            "x": 1366,
+            "y": 106,
+            "clic": true
+          },
+          {
+            "en": 4.1,
+            "x": 690,
+            "y": 413
+          }
         ]
       },
       "frases": [
@@ -623,22 +1876,102 @@
         "Hay salvaguardas: no se puede borrar a uno mismo, ni al usuario de sistema de la IA, ni dejar la plataforma sin administradores.",
         "Para dar de alta a alguien se genera una invitación de un solo uso, que caduca en veinticuatro horas. El invitado elige su contraseña, y en la base de datos solo guardamos la huella del enlace.",
         "También vemos la presencia: quién está conectado, desde qué dispositivo y por qué red. La IP solo la ven el administrador y el propio usuario."
+      ],
+      "clip": "c18_usuarios"
+    },
+    {
+      "id": "s24b_perfil",
+      "bloque": "demo",
+      "titulo": "Perfil del analista",
+      "req": [
+        "RF-09",
+        "RNF-04"
+      ],
+      "clip": "c19_perfil",
+      "visual": {
+        "tipo": "titular",
+        "kicker": "Perfil",
+        "titular": "Cada analista, su cuenta y su actividad",
+        "puntos": [
+          {
+            "en": 0,
+            "icono": "users",
+            "texto": "Foto (máx. 2 MB), correo y rol"
+          },
+          {
+            "en": 1,
+            "icono": "layout",
+            "texto": "Asignados abiertos · resueltos · acciones en auditoría"
+          },
+          {
+            "en": 2,
+            "icono": "lock",
+            "texto": "Sesiones activas y cambio de contraseña con política"
+          }
+        ]
+      },
+      "frases": [
+        "Cada persona tiene su perfil. Aquí cambia su foto, con un máximo de dos megas, y sus datos de contacto, y guarda los cambios.",
+        "Ve sus incidentes asignados abiertos, los que ha resuelto y cuántas acciones suyas constan en la auditoría, además de su actividad reciente.",
+        "Y en seguridad, sus sesiones activas y el cambio de contraseña, con la misma política que en las altas: mayúsculas, minúsculas, números y símbolos."
       ]
     },
     {
       "id": "s25_chat",
       "bloque": "demo",
       "titulo": "Chat de equipo y asistente de IA",
-      "req": ["RF-08", "RF-15", "RNF-06"],
+      "req": [
+        "RF-08",
+        "RF-15",
+        "RNF-06"
+      ],
       "visual": {
         "tipo": "chat",
         "mensajes": [
-          { "en": 0, "autor": "santiago", "rol": "analista", "texto": "Fuerza bruta contra el honeypot desde 172.18.0.2, ¿lo cojo yo?", "canal": "global" },
-          { "en": 0.5, "autor": "admin", "rol": "administrador", "texto": "Sí, abre incidente y sigue el runbook de SSH.", "canal": "global" },
-          { "en": 0.8, "autor": "admin", "rol": "administrador", "texto": "Mensaje directo: solo lo ven sus dos participantes", "canal": "privado" },
-          { "en": 1.3, "autor": "admin", "rol": "administrador", "texto": "<script>alert(1)</script>", "canal": "global", "neutralizado": true },
-          { "en": 2, "autor": "admin", "rol": "administrador", "texto": "@ia resumen del día", "canal": "global" },
-          { "en": 2.4, "autor": "ia", "rol": "IA local", "texto": "Resumen del periodo con las cifras calculadas por el backend · se adjunta el informe del día.", "canal": "global", "adjunto": "Informe del día" }
+          {
+            "en": 0,
+            "autor": "santiago",
+            "rol": "analista",
+            "texto": "Fuerza bruta contra el honeypot desde 172.18.0.2, ¿lo cojo yo?",
+            "canal": "global"
+          },
+          {
+            "en": 0.5,
+            "autor": "admin",
+            "rol": "administrador",
+            "texto": "Sí, abre incidente y sigue el runbook de SSH.",
+            "canal": "global"
+          },
+          {
+            "en": 0.8,
+            "autor": "admin",
+            "rol": "administrador",
+            "texto": "Mensaje directo: solo lo ven sus dos participantes",
+            "canal": "privado"
+          },
+          {
+            "en": 1.3,
+            "autor": "admin",
+            "rol": "administrador",
+            "texto": "<script>alert(1)</script>",
+            "canal": "global",
+            "neutralizado": true
+          },
+          {
+            "en": 2,
+            "autor": "admin",
+            "rol": "administrador",
+            "texto": "@ia resumen del día",
+            "canal": "global"
+          },
+          {
+            "en": 2.4,
+            "autor": "ia",
+            "rol": "IA local",
+            "texto": "Resumen del periodo con las cifras calculadas por el backend · se adjunta el informe del día.",
+            "canal": "global",
+            "adjunto": "Informe del día"
+          }
         ]
       },
       "frases": [
@@ -646,73 +1979,184 @@
         "Los adjuntos se validan por tipo y tamaño, y el texto se neutraliza frente a XSS.",
         "Si escribimos «arroba IA», responde el asistente local, con un glosario del SOC para no inventar términos. Con «resumen del día», adjunta el informe.",
         "Es el requisito que verificamos de forma manual, porque la respuesta de un modelo de lenguaje no es determinista."
-      ]
+      ],
+      "clip": "c20_chat"
     },
     {
       "id": "s26_sistema",
       "bloque": "demo",
       "titulo": "Sistema",
-      "req": ["RNF-05", "RNF-04"],
+      "req": [
+        "RNF-05",
+        "RNF-04"
+      ],
       "visual": {
         "tipo": "pantalla",
         "captura": "system.png",
         "camara": [
-          { "en": 0, "x": 840, "y": 350, "zoom": 1.35 },
-          { "en": 1, "x": 700, "y": 430, "zoom": 1.7 },
-          { "en": 1.6, "x": 1275, "y": 106, "zoom": 2 }
+          {
+            "en": 0,
+            "x": 840,
+            "y": 350,
+            "zoom": 1.35
+          },
+          {
+            "en": 1,
+            "x": 700,
+            "y": 430,
+            "zoom": 1.7
+          },
+          {
+            "en": 1.6,
+            "x": 1275,
+            "y": 106,
+            "zoom": 2
+          }
         ],
         "marcas": [
-          { "en": 0.3, "caja": [257, 186, 1173, 156], "texto": "Salud y latencia de cada integración" },
-          { "en": 1, "caja": [554, 354, 283, 156], "texto": "Opcional: requiere clave propia" },
-          { "en": 1.6, "caja": [1212, 92, 210, 28], "texto": "Monitores · auditoría" }
+          {
+            "en": 0.3,
+            "caja": [
+              257,
+              186,
+              1173,
+              156
+            ],
+            "texto": "Salud y latencia de cada integración"
+          },
+          {
+            "en": 1,
+            "caja": [
+              554,
+              354,
+              283,
+              156
+            ],
+            "texto": "Opcional: requiere clave propia"
+          },
+          {
+            "en": 1.6,
+            "caja": [
+              1212,
+              92,
+              210,
+              28
+            ],
+            "texto": "Monitores · auditoría"
+          }
         ],
         "cursor": [
-          { "en": 1.7, "x": 1270, "y": 106, "clic": true },
-          { "en": 1.9, "x": 1378, "y": 106, "clic": true }
+          {
+            "en": 1.7,
+            "x": 1270,
+            "y": 106,
+            "clic": true
+          },
+          {
+            "en": 1.9,
+            "x": 1378,
+            "y": 106,
+            "clic": true
+          }
         ]
       },
       "frases": [
         "En Sistema se ve la salud de cada integración: el manager, el indexador y la consola de Wazuh, PostgreSQL y Ollama, con su latencia.",
         "VirusTotal aparece como opcional, porque necesita una clave propia de cada operador. También están aquí los monitores de detección, con umbrales editables, y el registro de auditoría."
-      ]
+      ],
+      "clip": "c21_sistema"
     },
     {
       "id": "s27_movil",
       "bloque": "demo",
       "titulo": "Móvil y acceso remoto por VPN",
-      "req": ["RF-16", "RNF-08"],
+      "req": [
+        "RF-16",
+        "RNF-08"
+      ],
       "visual": {
         "tipo": "movil",
         "captura": "mobile_overview.png",
         "captura2": "mobile_intel.png",
         "puntos": [
-          { "en": 0, "texto": "Diseño adaptable: 390 px · 1280 px · 1700 px" },
-          { "en": 1, "texto": "Solo HTTPS con tailscale serve · certificado válido" },
-          { "en": 1.5, "texto": "Cortafuegos: la VPN no llega a los puertos de Docker" },
-          { "en": 2, "texto": "Cuenta y dispositivo de VPN en cada sesión" },
-          { "en": 2.5, "texto": "Alerta si la cuenta no es la vinculada" }
+          {
+            "en": 0,
+            "texto": "Diseño adaptable: 390 px · 1280 px · 1700 px"
+          },
+          {
+            "en": 1,
+            "texto": "Solo HTTPS con tailscale serve · certificado válido"
+          },
+          {
+            "en": 1.5,
+            "texto": "Cortafuegos: la VPN no llega a los puertos de Docker"
+          },
+          {
+            "en": 2,
+            "texto": "Cuenta y dispositivo de VPN en cada sesión"
+          },
+          {
+            "en": 2.5,
+            "texto": "Alerta si la cuenta no es la vinculada"
+          }
         ]
       },
       "frases": [
         "Y desde el móvil. La consola se adapta a trescientos noventa píxeles, con una barra inferior y paneles reorganizados.",
         "Para entrar desde fuera usamos Tailscale: la consola se publica solo por HTTPS, con certificado válido, y un cortafuegos cierra a la VPN todos los puertos de Docker.",
         "Cada sesión muestra la cuenta y el dispositivo de la VPN. Si alguien entra con una cuenta distinta de la vinculada, salta una alerta, y los administradores reciben un aviso en directo."
-      ]
+      ],
+      "clip": "c22_movil"
     },
     {
       "id": "s28_errores",
       "bloque": "seguridad",
       "titulo": "Cuando algo va mal",
-      "req": ["RNF-01", "RNF-02", "RNF-03", "RNF-04"],
+      "req": [
+        "RNF-01",
+        "RNF-02",
+        "RNF-03",
+        "RNF-04"
+      ],
       "visual": {
         "tipo": "errores",
         "casos": [
-          { "en": 1, "entrada": "POST sin token CSRF", "codigo": "403", "resultado": "Rechazada" },
-          { "en": 1.35, "entrada": "Lector intenta crear un runbook", "codigo": "403", "resultado": "Sin permiso" },
-          { "en": 1.7, "entrada": "Usuario con <b>HTML</b>", "codigo": "422", "resultado": "Rechazada / neutralizada" },
-          { "en": 2, "entrada": "X-Forwarded-For: 1.2.3.4 (falso)", "codigo": "—", "resultado": "Ignorada: proxy no confiable" },
-          { "en": 3, "entrada": "Wazuh no responde", "codigo": "—", "resultado": "Sistema lo indica; no se rompe" },
-          { "en": 3.4, "entrada": "Toda escritura", "codigo": "AUDIT", "resultado": "Usuario · IP · resultado · sin cuerpo" }
+          {
+            "en": 1,
+            "entrada": "POST sin token CSRF",
+            "codigo": "403",
+            "resultado": "Rechazada"
+          },
+          {
+            "en": 1.35,
+            "entrada": "Lector intenta crear un runbook",
+            "codigo": "403",
+            "resultado": "Sin permiso"
+          },
+          {
+            "en": 1.7,
+            "entrada": "Usuario con <b>HTML</b>",
+            "codigo": "422",
+            "resultado": "Rechazada / neutralizada"
+          },
+          {
+            "en": 2,
+            "entrada": "X-Forwarded-For: 1.2.3.4 (falso)",
+            "codigo": "—",
+            "resultado": "Ignorada: proxy no confiable"
+          },
+          {
+            "en": 3,
+            "entrada": "Wazuh no responde",
+            "codigo": "—",
+            "resultado": "Sistema lo indica; no se rompe"
+          },
+          {
+            "en": 3.4,
+            "entrada": "Toda escritura",
+            "codigo": "AUDIT",
+            "resultado": "Usuario · IP · resultado · sin cuerpo"
+          }
         ]
       },
       "frases": [
@@ -720,13 +2164,16 @@
         "Una petición que modifica datos sin el token CSRF se rechaza. Un usuario sin permisos recibe un 403. Una entrada con HTML o fuera de formato se rechaza, o se neutraliza.",
         "Si un cliente intenta falsificar su IP con la cabecera X-Forwarded-For, se ignora: solo se acepta si viene de un proxy de confianza, recorriendo la cadena desde la derecha.",
         "Y si un servicio cae, la consola lo indica en Sistema, en lugar de romperse. Toda acción que modifica datos queda auditada con usuario, IP y resultado, pero nunca con el cuerpo de la petición, para no guardar contraseñas."
-      ]
+      ],
+      "clip": "c23_errores"
     },
     {
       "id": "s29_stride",
       "bloque": "seguridad",
       "titulo": "Modelo de amenazas STRIDE",
-      "visual": { "tipo": "stride" },
+      "visual": {
+        "tipo": "stride"
+      },
       "frases": [
         "Analizamos el propio SOC con mentalidad de atacante, con un modelo STRIDE y cinco fronteras de confianza.",
         "Suplantación, manipulación, repudio, divulgación de información, denegación de servicio y elevación de privilegios: para cada categoría documentamos las amenazas, la mitigación, la prueba que la comprueba y el riesgo residual."
@@ -739,10 +2186,30 @@
       "visual": {
         "tipo": "hallazgos",
         "items": [
-          { "en": 1, "riesgo": "ALTO", "texto": "API de Wazuh con la credencial de fábrica, alcanzable desde la LAN y el atacante", "fix": "Contraseña propia · solo 127.0.0.1" },
-          { "en": 1.5, "riesgo": "ALTO", "texto": "Usuarios de demostración del indexador con contraseña pública", "fix": "Eliminados en el arranque" },
-          { "en": 2, "riesgo": "ALTO", "texto": "Certificados con claves privadas en el repositorio público", "fix": "git filter-repo en 6 ramas · certificados por instalación" },
-          { "en": 3, "riesgo": "MEDIO", "texto": "Atacante del laboratorio en la misma red que BD, Wazuh y Ollama", "fix": "Red lab-net aislada" }
+          {
+            "en": 1,
+            "riesgo": "ALTO",
+            "texto": "API de Wazuh con la credencial de fábrica, alcanzable desde la LAN y el atacante",
+            "fix": "Contraseña propia · solo 127.0.0.1"
+          },
+          {
+            "en": 1.5,
+            "riesgo": "ALTO",
+            "texto": "Usuarios de demostración del indexador con contraseña pública",
+            "fix": "Eliminados en el arranque"
+          },
+          {
+            "en": 2,
+            "riesgo": "ALTO",
+            "texto": "Certificados con claves privadas en el repositorio público",
+            "fix": "git filter-repo en 6 ramas · certificados por instalación"
+          },
+          {
+            "en": 3,
+            "riesgo": "MEDIO",
+            "texto": "Atacante del laboratorio en la misma red que BD, Wazuh y Ollama",
+            "fix": "Red lab-net aislada"
+          }
         ]
       },
       "frases": [
@@ -762,11 +2229,32 @@
         "kicker": "Cadena de suministro",
         "titular": "De decenas de vulnerabilidades a cero",
         "barras": [
-          { "en": 0, "herramienta": "pip-audit", "alcance": "Dependencias Python", "antes": 11, "despues": 0 },
-          { "en": 0.5, "herramienta": "npm audit", "alcance": "Dependencias de la consola", "antes": 26, "despues": 0 },
-          { "en": 1, "herramienta": "Trivy", "alcance": "Imagen de la consola", "antes": 49, "despues": 0 }
+          {
+            "en": 0,
+            "herramienta": "pip-audit",
+            "alcance": "Dependencias Python",
+            "antes": 11,
+            "despues": 0
+          },
+          {
+            "en": 0.5,
+            "herramienta": "npm audit",
+            "alcance": "Dependencias de la consola",
+            "antes": 26,
+            "despues": 0
+          },
+          {
+            "en": 1,
+            "herramienta": "Trivy",
+            "alcance": "Imagen de la consola",
+            "antes": 49,
+            "despues": 0
+          }
         ],
-        "nota": { "en": 2, "texto": "CI: auditoría en cada cambio y cada lunes → PyJWT 2.15.1 · urllib3 2.8.0" }
+        "nota": {
+          "en": 2,
+          "texto": "CI: auditoría en cada cambio y cada lunes → PyJWT 2.15.1 · urllib3 2.8.0"
+        }
       },
       "frases": [
         "En la cadena de suministro, pip-audit encontró once paquetes de Python vulnerables, y npm audit, veintiséis avisos, uno de ellos crítico. Ahora son cero.",
@@ -782,18 +2270,66 @@
         "tipo": "terminal",
         "titulo": "valhalla-soc — bash scripts/run_tests.sh",
         "lineas": [
-          { "en": 0, "tipo": "info", "texto": "Inicio de la práctica: 17 pruebas · 11 no arrancaban" },
-          { "en": 1, "tipo": "cmd", "texto": "bash scripts/run_tests.sh" },
-          { "en": 1.2, "tipo": "ok", "texto": "test_auth.py ...........                       11 passed" },
-          { "en": 1.35, "tipo": "ok", "texto": "test_users_invites.py ..............          14 passed" },
-          { "en": 1.5, "tipo": "ok", "texto": "test_incidents_runbooks.py ..........          10 passed" },
-          { "en": 1.65, "tipo": "ok", "texto": "test_chat_network.py ...........              11 passed" },
-          { "en": 1.8, "tipo": "ok", "texto": "test_reports_intel_ops.py ...........         11 passed" },
-          { "en": 1.95, "tipo": "ok", "texto": "test_lifespan.py .....                          5 passed" },
-          { "en": 2.1, "tipo": "pass", "texto": "62 passed · docs/TRAZABILIDAD.md generado" },
-          { "en": 3, "tipo": "cmd", "texto": "cd frontend && npm test" },
-          { "en": 3.25, "tipo": "pass", "texto": "Test Files 7 passed · Tests 56 passed" },
-          { "en": 3.5, "tipo": "info", "texto": "GitHub Actions: pruebas · tipos · build · pip-audit · npm audit · imágenes" }
+          {
+            "en": 0,
+            "tipo": "info",
+            "texto": "Inicio de la práctica: 17 pruebas · 11 no arrancaban"
+          },
+          {
+            "en": 1,
+            "tipo": "cmd",
+            "texto": "bash scripts/run_tests.sh"
+          },
+          {
+            "en": 1.2,
+            "tipo": "ok",
+            "texto": "test_auth.py ...........                       11 passed"
+          },
+          {
+            "en": 1.35,
+            "tipo": "ok",
+            "texto": "test_users_invites.py ..............          14 passed"
+          },
+          {
+            "en": 1.5,
+            "tipo": "ok",
+            "texto": "test_incidents_runbooks.py ..........          10 passed"
+          },
+          {
+            "en": 1.65,
+            "tipo": "ok",
+            "texto": "test_chat_network.py ...........              11 passed"
+          },
+          {
+            "en": 1.8,
+            "tipo": "ok",
+            "texto": "test_reports_intel_ops.py ...........         11 passed"
+          },
+          {
+            "en": 1.95,
+            "tipo": "ok",
+            "texto": "test_lifespan.py .....                          5 passed"
+          },
+          {
+            "en": 2.1,
+            "tipo": "pass",
+            "texto": "62 passed · docs/TRAZABILIDAD.md generado"
+          },
+          {
+            "en": 3,
+            "tipo": "cmd",
+            "texto": "cd frontend && npm test"
+          },
+          {
+            "en": 3.25,
+            "tipo": "pass",
+            "texto": "Test Files 7 passed · Tests 56 passed"
+          },
+          {
+            "en": 3.5,
+            "tipo": "info",
+            "texto": "GitHub Actions: pruebas · tipos · build · pip-audit · npm audit · imágenes"
+          }
         ]
       },
       "frases": [
@@ -801,13 +2337,16 @@
         "Hoy el backend tiene sesenta y dos pruebas, etiquetadas por requisito, que se ejecutan contra una base de datos en memoria y dobles de Wazuh, OpenSearch y Tailscale, sin tocar datos reales.",
         "Al ejecutarlas, se genera automáticamente la matriz de trazabilidad: requisito, pruebas y resultado. Sesenta y dos de sesenta y dos, superadas.",
         "La consola suma cincuenta y seis pruebas unitarias más. Y GitHub Actions lo ejecuta todo en cada cambio: pruebas, tipos, build, auditoría e imágenes Docker."
-      ]
+      ],
+      "clip": "c24_pruebas"
     },
     {
       "id": "s33_trazabilidad",
       "bloque": "seguridad",
       "titulo": "Matriz de trazabilidad",
-      "visual": { "tipo": "trazabilidad" },
+      "visual": {
+        "tipo": "trazabilidad"
+      },
       "frases": [
         "Así queda la matriz: los veinticinco requisitos cubiertos.",
         "Veintidós con pruebas automáticas, y tres con verificación manual documentada: el asistente de IA, el diseño adaptable, y el rendimiento de la API, cuyas lecturas habituales responden en menos de seis centésimas de segundo."
@@ -820,11 +2359,31 @@
       "visual": {
         "tipo": "limitaciones",
         "items": [
-          { "en": 1, "limite": "Catálogo de vulnerabilidades fijado a una instantánea (16/09/2026)", "mejora": "Actualización automática" },
-          { "en": 1.25, "limite": "Consola por HTTP en la red local", "mejora": "TLS también en la LAN" },
-          { "en": 1.5, "limite": "IA de 3B en CPU: lenta y limitada", "mejora": "Modelo mayor con GPU" },
-          { "en": 1.75, "limite": "Auditoría en la BD que gestiona el administrador", "mejora": "Exportarla al SIEM o firmarla" },
-          { "en": 2.4, "limite": "Pruebas automáticas solo de backend y unitarias", "mejora": "Extremo a extremo con Playwright" }
+          {
+            "en": 1,
+            "limite": "Catálogo de vulnerabilidades fijado a una instantánea (16/09/2026)",
+            "mejora": "Actualización automática"
+          },
+          {
+            "en": 1.25,
+            "limite": "Consola por HTTP en la red local",
+            "mejora": "TLS también en la LAN"
+          },
+          {
+            "en": 1.5,
+            "limite": "IA de 3B en CPU: lenta y limitada",
+            "mejora": "Modelo mayor con GPU"
+          },
+          {
+            "en": 1.75,
+            "limite": "Auditoría en la BD que gestiona el administrador",
+            "mejora": "Exportarla al SIEM o firmarla"
+          },
+          {
+            "en": 2.4,
+            "limite": "Pruebas automáticas solo de backend y unitarias",
+            "mejora": "Extremo a extremo con Playwright"
+          }
         ]
       },
       "frases": [
@@ -837,7 +2396,9 @@
       "id": "s35_cierre",
       "bloque": "cierre",
       "titulo": "Gracias",
-      "visual": { "tipo": "cierre" },
+      "visual": {
+        "tipo": "cierre"
+      },
       "frases": [
         "Valhalla SOC termina esta práctica como un producto instalable, auditado y verificable.",
         "La diferencia entre un prototipo y un producto no estaba en añadir funciones, sino en demostrar que las existentes funcionan, son seguras y dicen la verdad.",
