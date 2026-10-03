@@ -1,0 +1,49 @@
+# S.Y.N.A.P.S.E. — configuración del estudio
+# Cada umbral es una PROPUESTA del equipo investigador, no un estándar legal. Se fijan aquí antes
+# de ejecutar el experimento y se registran en el preregistro (paper/preregistro_OSF.md).
+
+study:
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]   # réplicas Monte Carlo (partición + generador)
+  m_synthetic: 5                           # sintéticos por ajuste para las reglas de combinación
+  holdout_fraction: 0.5                    # pacientes reales que el generador nunca ve
+  anonymeter_attacks: 200
+  max_rows: 2000                           # flchain se submuestrea a este tamaño (coste de los ataques)
+
+datasets: [gbsg2, whas500, flchain, veterans]
+
+generators:
+  - {name: bootstrap}
+  - {name: marginal}
+  - {name: copula}
+  - {name: cart}
+  - {name: dpcopula, params: {epsilon: 0.5}}
+  - {name: dpcopula, params: {epsilon: 1.0}}
+  - {name: dpcopula, params: {epsilon: 5.0}}
+  - {name: dpcopula, params: {epsilon: 10.0}}
+
+# Generadores del extra [deep] (synthcity). Se ejecutan con `synapse study --deep`.
+deep_generators:
+  - {name: ctgan, params: {n_iter: 300}}
+  - {name: tvae, params: {n_iter: 300}}
+  - {name: privbayes, params: {epsilon: 1.0}}
+  - {name: aim, params: {epsilon: 1.0}}
+
+# Semáforo: cada criterio tiene un umbral verde y uno ámbar (por encima → rojo).
+# "higher_is_better: true" invierte el sentido (p. ej., solapamiento de IC).
+thresholds:
+  utility:
+    ci_overlap_mean:   {green: 0.50, amber: 0.30, higher_is_better: true}
+    decisions_changed: {green: 0,    amber: 1}
+    km_mean_abs_diff:  {green: 0.05, amber: 0.10}
+    pmse_ratio:        {green: 3.0,  amber: 10.0}
+    cindex_gap:        {green: 0.05, amber: 0.10}
+  privacy:
+    exact_match_rate:  {green: 0.01, amber: 0.05}
+    # dcr_share_excess se informa pero NO puntúa: con n < 100 depende de la partición concreta
+    # train/holdout (los sintéticos alejados «caen» del lado con más puntos extremos) y produce
+    # falsos positivos incluso con privacidad diferencial. Ver docs/ataques_privacidad.md.
+    mia_dist_auc:      {green: 0.60, amber: 0.70}
+    mia_dens_auc:      {green: 0.60, amber: 0.70}
+    singling_out_risk: {green: 0.10, amber: 0.30}
+    linkability_risk:  {green: 0.10, amber: 0.30}
+    inference_risk:    {green: 0.10, amber: 0.30}
