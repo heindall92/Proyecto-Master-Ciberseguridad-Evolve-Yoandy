@@ -1,0 +1,165 @@
+---
+title: "¿Sobreviven las conclusiones clínicas a los datos sintéticos? Validez inferencial y riesgo de reidentificación en cuatro estudios de supervivencia"
+subtitle: "Borrador · estudio piloto"
+author:
+  - name: Maricel Meneses Gómez
+    roles: [conceptualización, metodología, análisis formal, redacción]
+    corresponding: true
+  - name: Yoandy Ramírez Delgado
+    roles: [software, investigación, validación, redacción]
+lang: es
+bibliography: refs.bib
+format:
+  html:
+    toc: true
+    embed-resources: true
+  docx: default
+  pdf:
+    documentclass: scrartcl
+---
+
+> **Estado.** Borrador generado a partir del estudio **piloto** (10 réplicas, semillas 0–9). Las
+> cifras son exploratorias: el estudio confirmatorio usará las semillas preregistradas
+> ([preregistro_OSF.md](preregistro_OSF.md)). Las secciones marcadas con ✍️ son de la autora
+> principal.
+
+## Resumen (abstract)
+
+**Background.** Synthetic data are promoted as a way to share health data under the GDPR and the
+European Health Data Space, but they are rarely evaluated on the two properties that matter: whether
+clinical conclusions survive, and whether patients can be re-identified.
+
+**Methods.** We synthesised four public survival studies (GBSG2, WHAS500, FLCHAIN, VA Lung Cancer)
+with five generators: bootstrap, independent marginals, Gaussian copula, sequential CART and a
+differentially private copula with ε ∈ {0.5, 1, 5, 10}. We ran 10 Monte Carlo replicates per study
+and generator, with a 50/50 member/hold-out split. Inferential validity was measured by Kaplan-Meier
+distance, Cox confidence-interval overlap, changed clinical conclusions and combining rules for
+m = 5 synthetic sets. Privacy was measured by membership inference (distance and density ratio) and
+by the three WP29 anonymisation criteria (Anonymeter).
+
+**Results.** Only 2 of 320 replicates passed both utility and privacy thresholds. Methods that kept
+Cox effects (bootstrap: CI overlap 0.86; CART: 0.73) were re-identifiable (membership AUC 0.82;
+singling-out risk 0.32–0.80). The differentially private copula resisted every attack, but its CI
+overlap fell to 0.24–0.30 at ε ≤ 1. The Gaussian copula offered the best trade-off, yet it still
+erased the protective effect of hormone therapy in GBSG2 in some replicates.
+
+**Conclusions.** In these studies, no generator was systematically both private and inferentially
+valid. Synthetic health data should be released with an explicit, attack-based evaluation, not on
+the assumption that "synthetic" means "anonymous".
+
+## 1. Introducción ✍️
+
+*Guion para la autora principal:*
+
+1. El Espacio Europeo de Datos de Salud [@ehds2025] y el RGPD empujan a compartir datos para uso
+   secundario sin exponer a los pacientes.
+2. Los datos sintéticos se presentan a menudo como «anónimos por diseño».
+3. Hay dos carencias en la literatura: la utilidad se mide con parecido estadístico y no con
+   **validez inferencial** [@karr2006; @snoke2018], y la privacidad se afirma en lugar de **atacarse**
+   [@giomi2023; @vanbreugel2023].
+4. Contribución: un marco reproducible que mide las dos cosas sobre análisis de supervivencia, que
+   es el lenguaje de la investigación clínica, y las traduce a un veredicto con base normativa.
+
+## 2. Métodos
+
+### 2.1 Datos
+Se usan cuatro estudios públicos de supervivencia distribuidos con `scikit-survival`:
+
+- **GBSG2** [@schumacher1994]: n = 686, 299 eventos.
+- **WHAS500** [@hosmer2008]: n = 500, 215 eventos.
+- **FLCHAIN** [@dispenzieri2012]: n = 6.524. Se excluye la causa de muerte, que es información
+  posterior al desenlace, y se hace análisis de casos completos para la creatinina. En el estudio se
+  submuestrea a 2.000.
+- **VA Lung Cancer** [@kalbfleisch1980]: n = 137, 128 eventos.
+
+### 2.2 Diseño del estudio de simulación
+Se sigue el marco ADEMP [@morris2019]. En cada réplica, los pacientes se dividen al azar, con
+estratificación por evento, en entrenamiento (miembros, que alimentan al generador) y control (no
+miembros). La referencia de validez inferencial es el análisis de los datos de entrenamiento.
+
+### 2.3 Generadores
+- **Controles:** *bootstrap* y marginales independientes.
+- **Estadísticos:** cópula gaussiana con transformación distribucional y síntesis secuencial por
+  CART [@nowok2016].
+- **Privacidad diferencial:** cópula con privacidad diferencial (DPCopula-Kendall) [@li2014], con
+  vecindad acotada, histogramas sobre límites públicos y presupuesto repartido a partes iguales.
+- **Profundos** (análisis secundario): CTGAN y TVAE [@xu2019], PrivBayes y AIM vía synthcity
+  [@qian2023].
+
+### 2.4 Validez inferencial ✍️
+- Curvas de Kaplan-Meier: distancia media absoluta en [0, τ], diferencia de RMST y log-rank.
+- Para cada coeficiente de Cox: solapamiento de IC [@karr2006], concordancia de signo y de
+  significación, y **conclusión cambiada** (efecto significativo en los datos reales que pierde la
+  significación o cambia de signo).
+- Reglas de combinación para m = 5 sintéticos, T = v̄(k/n + 1/m) [@raab2016].
+- Utilidad general: pMSE [@woo2009; @snoke2018] y entrenar con sintéticos para probar con reales
+  (índice C y Brier integrado).
+
+### 2.5 Privacidad
+- Inferencia de pertenencia por distancia de Gower [@chen2020] y por cociente de densidades
+  [@vanbreugel2023]. Se informa del AUC y del TPR con FPR del 10 % [@carlini2022].
+- Individualización, vinculación e inferencia [@wp216] con Anonymeter [@giomi2023]. Riesgo =
+  exceso de acierto sobre los miembros frente al control.
+- Los secretos con clase minoritaria < 5 % se excluyen del ataque de inferencia, por inestabilidad
+  del estimador.
+
+### 2.6 Veredicto
+Cada medida se califica en verde, ámbar o rojo con umbrales fijados *a priori*. La privacidad
+domina: un rojo en privacidad implica «no liberar», con independencia de la utilidad. La lectura
+normativa sigue el considerando 26 del RGPD, el Dictamen WP216, el EHDS e ISO/IEC 27559
+[@iso27559].
+
+### 2.7 Reproducibilidad
+Todo el análisis se ejecuta con `synapse study --seeds 10`, con semillas fijas en partición,
+generador y ataques. El código, los datos de resultados y los cuadernos son públicos.
+
+## 3. Resultados (piloto) ✍️
+
+| Generador | Solapamiento IC (m = 5) | Conclusiones cambiadas (1 sintético) | AUC pertenencia | Individualización |
+|---|---|---|---|---|
+| bootstrap | 0,86 | 0,55 | 0,82 | 0,59–0,80 |
+| CART | 0,73 | 1,35 | 0,59 | 0,32–0,80 |
+| cópula | 0,69 | 1,58 | 0,53 | 0,05–0,15 |
+| marginales | 0,50 | 3,20 | 0,51 | 0,05–0,14 |
+| cópula PD (ε ≤ 1) | 0,24–0,30 | 2,19 (todas las ε) | 0,51 | ≤ 0,02 |
+
+: Medias del piloto sobre 4 estudios × 10 réplicas (los rangos son por estudio). {#tbl-piloto}
+
+- **Ninguna combinación es verde de forma sistemática.** 2 de 320 réplicas, ambas de la cópula
+  (GBSG2 y FLCHAIN), superan todos los umbrales.
+- **La utilidad y la privacidad se oponen.** Los métodos que conservan los efectos de Cox los
+  conservan porque reproducen pacientes reales: el *bootstrap* tiene un AUC de pertenencia de 0,82 y
+  CART un riesgo de individualización de 0,74–0,80 en tres de los cuatro estudios.
+- **La privacidad diferencial cuesta validez clínica.** Con ε ≤ 1, el solapamiento de IC cae a
+  0,24–0,30 en los cuatro estudios. Con ε = 10 apenas alcanza el nivel del muestreo de marginales.
+- **La cópula es el mejor compromiso, pero no es inocua.** En GBSG2 (semilla 0, m = 5) el efecto
+  protector de la hormonoterapia deja de ser significativo.
+- **El suelo de la variabilidad muestral.** Incluso el *bootstrap* cambia 0,55 conclusiones por
+  réplica, así que un criterio de «0 conclusiones cambiadas» es demasiado estricto para un solo
+  sintético.
+
+Figuras: `results/figures/fig_pareto_*.png`, `fig_epsilon.png`, `fig_semaforo.png`,
+`fig_km_*.png` y `fig_forest_*.png`.
+
+## 4. Discusión ✍️
+
+*Guion:* (a) por qué la cópula y CART fracasan de formas distintas (individualización frente a
+pérdida de efectos); (b) el coste de ε frente a las recomendaciones habituales; (c) implicaciones
+para el EHDS: lo «ámbar» debería tratarse en un entorno de tratamiento seguro; (d) limitaciones:
+cuatro estudios de tamaño moderado, ataques sin acceso al generador y umbrales propuestos por el
+equipo; (e) próximos pasos: estudio confirmatorio preregistrado, generadores profundos y datos de
+MIMIC-IV.
+
+## 5. Conclusión
+«Sintético» no significa «anónimo» ni «válido». Ambas propiedades deben demostrarse, por separado y
+con evidencia reproducible, antes de liberar datos sanitarios sintéticos.
+
+## Disponibilidad de datos y código
+<https://github.com/maricelmeneses/synapse> (licencia MIT). Datos de partida públicos.
+
+## Contribuciones (CRediT)
+**M. Meneses Gómez:** conceptualización, metodología, análisis formal, redacción del borrador y
+revisión. **Y. Ramírez Delgado:** software, investigación (ataques), validación, marco normativo,
+redacción y revisión.
+
+## Referencias
