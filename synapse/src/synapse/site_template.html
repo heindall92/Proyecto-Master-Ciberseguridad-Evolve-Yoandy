@@ -1,0 +1,758 @@
+<title>S.Y.N.A.P.S.E. Explorer</title>
+<style>
+/* Layout: carcasa de aplicación (barra lateral flotante de cristal + barra superior translúcida + vista),
+   heredada del lenguaje visual de ENS Compliance Studio (Apple HIG). Iconos: Lucide (ISC). */
+:root{
+  --bg:#f5f5f7; --surface:#ffffff; --surface-2:#fbfbfd; --sunken:#f0f0f3; --hover:#f2f2f5;
+  --ink:#1d1d1f; --ink-2:#424245; --muted:#636366; --line:#e5e5ea; --line-2:#d2d2d7;
+  --accent:#0071e3; --accent-ink:#ffffff;
+  --accent-2:color-mix(in srgb,var(--accent) 82%,#000); --accent-soft:color-mix(in srgb,var(--accent) 12%,var(--surface));
+  --ok:#1e7b34; --ok-soft:#e8f6ec; --warn:#b25000; --warn-soft:#fff2e0; --crit:#d70015; --crit-soft:#ffe9eb;
+  --real:#52514e; --syn:#2a78d6; --fam-control:#898781; --fam-stat:#2a78d6; --fam-dp:#eb6834; --fam-deep:#1baf7a;
+  --sh-1:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.05); --sh-2:0 8px 28px -8px rgba(0,0,0,.14),0 2px 6px rgba(0,0,0,.05); --sh-3:0 24px 64px -12px rgba(0,0,0,.28);
+  --r:12px; --r-lg:16px; --r-xl:20px; --pad:20px; --row:11px; --gap:16px;
+  --f:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,"Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --glass:color-mix(in srgb,#ffffff 72%,transparent); --glass-strong:color-mix(in srgb,#ffffff 84%,transparent);
+  --glass-line:color-mix(in srgb,#000 8%,transparent); --glass-inset:inset 0 1px 0 rgba(255,255,255,.8);
+  --rail-full:280px; --rail-mini:76px;
+}
+:root[data-accent="teal"]{--accent:#0071a4}:root[data-accent="green"]{--accent:#248a3d}:root[data-accent="amber"]{--accent:#c93400}
+:root[data-accent="rose"]{--accent:#d30f45}:root[data-accent="graphite"]{--accent:#515154}
+:root[data-density="compacta"]{--pad:14px;--row:7px;--gap:12px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#232325; --sunken:#111113; --hover:#2c2c2e;
+  --ink:#f5f5f7; --ink-2:#d1d1d6; --muted:#aeaeb2; --line:#2c2c2e; --line-2:#3a3a3c; --accent:#2997ff; --accent-ink:#000000;
+  --accent-soft:color-mix(in srgb,var(--accent) 22%,var(--surface)); --accent-2:color-mix(in srgb,var(--accent) 80%,#fff);
+  --ok:#30d158; --ok-soft:#10301a; --warn:#ff9f0a; --warn-soft:#33230a; --crit:#ff453a; --crit-soft:#3a1412;
+  --real:#c3c2b7; --syn:#3987e5; --fam-control:#8e8e93; --fam-stat:#3987e5; --fam-dp:#d95926; --fam-deep:#199e70;
+  --sh-1:0 1px 2px rgba(0,0,0,.4); --sh-2:0 8px 28px -8px rgba(0,0,0,.7); --sh-3:0 24px 64px -12px rgba(0,0,0,.8);
+  --glass:color-mix(in srgb,#1c1c1e 62%,transparent); --glass-strong:color-mix(in srgb,#1c1c1e 80%,transparent);
+  --glass-line:color-mix(in srgb,#ffffff 12%,transparent); --glass-inset:inset 0 1px 0 rgba(255,255,255,.08)}
+  :root[data-accent="teal"]:not([data-theme="light"]){--accent:#64d2ff}:root[data-accent="green"]:not([data-theme="light"]){--accent:#30d158}
+  :root[data-accent="amber"]:not([data-theme="light"]){--accent:#ff9f0a}:root[data-accent="rose"]:not([data-theme="light"]){--accent:#ff375f}
+  :root[data-accent="graphite"]:not([data-theme="light"]){--accent:#d1d1d6}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#232325; --sunken:#111113; --hover:#2c2c2e;
+  --ink:#f5f5f7; --ink-2:#d1d1d6; --muted:#aeaeb2; --line:#2c2c2e; --line-2:#3a3a3c; --accent:#2997ff; --accent-ink:#000000;
+  --accent-soft:color-mix(in srgb,var(--accent) 22%,var(--surface)); --accent-2:color-mix(in srgb,var(--accent) 80%,#fff);
+  --ok:#30d158; --ok-soft:#10301a; --warn:#ff9f0a; --warn-soft:#33230a; --crit:#ff453a; --crit-soft:#3a1412;
+  --real:#c3c2b7; --syn:#3987e5; --fam-control:#8e8e93; --fam-stat:#3987e5; --fam-dp:#d95926; --fam-deep:#199e70;
+  --sh-1:0 1px 2px rgba(0,0,0,.4); --sh-2:0 8px 28px -8px rgba(0,0,0,.7); --sh-3:0 24px 64px -12px rgba(0,0,0,.8);
+  --glass:color-mix(in srgb,#1c1c1e 62%,transparent); --glass-strong:color-mix(in srgb,#1c1c1e 80%,transparent);
+  --glass-line:color-mix(in srgb,#ffffff 12%,transparent); --glass-inset:inset 0 1px 0 rgba(255,255,255,.08)}
+:root[data-theme="dark"][data-accent="teal"]{--accent:#64d2ff}:root[data-theme="dark"][data-accent="green"]{--accent:#30d158}
+:root[data-theme="dark"][data-accent="amber"]{--accent:#ff9f0a}:root[data-theme="dark"][data-accent="rose"]{--accent:#ff375f}
+:root[data-theme="dark"][data-accent="graphite"]{--accent:#d1d1d6}
+
+/* ── Base ── */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--f);letter-spacing:-.006em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.015em;text-wrap:balance}
+h1{font-size:1.75rem;line-height:1.14;letter-spacing:-.028em;font-weight:700}
+h2{font-size:1.15rem}h3{font-size:1rem}
+h4{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin-bottom:8px}
+p{margin:0}a{color:var(--accent-2);text-decoration:none}a:hover{text-decoration:underline}
+.num{font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.small{font-size:.85rem}
+.ic{flex:none}
+.skip{position:absolute;left:-999px;top:8px;z-index:100;background:var(--surface);padding:8px 12px;border-radius:8px}.skip:focus{left:8px}
+
+/* ── Carcasa ── */
+.app{display:grid;grid-template-columns:calc(var(--rail-full) + 24px) minmax(0,1fr);min-height:100vh}
+:root[data-mini] .app{grid-template-columns:calc(var(--rail-mini) + 24px) minmax(0,1fr)}
+.side{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));bottom:12px;width:var(--rail-full);z-index:30;overflow:hidden auto;scrollbar-width:none;
+  display:flex;flex-direction:column;gap:12px;padding:14px 12px 12px;border-radius:var(--r-xl);
+  background:var(--glass-strong);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);
+  border:1px solid var(--glass-line);box-shadow:var(--glass-inset),var(--sh-2);transition:width 260ms var(--ease),box-shadow .3s}
+.side::-webkit-scrollbar{display:none}
+:root[data-mini] .side{width:var(--rail-mini)}
+@media (hover:hover){:root[data-mini] .side:hover{width:var(--rail-full);box-shadow:var(--glass-inset),var(--sh-3)}}
+:root[data-mini] .side.hold,:root[data-mini] .side.hold:hover{width:var(--rail-mini)}
+.side .lbl,.side .brand-txt,.side .proj-txt,.side .count,.side .nav-group span,.side .chev{transition:opacity 160ms var(--ease)}
+:root[data-mini] .side:not(:hover) :is(.lbl,.brand-txt,.proj-txt,.count,.nav-group span,.chev,.rail-btn){opacity:0;pointer-events:none}
+:root[data-mini] .side.hold :is(.lbl,.brand-txt,.proj-txt,.count,.nav-group span,.chev,.rail-btn){opacity:0;pointer-events:none}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 4px 2px 6px;min-height:38px}
+.logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);flex:none}
+.brand-txt{flex:1;min-width:0;white-space:nowrap}.brand-txt b{display:block;font-size:.98rem;letter-spacing:-.02em;line-height:1.1}.brand-txt small{color:var(--muted);font-size:.76rem}
+.icon-btn{all:unset;box-sizing:border-box;width:36px;height:36px;display:inline-grid;place-items:center;border-radius:10px;cursor:pointer;color:var(--ink-2);flex:none;transition:background-color .12s,transform 120ms var(--ease)}
+.icon-btn:hover{background:var(--hover);color:var(--ink)}.icon-btn:active{transform:scale(.94)}.icon-btn:focus-visible{outline:2px solid var(--accent)}
+.icon-btn.sm{width:30px;height:30px;border-radius:8px}
+.proj-wrap{position:relative}
+.proj-switch{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--surface-2);width:100%;white-space:nowrap;transition:transform 120ms var(--ease)}
+.proj-switch:hover{border-color:var(--line-2);background:var(--hover)}.proj-switch:active{transform:scale(.98)}.proj-switch:focus-visible{outline:2px solid var(--accent)}
+.proj-ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);flex:none}
+.proj-txt{min-width:0;flex:1}.proj-txt b{display:block;font-size:.88rem;overflow:hidden;text-overflow:ellipsis}.proj-txt small{display:block;color:var(--muted);font-size:.74rem;overflow:hidden;text-overflow:ellipsis}
+.menu{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:5;background:var(--glass-strong);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);
+  border:1px solid var(--glass-line);border-radius:var(--r);box-shadow:var(--glass-inset),var(--sh-3);padding:6px;display:flex;flex-direction:column;gap:1px;
+  transform-origin:top center;animation:pop 180ms var(--ease)}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(-4px)}to{opacity:1;transform:none}}
+.menu-label{font-size:.7rem;font-weight:600;color:var(--muted);padding:8px 10px 4px;text-transform:uppercase;letter-spacing:.06em}
+.menu-item{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.86rem}
+.menu-item span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.menu-item small{color:var(--muted);font-size:.74rem}
+.menu-item:hover,.menu-item:focus-visible{background:var(--hover);outline:none}.menu-item.on{font-weight:600}
+.nav{position:relative;display:flex;flex-direction:column;gap:1px}
+.nav-glow{position:absolute;left:0;right:0;top:0;height:0;border-radius:9px;background:var(--hover);opacity:0;transition:top 220ms var(--ease),height 220ms var(--ease),opacity .15s;pointer-events:none}
+.nav.hov .nav-glow{opacity:1}
+.nav-group{font-size:.7rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding:14px 10px 6px;white-space:nowrap;height:36px}
+.nav-item{all:unset;position:relative;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:7px 10px 7px 14px;border-radius:9px;color:var(--ink-2);cursor:pointer;font-size:.9rem;font-weight:500;width:100%;white-space:nowrap}
+.nav-item .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;flex:1}
+.nav-item .ic{color:var(--muted)}.nav-item:hover{color:var(--ink)}
+.nav-item[aria-current="page"]{background:var(--accent-soft);color:var(--ink);box-shadow:inset 3px 0 0 var(--accent)}
+.nav-item[aria-current="page"] .ic{color:var(--accent-2)}
+.nav-item:focus-visible{outline:2px solid var(--accent)}
+.count{margin-left:auto;font:600 .7rem/1 var(--f-mono);padding:3px 7px;border-radius:999px;background:var(--sunken);color:var(--ink-2)}
+.count.warn{background:var(--warn-soft);color:var(--warn)}.count.crit{background:var(--crit-soft);color:var(--crit)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:1px;padding-top:10px;border-top:1px solid var(--line)}
+.me{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--r);cursor:pointer;margin-top:6px;white-space:nowrap}
+.me:hover{background:var(--hover)}.me[aria-current="page"]{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.me b{display:block;font-size:.86rem}.me small{display:block;font-size:.74rem;color:var(--muted);max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.avatar{width:var(--s);height:var(--s);border-radius:50%;display:inline-grid;place-items:center;font-weight:600;font-size:calc(var(--s)*.38);color:#fff;flex:none;letter-spacing:.02em}
+.c-teal{background:#0071a4}.c-blue{background:#0071e3}.c-green{background:#248a3d}.c-amber{background:#c93400}.c-rose{background:#d30f45}.c-slate{background:#6e6e73}
+.main{min-width:0;grid-column:2}
+.top{position:sticky;top:calc(12px + env(safe-area-inset-top,0px));z-index:20;display:flex;align-items:center;gap:10px;
+  margin:12px 12px 0 0;padding:8px 10px 8px 22px;border-radius:999px;
+  background:var(--glass-strong);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);
+  border:1px solid var(--glass-line);box-shadow:var(--glass-inset),var(--sh-2)}
+.top .search-btn{border-radius:999px}.top .avatar-btn{margin-left:2px}
+.crumbs{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.crumb-proj{color:var(--muted);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}.crumb-cur{font-weight:600;white-space:nowrap}
+.search-btn{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;border:1px solid var(--line);background:var(--surface);border-radius:10px;color:var(--muted);cursor:pointer;font-size:.86rem;width:min(340px,34vw);box-shadow:var(--sh-1)}
+.search-btn span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.search-btn:hover{border-color:var(--line-2)}.search-btn:focus-visible{outline:2px solid var(--accent)}
+kbd{font:500 .7rem/1 var(--f-mono);padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.lang-switch{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface);flex:none}
+.lang-switch button{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 8px;font:600 .72rem/1 var(--f-mono);color:var(--muted)}
+.lang-switch button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}.lang-switch button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.avatar-btn{all:unset;cursor:pointer;border-radius:50%;display:grid;transition:transform 120ms var(--ease)}.avatar-btn:active{transform:scale(.94)}.avatar-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.only-mobile{display:none!important}
+.view{max-width:1240px;margin:0 auto;padding:28px 28px 64px;display:flex;flex-direction:column;gap:22px}
+
+/* ── Componentes ── */
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.ph-text{max-width:780px}.eyebrow{font-size:.75rem;font-weight:600;color:var(--accent-2);letter-spacing:.02em;margin-bottom:6px}
+.lead{color:var(--ink-2);margin-top:8px;max-width:72ch;font-size:.96rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--pad);box-shadow:var(--sh-1);min-width:0}
+.card.flush{padding:0;overflow:hidden}.card.soft{background:var(--surface-2);box-shadow:none}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.card-head p{color:var(--muted);font-size:.82rem}
+.grid{display:grid;gap:var(--gap)}.grid>*{min-width:0}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-main{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer;font-weight:500;font-size:.87rem;white-space:nowrap;box-shadow:var(--sh-1);transition:background .12s,transform 120ms var(--ease)}
+.btn:hover{background:var(--hover);text-decoration:none}.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.btn.primary:hover{background:var(--accent-2)}
+.btn.sm{height:30px;padding:0 10px;font-size:.82rem;border-radius:8px}
+select,input[type="text"]{height:36px;background:var(--surface);border:1px solid var(--line-2);border-radius:9px;padding:0 10px;max-width:100%;font-size:.88rem}
+select{padding-right:28px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23687880' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--ink-2);font-weight:500;min-width:0}.fld>:is(input,select){width:100%;color:var(--ink);font-weight:400}
+.seg{display:inline-flex;flex-wrap:wrap;max-width:100%;padding:3px;background:var(--sunken);border-radius:10px;gap:2px;border:1px solid var(--line)}
+.seg button{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:.83rem;font-weight:500;color:var(--ink-2);transition:transform 120ms var(--ease)}
+.seg button:hover{color:var(--ink)}.seg button:active{transform:scale(.96)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12),inset 0 0 0 1px var(--line)}
+.seg button:focus-visible{outline:2px solid var(--accent)}
+.switch{position:relative;display:inline-flex;flex:none}.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.switch span{width:38px;height:22px;border-radius:999px;background:var(--line-2);transition:background .15s;position:relative}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform 200ms var(--ease)}
+.switch input:checked+span{background:var(--accent)}.switch input:checked+span::after{transform:translateX(16px)}.switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}.set-row:last-child{border-bottom:0}
+.set-row b{display:block;font-weight:500}.set-row small{color:var(--muted)}
+.swatches{display:flex;gap:8px}.sw{all:unset;width:24px;height:24px;border-radius:50%;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink-2)}.sw:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;font-size:.74rem;font-weight:600;white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.crit{background:var(--crit-soft);color:var(--crit)}
+.badge.accent{background:var(--accent-soft);color:var(--accent-2)}.badge.neutral{background:var(--sunken);color:var(--muted)}
+.chip{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:6px;font:500 .74rem/1 var(--f-mono);background:var(--sunken);color:var(--ink-2);border:1px solid var(--line);white-space:nowrap}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--sh-1)}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:.87rem}
+.tbl th,.tbl td{padding:var(--row) 12px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th{font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:var(--surface-2)}
+.tbl tbody tr:last-child td{border-bottom:0}.card>.tbl td:first-child{white-space:normal}.tbl td.r,.tbl th.r{text-align:right}
+.tbl tbody tr.click{cursor:pointer}.tbl tbody tr.click:hover td{background:var(--hover)}.tbl tbody tr[aria-selected="true"] td{background:var(--accent-soft)}
+.sw-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.kpi b{display:block;font-size:1.9rem;font-weight:700;letter-spacing:-.035em;line-height:1.05}.kpi span{display:block;color:var(--ink-2);font-size:.86rem;margin-top:6px}.kpi small{color:var(--muted);font-size:.76rem}
+.hero{padding:6px 0 0}.hero h1{font-size:clamp(2rem,4.2vw,3.1rem);letter-spacing:-.035em;max-width:20ch}
+.hero .lead{font-size:1.08rem;max-width:62ch}
+.byline{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:16px;font-size:.88rem;color:var(--muted)}.byline b{color:var(--ink);font-weight:600}
+.start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap)}
+.start-card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:22px;border-radius:var(--r-xl);border:1px solid var(--line);background:var(--surface);cursor:pointer;box-shadow:var(--sh-1);transition:border-color .15s,box-shadow .15s,transform 160ms var(--ease);color:var(--ink)}
+.start-card:hover{box-shadow:var(--sh-2);transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}.start-card:active{transform:scale(.98)}
+.start-card:focus-visible{outline:2px solid var(--accent)}.start-card b{font-size:1.02rem;font-weight:600}.start-card>span:not(.sc-ic){color:var(--ink-2);font-size:.88rem;flex:1}
+.start-card em{font-style:normal;color:var(--accent-2);font-weight:600;font-size:.86rem;display:inline-flex;gap:6px;align-items:center}
+.sc-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-2)}
+.finding .big{font-size:clamp(1.7rem,3vw,2.3rem);font-weight:700;letter-spacing:-.04em;line-height:1}.finding p{color:var(--ink-2);font-size:.9rem;margin-top:10px}.finding small{display:block;color:var(--muted);font-size:.76rem;margin-top:8px}
+.chart{position:relative;width:100%}.chart svg{display:block;width:100%;height:auto;overflow:hidden}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.8rem;color:var(--ink-2);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}.legend i.line{width:16px;height:2px;border-radius:2px;vertical-align:3px}
+.tip{position:absolute;pointer-events:none;z-index:5;background:var(--glass-strong);-webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);
+  border:1px solid var(--glass-line);border-radius:10px;padding:8px 10px;font-size:.78rem;line-height:1.4;color:var(--ink);box-shadow:var(--sh-2);white-space:nowrap;opacity:0;transform:translateY(4px) scale(.98);transition:opacity 140ms var(--ease),transform 140ms var(--ease)}
+.tip.on{opacity:1;transform:none}
+.prose p,.prose li{color:var(--ink-2);font-size:.92rem;max-width:72ch}.prose ul{margin:0;padding-left:18px;display:grid;gap:6px}.prose p+p{margin-top:8px}
+.ref{font-size:.82rem;color:var(--muted)}
+.person .name{font-size:1.2rem;font-weight:700;letter-spacing:-.022em}.person .role{color:var(--accent-2);font-weight:600;font-size:.88rem;margin:2px 0 10px}
+.tag{display:inline-block;font-size:.74rem;color:var(--ink-2);background:var(--sunken);border-radius:6px;padding:2px 7px;margin:8px 4px 0 0}
+.faq details{border-bottom:1px solid var(--line);padding:12px 0}.faq details:last-child{border-bottom:0}
+.faq summary{cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:12px}.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--muted);font-weight:400}.faq details[open] summary::after{content:"–"}
+.faq details p{margin-top:8px;color:var(--ink-2);font-size:.9rem}
+.gloss{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:10px 18px}.gloss dt{font-weight:600}.gloss dd{margin:0;color:var(--ink-2);font-size:.9rem}
+.kbd-list{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;align-items:center}
+.stamp{display:inline-block;font-weight:700;letter-spacing:.06em;font-size:.7rem;color:var(--crit);border:1.5px solid currentColor;border-radius:6px;padding:1px 6px}
+.foot{color:var(--muted);font-size:.78rem;border-top:1px solid var(--line);padding-top:16px}
+
+/* Paleta de búsqueda (Ctrl K) */
+#palette{position:fixed;inset:0;z-index:60}
+#palette .scrim{position:absolute;inset:0;background:rgba(0,0,0,.28)}
+.palette{position:relative;margin:min(12vh,110px) auto 0;width:min(640px,calc(100vw - 32px));background:var(--glass-strong);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);
+  border:1px solid var(--glass-line);border-radius:var(--r-xl);box-shadow:var(--glass-inset),var(--sh-3);overflow:hidden;animation:pop 180ms var(--ease)}
+.pal-in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.pal-in input{all:unset;flex:1;font-size:1rem}
+.pal-list{max-height:min(60vh,440px);overflow:auto;padding:6px}
+.pal-item{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border-radius:9px;cursor:pointer}
+.pal-item small{margin-left:auto;color:var(--muted);font-size:.75rem}
+.pal-item[aria-selected="true"]{background:var(--accent-soft)}
+.pal-empty{padding:24px;text-align:center;color:var(--muted)}
+.scrim-m{display:none}
+
+@media (max-width:1100px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.start-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}.main{grid-column:1}
+  .side,:root[data-mini] .side{left:0;top:0;bottom:0;border-radius:0 var(--r-xl) var(--r-xl) 0;width:284px;transform:translateX(-105%);transition:transform 260ms var(--ease);background:var(--surface);padding-top:calc(14px + env(safe-area-inset-top,0px))}
+  :root[data-mini] .side :is(.lbl,.brand-txt,.proj-txt,.count,.nav-group span,.chev){opacity:1!important;pointer-events:auto!important}
+  body.drawer-open .side{transform:none}body.drawer-open .scrim-m{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:25}
+  .only-mobile{display:inline-grid!important}.rail-btn{display:none!important}
+  .top{margin:8px 8px 0;top:calc(8px + env(safe-area-inset-top,0px));padding:6px 8px 6px 6px}.search-btn{width:auto;flex:none}.search-btn span,.search-btn kbd{display:none}.crumb-proj,.crumb-sep{display:none}
+  .view{padding:20px 16px 56px}.g2,.g3,.g-main,.start-grid{grid-template-columns:1fr}
+}
+@media (max-width:560px){.chart svg text{font-size:13px}.g4{grid-template-columns:1fr 1fr}.lang-switch{display:none}.gloss{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:1ms!important}}
+:root[data-motion="reduce"] *{animation:none!important;transition-duration:1ms!important}
+@media (prefers-reduced-transparency:reduce){.side,.top,.menu,.palette,.tip{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media (prefers-contrast:more){:root{--line:var(--line-2)}.side,.top{background:var(--surface)}}
+</style>
+
+<a class="skip" href="#view">Ir al contenido</a>
+<div class="app">
+  <aside class="side" id="side" aria-label="Navegación"></aside>
+  <div class="scrim-m" id="scrim" aria-hidden="true"></div>
+  <div class="main">
+    <header class="top" id="top"></header>
+    <main class="view" id="view" tabindex="-1"></main>
+  </div>
+</div>
+<div id="palette" hidden></div>
+
+<script type="application/json" id="data">__SYNAPSE_DATA__</script>
+<script type="application/json" id="icons">__SYNAPSE_ICONS__</script>
+<script>
+(() => {
+'use strict';
+const D = JSON.parse(document.getElementById('data').textContent);
+const ICONS = JSON.parse(document.getElementById('icons').textContent).icons;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const icon = (n, s = 18) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ── Estado (preferencias del visitante en localStorage, siempre opcional) ── */
+const DS = Object.keys(D.datasets);
+const DEF = { view: 'inicio', ds: DS.includes('gbsg2') ? 'gbsg2' : DS[0], gen: 'copula', lang: 'es', theme: 'system', accent: 'blue', density: 'comoda',
+  motion: 'system', railMin: false, profile: { name: '', role: '', color: 'blue' } };
+let S = { ...DEF };
+try { S = { ...DEF, ...JSON.parse(localStorage.getItem('synapse') || '{}') }; } catch (e) { /* almacenamiento no disponible */ }
+if (!DS.includes(S.ds)) S.ds = DEF.ds;
+const save = () => { try { localStorage.setItem('synapse', JSON.stringify(S)); } catch (e) { /* sin almacenamiento */ } };
+const ui = { menu: null, drawer: false, pal: false, q: '', sel: 0 };
+const fromHash = () => { const h = location.hash.slice(1); if (VIEWS[h]) S.view = h; };
+
+/* ── Idioma ── */
+const EN = {
+  'Ir al contenido': 'Skip to content', 'Navegación': 'Navigation', 'Explorador': 'Explorer', 'Estudio clínico': 'Clinical study', 'Estudios clínicos': 'Clinical studies',
+  'Inicio': 'Home', 'Estudio': 'Study', 'Panel': 'Overview', 'Supervivencia': 'Survival', 'Efectos clínicos': 'Clinical effects', 'Semáforo': 'Release verdict', 'Privacidad': 'Privacy',
+  'Documentación': 'Documentation', 'Método': 'Method', 'Marco normativo': 'Regulation', 'Equipo': 'Team', 'Ayuda': 'Help', 'Ajustes': 'Settings', 'Tu perfil': 'Your profile',
+  'Completa tu perfil': 'Complete your profile', 'Buscar generador, vista o término…': 'Search generator, view or term…', 'Cambiar tema': 'Change theme', 'Plegar barra lateral': 'Collapse sidebar',
+  'Abrir menú': 'Open menu', 'Generador': 'Generator', 'Bioestadística · Privacidad · Datos sanitarios sintéticos': 'Biostatistics · Privacy · Synthetic health data',
+  '¿Se puede compartir un ensayo clínico sin compartir a sus pacientes?': 'Can you share a clinical trial without sharing its patients?',
+  'Generamos pacientes sintéticos a partir de cuatro estudios clínicos reales y comprobamos dos cosas a la vez: si las conclusiones médicas sobreviven y si un atacante puede reconocer a los pacientes originales.':
+    'We generate synthetic patients from four real clinical studies and test two things at once: whether the medical conclusions survive, and whether an attacker can recognise the original patients.',
+  'investigadora principal': 'principal investigator', 'privacidad y ataques': 'privacy and attacks', 'réplicas': 'replicates', 'estudios': 'studies', 'semillas': 'seeds',
+  'Hallazgos del piloto': 'Pilot findings', 'Por dónde empezar': 'Where to start',
+  'combinaciones de estudio y generador obtienen verde en la mayoría de réplicas.': 'study–generator combinations are green in most replicates.',
+  'Ningún método es seguro y útil a la vez de forma sistemática.': 'No method is systematically both safe and useful.',
+  'AUC del ataque de pertenencia contra el bootstrap: copiar pacientes reales los delata.': 'membership-attack AUC against the bootstrap: copying real patients gives them away.',
+  '0,5 = el atacante adivina al azar.': '0.5 = the attacker is guessing.',
+  'riesgo de individualización con síntesis CART: reutiliza valores reales de cada hoja.': 'singling-out risk with CART synthesis: it reuses real values from each leaf.',
+  'Criterio de individualización del WP29.': 'WP29 singling-out criterion.',
+  'solapamiento de intervalos de Cox: privacidad diferencial (ε = 1) frente a cópula gaussiana.': 'Cox interval overlap: differential privacy (ε = 1) vs Gaussian copula.',
+  'La garantía formal cuesta validez clínica.': 'The formal guarantee costs clinical validity.',
+  'Compara utilidad y privacidad': 'Compare utility and privacy', 'Cada generador en un solo gráfico, con su error Monte Carlo.': 'Every generator on one chart, with its Monte Carlo error.',
+  'Mira las curvas': 'See the curves', 'Kaplan-Meier real frente a sintético, día a día.': 'Real vs synthetic Kaplan-Meier, day by day.',
+  'Lee el veredicto': 'Read the verdict', '¿Se puede liberar? Verde, ámbar o rojo, con sus motivos.': 'Can it be released? Green, amber or red, with reasons.', 'Abrir': 'Open',
+  'Pacientes': 'Patients', 'Eventos': 'Events', 'Mejor compromiso': 'Best trade-off', 'Réplicas en verde': 'Green replicates',
+  'Utilidad frente a privacidad': 'Utility vs privacy', 'Cada punto es la media de las réplicas. Pulsa uno para seleccionarlo.': 'Each point is the replicate mean. Click one to select it.',
+  'zona de liberación': 'release zone', 'Riesgo de reidentificación (peor ataque)': 'Re-identification risk (worst attack)', 'Validez inferencial': 'Inferential validity',
+  'Ficha del generador': 'Generator card', 'Medias entre réplicas (± error Monte Carlo).': 'Means across replicates (± Monte Carlo error).',
+  'Solapamiento de IC (m combinados)': 'CI overlap (m combined)', 'Conclusiones cambiadas (1 sintético)': 'Changed conclusions (1 synthetic)', 'Diferencia media entre curvas KM': 'Mean KM curve difference',
+  'Índice C entrenando con sintéticos': 'C-index training on synthetic', 'AUC pertenencia (distancia)': 'Membership AUC (distance)', 'AUC pertenencia (densidad)': 'Membership AUC (density)',
+  'Individualización': 'Singling out', 'Vinculación': 'Linkability', 'Inferencia de atributo': 'Attribute inference', 'Copias exactas': 'Exact copies',
+  'en': 'in', 'de': 'of', 'verde': 'green', 'ámbar': 'amber', 'rojo': 'red',
+  'Curva de supervivencia': 'Survival curve', 'Real (entrenamiento)': 'Real (training)', 'Sintético': 'Synthetic', 'Real': 'Real', 'Días de seguimiento': 'Days of follow-up', 'Supervivencia S(t)': 'Survival S(t)',
+  'Día': 'Day', 'Sin curva para este generador.': 'No curve for this generator.', 'semilla 0': 'seed 0',
+  'Kaplan-Meier: pacientes reales de entrenamiento frente a pacientes sintéticos del generador elegido.': 'Kaplan-Meier: real training patients vs synthetic patients from the selected generator.',
+  'Modelo de Cox con m = 5 sintéticos combinados. Escala logarítmica; en rojo, efectos cuya conclusión cambia.': 'Cox model with m = 5 combined synthetic sets. Log scale; in red, effects whose conclusion changes.',
+  'Hazard ratio (IC 95 %)': 'Hazard ratio (95% CI)', 'Conclusión clínica cambiada': 'Clinical conclusion changed', 'Solapamiento': 'Overlap', 'HR real': 'Real HR', 'HR sintético': 'Synthetic HR',
+  'Sin estimaciones para este generador.': 'No estimates for this generator.',
+  'Verde: candidato a liberarse como dato anónimo. Ámbar: solo en un entorno de tratamiento seguro. Rojo: sigue siendo dato personal de salud.':
+    'Green: candidate for release as anonymous data. Amber: only inside a secure processing environment. Red: still personal health data.',
+  'Veredicto mayoritario': 'Majority verdict', 'Conclusiones cambiadas': 'Changed conclusions', 'Pulsa una fila para seleccionar el generador.': 'Click a row to select the generator.',
+  'Ataques ejecutados contra cada conjunto sintético. Solo cuenta el acierto que supera al obtenido sobre pacientes que el generador nunca vio.':
+    'Attacks run against each synthetic set. Only success beyond what the attacker achieves on patients the generator never saw counts.',
+  'AUC distancia': 'AUC distance', 'AUC densidad': 'AUC density', 'Familia': 'Family',
+  'control': 'control', 'estadístico': 'statistical', 'privacidad diferencial': 'differential privacy', 'aprendizaje profundo': 'deep learning',
+  'Cómo se mide': 'How it is measured',
+  'Los pacientes reales se dividen al azar: la mitad entrena al generador y la otra mitad, que el generador nunca ve, sirve de control.': 'Real patients are split at random: half train the generator and the other half, which the generator never sees, serve as control.',
+  'Validez inferencial': 'Inferential validity', 'Ataques de privacidad': 'Privacy attacks', 'Utilidad general': 'General utility',
+  'Datos de partida': 'Source data', 'Los umbrales son una propuesta del equipo, no un estándar legal.': 'Thresholds are the team’s proposal, not a legal standard.',
+  'Base normativa': 'Legal basis', 'Qué dice cada norma y cómo la usa el semáforo.': 'What each rule says and how the verdict uses it.',
+  'Investigadora principal · Bioestadística': 'Principal investigator · Biostatistics', 'Privacidad ofensiva · GRC · Ingeniería': 'Offensive privacy · GRC · Engineering',
+  'Preguntas frecuentes': 'Frequently asked questions', 'Glosario': 'Glossary', 'Atajos de teclado': 'Keyboard shortcuts', 'Soporte': 'Support',
+  'Apariencia': 'Appearance', 'Tema': 'Theme', 'Sistema': 'System', 'Claro': 'Light', 'Oscuro': 'Dark', 'Color de acento': 'Accent colour', 'Densidad': 'Density', 'Cómoda': 'Comfortable', 'Compacta': 'Compact',
+  'Idioma': 'Language', 'Movimiento': 'Motion', 'Reducir movimiento': 'Reduce motion', 'Sigue el ajuste del sistema si está desactivado.': 'Follows the system setting when off.',
+  'Barra lateral compacta': 'Compact sidebar', 'Muestra solo iconos; se despliega al pasar el cursor.': 'Shows icons only; expands on hover.',
+  'Datos guardados': 'Saved data', 'Tus preferencias y tu perfil se guardan solo en este navegador.': 'Your preferences and profile are stored only in this browser.', 'Restablecer': 'Reset', 'Restablecido': 'Reset done',
+  'Nombre': 'Name', 'Rol': 'Role', 'Color del avatar': 'Avatar colour', 'Guardar': 'Save', 'Guardado': 'Saved',
+  'Tu perfil solo personaliza esta página en tu navegador; no se envía a ningún sitio.': 'Your profile only personalises this page in your browser; it is never sent anywhere.',
+  'Visitante': 'Visitor', 'Sin resultados para': 'No results for', 'Vistas': 'Views', 'Generadores': 'Generators', 'Términos': 'Terms',
+  'Ninguna cifra de esta página describe a un paciente real.': 'No figure on this page describes a real patient.', 'Resultados del estudio piloto.': 'Pilot study results.',
+};
+const t = (s) => (S.lang === 'en' && EN[s]) || s;
+const nf = (x, d = 2) => x == null || Number.isNaN(x) ? '—' : Number(x).toLocaleString(S.lang === 'en' ? 'en-GB' : 'es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+const loc = () => (S.lang === 'en' ? 'en-GB' : 'es-ES');
+const intf = (x) => Math.round(x).toLocaleString(loc());
+const pct = (x) => x == null ? '—' : Math.round(100 * x) + (S.lang === 'en' ? '%' : ' %');
+
+/* ── Datos derivados ── */
+const FAM = { 'control': '--fam-control', 'estadístico': '--fam-stat', 'privacidad diferencial': '--fam-dp', 'aprendizaje profundo': '--fam-deep' };
+const VBADGE = { verde: 'ok', 'ámbar': 'warn', rojo: 'crit' }, VICON = { verde: 'check', 'ámbar': 'circle-alert', rojo: 'x' };
+const rowsOf = (ds) => D.summary.filter((r) => r.dataset === ds);
+const cur = () => rowsOf(S.ds).find((r) => r.label === S.gen) || rowsOf(S.ds)[0];
+const majority = (v) => ['rojo', 'ámbar', 'verde'].reduce((best, k) => (v[k] > (v[best] ?? -1) + 1e-9 ? k : best), 'rojo');
+const vbadge = (v) => `<span class="badge ${VBADGE[v]}">${icon(VICON[v], 13)} ${t(v)}</span>`;
+const DS_ICON = { gbsg2: 'ribbon', whas500: 'heart-pulse', flchain: 'microscope', veterans: 'stethoscope' };
+const dsShort = (n) => D.datasets[n].title.split(' — ')[0];
+const dsSub = (n) => (D.datasets[n].title.split(' — ')[1] || '').replace(/\s*\(.*\)$/, '');
+const mean = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+
+/* ── Vistas ── */
+const VIEWS = {
+  inicio: { label: 'Inicio', ic: 'house', group: null, render: vInicio },
+  panel: { label: 'Panel', ic: 'layout-dashboard', group: 'Estudio', render: vPanel },
+  supervivencia: { label: 'Supervivencia', ic: 'activity', group: 'Estudio', render: vKM },
+  efectos: { label: 'Efectos clínicos', ic: 'chart-bar-big', group: 'Estudio', render: vForest },
+  semaforo: { label: 'Semáforo', ic: 'traffic-cone', group: 'Estudio', render: vSem, count: () => { const n = rowsOf(S.ds).filter((r) => majority(r.verdicts) === 'rojo').length; return n ? [n, 'crit'] : null; } },
+  privacidad: { label: 'Privacidad', ic: 'fingerprint', group: 'Estudio', render: vPriv, count: () => { const n = rowsOf(S.ds).filter((r) => (r.mia_dist_auc ?? 0) > 0.6).length; return n ? [n, 'warn'] : null; } },
+  metodo: { label: 'Método', ic: 'flask-conical', group: 'Documentación', render: vMetodo },
+  normativa: { label: 'Marco normativo', ic: 'scale', group: 'Documentación', render: vNorma },
+  equipo: { label: 'Equipo', ic: 'users', group: 'Documentación', render: vEquipo },
+  ayuda: { label: 'Ayuda', ic: 'circle-help', foot: true, render: vAyuda },
+  ajustes: { label: 'Ajustes', ic: 'sliders-horizontal', foot: true, render: vAjustes },
+  perfil: { label: 'Tu perfil', ic: 'user', foot: true, render: vPerfil },
+};
+fromHash();
+const pageHead = (eyebrow, title, lead, actions = '') => `<header class="page-head"><div class="ph-text">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</div>${actions}</header>`;
+const genPicker = () => `<label class="fld" style="flex-direction:row;align-items:center;gap:10px"><span>${t('Generador')}</span><select id="gen-sel">${rowsOf(S.ds).map((r) => `<option value="${esc(r.label)}"${r.label === S.gen ? ' selected' : ''}>${esc(r.label)}</option>`).join('')}</select></label>`;
+const footNote = () => `<p class="foot"><span class="stamp">${S.lang === 'en' ? 'SYNTHETIC DATA' : 'DATOS SINTÉTICOS'}</span>&nbsp; ${t('Ninguna cifra de esta página describe a un paciente real.')} ${t('Resultados del estudio piloto.')} S.Y.N.A.P.S.E. v${esc(D.version)}</p>`;
+
+function vInicio() {
+  const all = D.summary, by = (g) => all.filter((r) => r.generator === g);
+  const green = all.filter((r) => majority(r.verdicts) === 'verde').length;
+  const dp1 = all.filter((r) => r.generator === 'dpcopula' && r.epsilon === 1);
+  const cards = [
+    [`${green} / ${all.length}`, 'combinaciones de estudio y generador obtienen verde en la mayoría de réplicas.', 'Ningún método es seguro y útil a la vez de forma sistemática.'],
+    by('bootstrap').length && [nf(mean(by('bootstrap').map((r) => r.mia_dist_auc))), 'AUC del ataque de pertenencia contra el bootstrap: copiar pacientes reales los delata.', '0,5 = el atacante adivina al azar.'],
+    by('cart').length && [pct(mean(by('cart').map((r) => r.singling_out_risk))), 'riesgo de individualización con síntesis CART: reutiliza valores reales de cada hoja.', 'Criterio de individualización del WP29.'],
+    dp1.length && by('copula').length && [`${nf(mean(dp1.map((r) => r.comb_ci_overlap_mean)))} · ${nf(mean(by('copula').map((r) => r.comb_ci_overlap_mean)))}`, 'solapamiento de intervalos de Cox: privacidad diferencial (ε = 1) frente a cópula gaussiana.', 'La garantía formal cuesta validez clínica.'],
+  ].filter(Boolean);
+  const start = (v, ic, title, text) => `<button type="button" class="start-card" data-go="${v}"><span class="sc-ic">${icon(ic, 22)}</span><b>${t(title)}</b><span>${t(text)}</span><em>${t('Abrir')} ${icon('arrow-right', 15)}</em></button>`;
+  return `<section class="hero"><div class="eyebrow">${t('Bioestadística · Privacidad · Datos sanitarios sintéticos')}</div>
+    <h1>${t('¿Se puede compartir un ensayo clínico sin compartir a sus pacientes?')}</h1>
+    <p class="lead">${t('Generamos pacientes sintéticos a partir de cuatro estudios clínicos reales y comprobamos dos cosas a la vez: si las conclusiones médicas sobreviven y si un atacante puede reconocer a los pacientes originales.')}</p>
+    <div class="byline"><span><b>Maricel Meneses Gómez</b> · ${t('investigadora principal')}</span><span><b>Yoandy Ramírez Delgado</b> · ${t('privacidad y ataques')}</span>
+    <span class="num">${D.replicas} ${t('réplicas')} · ${DS.length} ${t('estudios')} · ${D.seeds} ${t('semillas')}</span></div></section>
+    <h4 style="margin:0">${t('Hallazgos del piloto')}</h4>
+    <div class="grid g4">${cards.map(([b, p, s]) => `<article class="card finding"><div class="big num">${b}</div><p>${t(p)}</p><small>${t(s)}</small></article>`).join('')}</div>
+    <h4 style="margin:0">${t('Por dónde empezar')}</h4>
+    <div class="start-grid">${start('panel', 'chart-scatter', 'Compara utilidad y privacidad', 'Cada generador en un solo gráfico, con su error Monte Carlo.')}
+    ${start('supervivencia', 'activity', 'Mira las curvas', 'Kaplan-Meier real frente a sintético, día a día.')}
+    ${start('semaforo', 'traffic-cone', 'Lee el veredicto', '¿Se puede liberar? Verde, ámbar o rojo, con sus motivos.')}</div>${footNote()}`;
+}
+
+function genCard() {
+  const r = cur(), v = majority(r.verdicts);
+  const item = (k, label, d = 2, p = false) => `<tr><td>${t(label)}</td><td class="r num">${p ? pct(r[k]) : nf(r[k], d)} <span class="muted">± ${p ? pct(r[k + '_se']) : nf(r[k + '_se'], d)}</span></td></tr>`;
+  return `<div class="card"><div class="card-head"><div><h2>${t('Ficha del generador')}</h2><p>${t('Medias entre réplicas (± error Monte Carlo).')}</p></div>${vbadge(v)}</div>
+    <p class="small muted" style="margin-bottom:10px"><span class="sw-dot" style="background:var(${FAM[r.family] || '--fam-control'})"></span><b style="color:var(--ink)">${esc(r.label)}</b> · ${t(r.family)} · ${t('verde')} ${t('en')} ${pct(r.verdicts.verde)} ${t('de')} ${r.n} ${t('réplicas')}</p>
+    <table class="tbl"><tbody>${item('comb_ci_overlap_mean', 'Solapamiento de IC (m combinados)')}${item('decisions_changed', 'Conclusiones cambiadas (1 sintético)', 1)}${item('km_mean_abs_diff', 'Diferencia media entre curvas KM', 3)}
+    ${item('cindex_tstr', 'Índice C entrenando con sintéticos')}${item('mia_dist_auc', 'AUC pertenencia (distancia)')}${item('singling_out_risk', 'Individualización', 0, true)}
+    ${item('linkability_risk', 'Vinculación', 0, true)}${item('inference_risk', 'Inferencia de atributo', 0, true)}${item('exact_match_rate', 'Copias exactas', 0, true)}</tbody></table></div>`;
+}
+
+function vPanel() {
+  const rs = rowsOf(S.ds), d = D.datasets[S.ds];
+  const best = [...rs].sort((a, b) => (b.verdicts.verde - a.verdicts.verde) || ((b.comb_ci_overlap_mean - b.risk) - (a.comb_ci_overlap_mean - a.risk)))[0];
+  const kpi = (b, s, sm = '') => `<div class="card kpi"><b class="num">${b}</b><span>${t(s)}</span>${sm ? `<small>${sm}</small>` : ''}</div>`;
+  return pageHead(esc(dsShort(S.ds)), t('Panel'), esc(d.title.split(' — ')[1] || ''), genPicker()) +
+    `<div class="grid g4">${kpi(intf(d.n), 'Pacientes')}${kpi(intf(d.events), 'Eventos', pct(d.events / d.n))}${kpi(esc(best.label), 'Mejor compromiso', `${t('Validez inferencial')} ${nf(best.comb_ci_overlap_mean)}`)}${kpi(pct(mean(rs.map((r) => r.verdicts.verde))), 'Réplicas en verde')}</div>
+    <div class="grid g-main"><div class="card"><div class="card-head"><div><h2>${t('Utilidad frente a privacidad')}</h2><p>${t('Cada punto es la media de las réplicas. Pulsa uno para seleccionarlo.')}</p></div></div><div class="chart" id="c-pareto"></div><div class="legend" id="lg-pareto"></div></div>${genCard()}</div>${footNote()}`;
+}
+function vKM() {
+  return pageHead(esc(dsShort(S.ds)), t('Supervivencia'), t('Kaplan-Meier: pacientes reales de entrenamiento frente a pacientes sintéticos del generador elegido.'), genPicker()) +
+    `<div class="card"><div class="chart" id="c-km"></div><div class="legend"><span><i class="line" style="background:var(--real)"></i>${t('Real (entrenamiento)')}</span><span><i class="line" style="background:var(--syn)"></i>${t('Sintético')} · ${esc(S.gen)}, ${t('semilla 0')}</span></div></div>${footNote()}`;
+}
+function vForest() {
+  return pageHead(esc(dsShort(S.ds)), t('Efectos clínicos'), t('Modelo de Cox con m = 5 sintéticos combinados. Escala logarítmica; en rojo, efectos cuya conclusión cambia.'), genPicker()) +
+    `<div class="grid g-main"><div class="card"><div class="chart" id="c-forest"></div><div class="legend"><span><i style="background:var(--real)"></i>${t('Real')}</span><span><i style="background:var(--syn)"></i>${t('Sintético')}</span></div></div>${genCard()}</div>${footNote()}`;
+}
+function vSem() {
+  const rows = rowsOf(S.ds).map((r) => { const v = majority(r.verdicts);
+    return `<tr class="click" data-gen="${esc(r.label)}" tabindex="0" aria-selected="${r.label === S.gen}"><td><span class="sw-dot" style="background:var(${FAM[r.family] || '--fam-control'})"></span>${esc(r.label)}</td>
+    <td class="r num">${nf(r.comb_ci_overlap_mean)}</td><td class="r num">${nf(r.decisions_changed, 1)}</td><td class="r num">${nf(r.mia_dist_auc)}</td>
+    <td class="r num">${pct(r.singling_out_risk)}</td><td class="r num">${pct(r.linkability_risk)}</td><td>${vbadge(v)}</td><td class="r num">${pct(r.verdicts.verde)}</td></tr>`; }).join('');
+  return pageHead(esc(dsShort(S.ds)), t('Semáforo'), t('Verde: candidato a liberarse como dato anónimo. Ámbar: solo en un entorno de tratamiento seguro. Rojo: sigue siendo dato personal de salud.')) +
+    `<div class="table-wrap"><table class="tbl"><thead><tr><th>${t('Generador')}</th><th class="r">${t('Validez inferencial')}</th><th class="r">${t('Conclusiones cambiadas')}</th><th class="r">${t('AUC distancia')}</th><th class="r">${t('Individualización')}</th><th class="r">${t('Vinculación')}</th><th>${t('Veredicto mayoritario')}</th><th class="r">${t('Réplicas en verde')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small muted">${t('Pulsa una fila para seleccionar el generador.')}</p>${footNote()}`;
+}
+function vPriv() {
+  const rows = rowsOf(S.ds).map((r) => `<tr class="click" data-gen="${esc(r.label)}" tabindex="0" aria-selected="${r.label === S.gen}"><td><span class="sw-dot" style="background:var(${FAM[r.family] || '--fam-control'})"></span>${esc(r.label)}</td><td>${t(r.family)}</td>
+    <td class="r num">${nf(r.mia_dist_auc)}</td><td class="r num">${nf(r.mia_dens_auc)}</td><td class="r num">${pct(r.exact_match_rate)}</td><td class="r num">${pct(r.singling_out_risk)}</td><td class="r num">${pct(r.linkability_risk)}</td><td class="r num">${pct(r.inference_risk)}</td></tr>`).join('');
+  return pageHead(esc(dsShort(S.ds)), t('Privacidad'), t('Ataques ejecutados contra cada conjunto sintético. Solo cuenta el acierto que supera al obtenido sobre pacientes que el generador nunca vio.')) +
+    `<div class="table-wrap"><table class="tbl"><thead><tr><th>${t('Generador')}</th><th>${t('Familia')}</th><th class="r">${t('AUC distancia')}</th><th class="r">${t('AUC densidad')}</th><th class="r">${t('Copias exactas')}</th><th class="r">${t('Individualización')}</th><th class="r">${t('Vinculación')}</th><th class="r">${t('Inferencia de atributo')}</th></tr></thead><tbody>${rows}</tbody></table></div>${footNote()}`;
+}
+const ES_EN = (es, en) => (S.lang === 'en' ? en : es);
+function vMetodo() {
+  return pageHead(t('Documentación'), t('Cómo se mide'), t('Los pacientes reales se dividen al azar: la mitad entrena al generador y la otra mitad, que el generador nunca ve, sirve de control.')) +
+  `<div class="grid g3"><div class="card prose"><h2 style="margin-bottom:10px">${t('Validez inferencial')}</h2><ul>
+    <li>${ES_EN('Curvas de Kaplan-Meier, supervivencia media restringida y prueba de log-rank.', 'Kaplan-Meier curves, restricted mean survival time and log-rank test.')}</li>
+    <li>${ES_EN('Solapamiento de intervalos de los hazard ratios de Cox (Karr et al., 2006).', 'Interval overlap of Cox hazard ratios (Karr et al., 2006).')}</li>
+    <li>${ES_EN('Reglas de combinación para m sintéticos (Raab, Nowok y Dibben, 2016).', 'Combining rules for m synthetic sets (Raab, Nowok and Dibben, 2016).')}</li>
+    <li>${ES_EN('¿Cambia el signo o la significación de algún efecto clínico?', 'Does any clinical effect change sign or significance?')}</li></ul></div>
+  <div class="card prose"><h2 style="margin-bottom:10px">${t('Ataques de privacidad')}</h2><ul>
+    <li>${ES_EN('Individualización, vinculación e inferencia: los tres criterios del Dictamen 05/2014 del WP29, con Anonymeter (Giomi et al., 2023).', 'Singling out, linkability and inference: the three WP29 Opinion 05/2014 criteria, with Anonymeter (Giomi et al., 2023).')}</li>
+    <li>${ES_EN('Inferencia de pertenencia por distancia y por cociente de densidades (van Breugel et al., 2023).', 'Membership inference by distance and by density ratio (van Breugel et al., 2023).')}</li>
+    <li>${ES_EN('Copias exactas y distancia al registro más cercano.', 'Exact copies and distance to closest record.')}</li></ul></div>
+  <div class="card prose"><h2 style="margin-bottom:10px">${t('Utilidad general')}</h2><ul>
+    <li>${ES_EN('Kolmogorov-Smirnov y variación total por variable.', 'Kolmogorov-Smirnov and total variation per variable.')}</li>
+    <li>${ES_EN('pMSE de propensión (Snoke et al., 2018).', 'Propensity pMSE (Snoke et al., 2018).')}</li>
+    <li>${ES_EN('Entrenar con sintéticos y evaluar en pacientes reales: índice C y Brier integrado.', 'Train on synthetic, test on real patients: C-index and integrated Brier score.')}</li></ul></div></div>
+  <div class="card prose"><h2 style="margin-bottom:10px">${t('Datos de partida')}</h2>${DS.map((n) => `<p><b>${esc(D.datasets[n].title)}</b> · n = ${D.datasets[n].n} · ${esc(D.datasets[n].note || '')}<br><span class="ref">${esc(D.datasets[n].citation)}</span></p>`).join('')}
+  <p class="small muted">${t('Los umbrales son una propuesta del equipo, no un estándar legal.')}</p></div>${footNote()}`;
+}
+function vNorma() {
+  const L = [
+    ['RGPD, considerando 26', 'GDPR, recital 26', 'La información anónima queda fuera del RGPD; para saber si alguien es identificable se consideran todos los medios que razonablemente puedan usarse.', 'Anonymous information is outside the GDPR; identifiability considers all means reasonably likely to be used.', 'Un rojo en privacidad significa que el conjunto sigue siendo dato personal.', 'A red privacy grade means the set is still personal data.'],
+    ['RGPD, art. 9 y art. 89', 'GDPR, art. 9 and art. 89', 'Los datos de salud son categoría especial; la investigación exige garantías como la seudonimización o la anonimización.', 'Health data is a special category; research requires safeguards such as pseudonymisation or anonymisation.', 'Marca el nivel de protección del veredicto ámbar.', 'Sets the protection level of the amber verdict.'],
+    ['WP29, Dictamen 05/2014 (WP216)', 'WP29, Opinion 05/2014 (WP216)', 'Una anonimización robusta impide individualizar, vincular e inferir.', 'Robust anonymisation prevents singling out, linkability and inference.', 'Son exactamente los tres ataques de Anonymeter.', 'These are exactly the three Anonymeter attacks.'],
+    ['Reglamento (UE) 2025/327 (EHDS)', 'Regulation (EU) 2025/327 (EHDS)', 'Uso secundario de datos de salud: anonimizados cuando el fin lo permita; si no, seudonimizados y en un entorno de tratamiento seguro.', 'Secondary use of health data: anonymised when the purpose allows; otherwise pseudonymised and inside a secure processing environment.', 'Define la diferencia entre verde y ámbar.', 'Defines the difference between green and amber.'],
+    ['ISO/IEC 27559:2022', 'ISO/IEC 27559:2022', 'Marco de desidentificación: el riesgo de reidentificación se evalúa en su contexto.', 'De-identification framework: re-identification risk is assessed in context.', 'Justifica medir el riesgo con ataques, no con reglas fijas.', 'Justifies measuring risk with attacks, not fixed rules.'],
+  ];
+  return pageHead(t('Documentación'), t('Marco normativo'), t('Qué dice cada norma y cómo la usa el semáforo.')) +
+    `<div class="table-wrap"><table class="tbl"><thead><tr><th>${t('Base normativa')}</th><th>${ES_EN('Qué dice', 'What it says')}</th><th>${ES_EN('Uso en S.Y.N.A.P.S.E.', 'Use in S.Y.N.A.P.S.E.')}</th></tr></thead><tbody>${L.map((l) => `<tr><td style="white-space:normal;min-width:170px"><b>${ES_EN(l[0], l[1])}</b></td><td style="white-space:normal;min-width:260px">${ES_EN(l[2], l[3])}</td><td style="white-space:normal;min-width:200px">${ES_EN(l[4], l[5])}</td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted">${ES_EN('El veredicto apoya, pero no sustituye, la evaluación de impacto (art. 35 RGPD) ni el criterio del delegado de protección de datos.', 'The verdict supports, but does not replace, the impact assessment (GDPR art. 35) or the data protection officer’s judgement.')}</p>${footNote()}`;
+}
+function vEquipo() {
+  return pageHead(t('Documentación'), t('Equipo'), '') + `<div class="grid g2">
+  <div class="card person"><div class="name">Maricel Meneses Gómez</div><div class="role">${t('Investigadora principal · Bioestadística')}</div><p class="prose">${ES_EN('Licenciada en Ciencias de la Computación y Máster en Computación Aplicada. Diez años de docencia universitaria en Computación y Estadística, cinco de ellos en la Universidad de Ciencias Médicas de Villa Clara. Lidera el diseño del estudio, la validez inferencial y el análisis de supervivencia.', 'BSc in Computer Science and MSc in Applied Computing. Ten years teaching Computing and Statistics at university level, five of them at the University of Medical Sciences of Villa Clara. Leads the study design, inferential validity and survival analysis.')}</p>
+  <div>${['Conceptualización', 'Metodología', 'Análisis formal', 'Redacción'].map((x) => `<span class="tag">${x}</span>`).join('')}</div></div>
+  <div class="card person"><div class="name">Yoandy Ramírez Delgado</div><div class="role">${t('Privacidad ofensiva · GRC · Ingeniería')}</div><p class="prose">${ES_EN('Pentester (eJPTv2) con formación en ENS, ISO 27001 e ISO 42001. Lidera los ataques de reidentificación, el marco normativo y el software del proyecto.', 'Pentester (eJPTv2) trained in ENS, ISO 27001 and ISO 42001. Leads the re-identification attacks, the regulatory framework and the project software.')}</p>
+  <div>${['Software', 'Investigación', 'Validación', 'Marco legal'].map((x) => `<span class="tag">${x}</span>`).join('')}</div></div></div>
+  <p class="small muted">${ES_EN('Roles según la taxonomía CRediT.', 'Roles follow the CRediT taxonomy.')}</p>${footNote()}`;
+}
+function vAyuda() {
+  const faq = [
+    ['¿Qué es un dato sintético?', 'What is synthetic data?', 'Un registro generado por un modelo entrenado con pacientes reales. Imita sus patrones estadísticos sin ser, en principio, ningún paciente concreto.', 'A record produced by a model trained on real patients. It mimics their statistical patterns without, in principle, being any specific patient.'],
+    ['¿Cómo leo el gráfico de utilidad frente a privacidad?', 'How do I read the utility vs privacy chart?', 'Arriba a la izquierda es lo ideal: mucha validez inferencial y poco riesgo. La franja verde marca dónde un conjunto podría liberarse.', 'Top left is ideal: high inferential validity and low risk. The green band marks where a set could be released.'],
+    ['¿Por qué casi todo sale en rojo o ámbar?', 'Why is almost everything red or amber?', 'Porque es lo que encontramos: los métodos que conservan las conclusiones clínicas también filtran pacientes, y los que los protegen pierden validez. Ese compromiso es el hallazgo central.', 'Because that is what we found: methods that keep the clinical conclusions also leak patients, and those that protect them lose validity. That trade-off is the central finding.'],
+    ['¿Son reales los pacientes?', 'Are the patients real?', 'Los datos de partida son estudios clínicos públicos y clásicos de bioestadística. Todo lo que se muestra aquí son agregados o datos sintéticos.', 'The source data are public, classic biostatistics studies. Everything shown here is aggregated or synthetic.'],
+  ];
+  const gloss = [['Kaplan-Meier', 'Estimador de la probabilidad de seguir sin el evento a lo largo del tiempo.', 'Estimator of the probability of remaining event-free over time.'],
+    ['Hazard ratio (HR)', 'Cuánto multiplica una variable el riesgo instantáneo del evento. HR < 1 protege.', 'How much a variable multiplies the instantaneous risk. HR < 1 is protective.'],
+    ['Solapamiento de IC', 'Cuánto coinciden los intervalos de confianza real y sintético (1 = idénticos).', 'How much the real and synthetic confidence intervals coincide (1 = identical).'],
+    ['pMSE', 'Capacidad de un clasificador para distinguir reales de sintéticos.', 'Ability of a classifier to tell real from synthetic records.'],
+    ['Inferencia de pertenencia', 'Ataque que intenta saber si un paciente estaba en los datos de entrenamiento.', 'Attack that tries to tell whether a patient was in the training data.'],
+    ['ε (épsilon)', 'Presupuesto de privacidad diferencial: cuanto menor, más privado y más ruido.', 'Differential privacy budget: lower means more private and noisier.'],
+    ['Réplica Monte Carlo', 'Repetición completa del experimento con otra semilla aleatoria.', 'Full repetition of the experiment with another random seed.']];
+  return pageHead('', t('Ayuda'), '') + `<div class="grid g-main"><div class="card faq"><h2 style="margin-bottom:6px">${t('Preguntas frecuentes')}</h2>${faq.map((f) => `<details><summary>${ES_EN(f[0], f[1])}</summary><p>${ES_EN(f[2], f[3])}</p></details>`).join('')}</div>
+  <div class="grid"><div class="card"><h2 style="margin-bottom:12px">${t('Atajos de teclado')}</h2><div class="kbd-list"><kbd>Ctrl K</kbd><span>${t('Buscar generador, vista o término…')}</span><kbd>[</kbd><span>${t('Plegar barra lateral')}</span><kbd>1 – 4</kbd><span>${t('Estudios clínicos')}</span><kbd>Esc</kbd><span>${ES_EN('Cerrar menús', 'Close menus')}</span></div></div>
+  <div class="card"><h2 style="margin-bottom:8px">${t('Soporte')}</h2><p class="small" style="color:var(--ink-2)">${ES_EN('¿Has encontrado un error o una métrica discutible? Abre una incidencia en el repositorio del proyecto.', 'Found a bug or a debatable metric? Open an issue in the project repository.')}</p>
+  <p style="margin-top:12px"><a class="btn sm" href="https://github.com/maricelmeneses/synapse/issues" target="_blank" rel="noopener">${icon('life-buoy', 15)} ${ES_EN('Abrir incidencia', 'Open an issue')} ${icon('external-link', 13)}</a></p></div></div></div>
+  <div class="card"><h2 style="margin-bottom:12px">${t('Glosario')}</h2><dl class="gloss">${gloss.map((g) => `<dt>${g[0]}</dt><dd>${ES_EN(g[1], g[2])}</dd>`).join('')}</dl></div>`;
+}
+function vAjustes() {
+  const seg = (key, opts) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-set="${key}" data-v="${v}" aria-pressed="${S[key] === v}">${t(l)}</button>`).join('')}</div>`;
+  const acc = { blue: '#0071e3', teal: '#0071a4', green: '#248a3d', amber: '#c93400', rose: '#d30f45', graphite: '#515154' };
+  return pageHead('', t('Ajustes'), '') + `<div class="card"><h4>${t('Apariencia')}</h4>
+  <div class="set-row"><div><b>${t('Tema')}</b></div>${seg('theme', [['system', 'Sistema'], ['light', 'Claro'], ['dark', 'Oscuro']])}</div>
+  <div class="set-row"><div><b>${t('Color de acento')}</b></div><div class="swatches">${Object.entries(acc).map(([k, c]) => `<button type="button" class="sw" data-set="accent" data-v="${k}" aria-pressed="${S.accent === k}" aria-label="${k}" style="background:${c}"></button>`).join('')}</div></div>
+  <div class="set-row"><div><b>${t('Densidad')}</b></div>${seg('density', [['comoda', 'Cómoda'], ['compacta', 'Compacta']])}</div>
+  <div class="set-row"><div><b>${t('Idioma')}</b></div>${seg('lang', [['es', 'Español'], ['en', 'English']])}</div>
+  <div class="set-row"><div><b>${t('Barra lateral compacta')}</b><small>${t('Muestra solo iconos; se despliega al pasar el cursor.')}</small></div><label class="switch"><input type="checkbox" id="set-rail" ${S.railMin ? 'checked' : ''}><span></span></label></div>
+  <div class="set-row"><div><b>${t('Reducir movimiento')}</b><small>${t('Sigue el ajuste del sistema si está desactivado.')}</small></div><label class="switch"><input type="checkbox" id="set-motion" ${S.motion === 'reduce' ? 'checked' : ''}><span></span></label></div></div>
+  <div class="card"><h4>${t('Datos guardados')}</h4><div class="set-row"><div><small>${t('Tus preferencias y tu perfil se guardan solo en este navegador.')}</small></div><button type="button" class="btn sm" id="reset">${icon('rotate-ccw', 15)} ${t('Restablecer')}</button></div></div>`;
+}
+function vPerfil() {
+  const cols = ['blue', 'teal', 'green', 'amber', 'rose', 'slate'];
+  return pageHead('', t('Tu perfil'), t('Tu perfil solo personaliza esta página en tu navegador; no se envía a ningún sitio.')) + `<div class="card" style="max-width:640px">
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">${avatar(56)}<div><b style="font-size:1.1rem">${esc(S.profile.name || t('Visitante'))}</b><div class="muted small">${esc(S.profile.role || '')}</div></div></div>
+  <form id="prof" class="grid g2"><label class="fld">${t('Nombre')}<input type="text" id="p-name" value="${esc(S.profile.name)}" autocomplete="name" maxlength="60"></label>
+  <label class="fld">${t('Rol')}<input type="text" id="p-role" value="${esc(S.profile.role)}" maxlength="60" placeholder="${ES_EN('DPO, CISO, investigadora…', 'DPO, CISO, researcher…')}"></label>
+  <div class="fld" style="grid-column:1/-1">${t('Color del avatar')}<div class="swatches">${cols.map((c) => `<button type="button" class="sw c-${c}" data-pcolor="${c}" aria-pressed="${S.profile.color === c}" aria-label="${c}"></button>`).join('')}</div></div>
+  <div style="grid-column:1/-1"><button class="btn primary" type="submit">${t('Guardar')}</button> <span id="p-ok" class="small muted" role="status"></span></div></form></div>`;
+}
+const initials = (n) => (n || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '··';
+const avatar = (s = 32) => `<span class="avatar c-${esc(S.profile.color || 'blue')}" style="--s:${s}px">${esc(initials(S.profile.name))}</span>`;
+
+/* ── Carcasa ── */
+function renderSide() {
+  let html = `<div class="brand"><span class="logo">${icon('dna', 20)}</span><span class="brand-txt"><b>S.Y.N.A.P.S.E.</b><small>${t('Explorador')}</small></span>
+    <button type="button" class="icon-btn sm rail-btn" data-act="rail" aria-label="${t('Plegar barra lateral')}" title="${t('Plegar barra lateral')} ([)">${icon(S.railMin ? 'chevron-right' : 'chevron-left', 17)}</button></div>
+    <div class="proj-wrap"><button type="button" class="proj-switch" data-act="menu" aria-haspopup="menu" aria-expanded="${ui.menu === 'ds'}"><span class="proj-ic">${icon(DS_ICON[S.ds] || 'database', 17)}</span>
+    <span class="proj-txt"><b>${esc(dsShort(S.ds))}</b><small>${esc(dsSub(S.ds))}</small></span><span class="chev">${icon('chevron-down', 16)}</span></button>
+    ${ui.menu === 'ds' ? `<div class="menu" role="menu"><div class="menu-label">${t('Estudios clínicos')}</div>${DS.map((n, i) => `<button type="button" role="menuitem" class="menu-item${n === S.ds ? ' on' : ''}" data-ds="${n}">${icon(DS_ICON[n] || 'database', 16)}<span>${esc(dsShort(n))}<br><small>n = ${intf(D.datasets[n].n)}</small></span>${n === S.ds ? icon('check', 15) : `<kbd>${i + 1}</kbd>`}</button>`).join('')}</div>` : ''}</div>
+    <nav class="nav" aria-label="${t('Navegación')}"><span class="nav-glow" aria-hidden="true"></span>`;
+  let group = null;
+  for (const [k, v] of Object.entries(VIEWS)) {
+    if (v.foot) continue;
+    if (v.group !== group && v.group) { group = v.group; html += `<div class="nav-group"><span>${t(group)}</span></div>`; }
+    const c = v.count && v.count();
+    html += `<button type="button" class="nav-item" data-go="${k}"${S.view === k ? ' aria-current="page"' : ''} title="${t(v.label)}">${icon(v.ic)}<span class="lbl">${t(v.label)}</span>${c ? `<span class="count ${c[1]}">${c[0]}</span>` : ''}</button>`;
+  }
+  html += `</nav><div class="side-foot">${['ayuda', 'ajustes'].map((k) => `<button type="button" class="nav-item" data-go="${k}"${S.view === k ? ' aria-current="page"' : ''} title="${t(VIEWS[k].label)}">${icon(VIEWS[k].ic)}<span class="lbl">${t(VIEWS[k].label)}</span></button>`).join('')}
+    <button type="button" class="me" data-go="perfil"${S.view === 'perfil' ? ' aria-current="page"' : ''}>${avatar(32)}<span class="lbl"><b>${esc(S.profile.name || t('Tu perfil'))}</b><small>${esc(S.profile.role || t('Completa tu perfil'))}</small></span></button></div>`;
+  return html;
+}
+const THEME_IC = { system: 'monitor', light: 'sun', dark: 'moon' };
+function renderTop() {
+  return `<button type="button" class="icon-btn only-mobile" data-act="drawer" aria-label="${t('Abrir menú')}">${icon('menu')}</button>
+  <div class="crumbs"><span class="crumb-proj">${esc(dsShort(S.ds))}</span><span class="crumb-sep">${icon('chevron-right', 14)}</span><span class="crumb-cur">${t(VIEWS[S.view].label)}</span></div>
+  <button type="button" class="search-btn" data-act="pal" aria-label="${t('Buscar generador, vista o término…')}">${icon('search', 16)}<span>${t('Buscar generador, vista o término…')}</span><kbd>Ctrl K</kbd></button>
+  <div class="lang-switch" role="group" aria-label="${t('Idioma')}"><button type="button" data-set="lang" data-v="es" aria-pressed="${S.lang === 'es'}">ES</button><button type="button" data-set="lang" data-v="en" aria-pressed="${S.lang === 'en'}">EN</button></div>
+  <button type="button" class="icon-btn" data-act="theme" aria-label="${t('Cambiar tema')}" title="${t('Cambiar tema')}: ${t({ system: 'Sistema', light: 'Claro', dark: 'Oscuro' }[S.theme])}">${icon(THEME_IC[S.theme])}</button>
+  <button type="button" class="icon-btn" data-go="ayuda" aria-label="${t('Ayuda')}" title="${t('Ayuda')}">${icon('circle-help')}</button>
+  <button type="button" class="avatar-btn" data-go="perfil" aria-label="${t('Tu perfil')}">${avatar(34)}</button>`;
+}
+
+/* ── Paleta de búsqueda ── */
+function palItems() {
+  const q = ui.q.trim().toLowerCase();
+  const items = [
+    ...Object.entries(VIEWS).map(([k, v]) => ({ kind: 'Vistas', ic: v.ic, label: t(v.label), run: () => go(k) })),
+    ...DS.map((n) => ({ kind: 'Estudios clínicos', ic: DS_ICON[n] || 'database', label: dsShort(n), hint: dsSub(n), run: () => { setDs(n); } })),
+    ...rowsOf(S.ds).map((r) => ({ kind: 'Generadores', ic: 'sparkles', label: r.label, hint: t(r.family), run: () => { S.gen = r.label; go(S.view === 'inicio' ? 'panel' : S.view); } })),
+    ...[['Kaplan-Meier', 'supervivencia'], ['Hazard ratio', 'efectos'], ['Anonymeter', 'privacidad'], ['WP29', 'normativa'], ['EHDS', 'normativa'], ['RGPD', 'normativa'], ['pMSE', 'metodo'], ['ε', 'ajustes']]
+      .map(([l, v]) => ({ kind: 'Términos', ic: 'book-open', label: l, hint: t(VIEWS[v].label), run: () => go(v === 'ajustes' ? 'panel' : v) })),
+  ];
+  return q ? items.filter((i) => (i.label + ' ' + (i.hint || '')).toLowerCase().includes(q)) : items;
+}
+function renderPalette() {
+  const p = $('#palette'); p.hidden = !ui.pal; if (!ui.pal) { p.innerHTML = ''; return; }
+  const items = palItems(); ui.sel = Math.min(ui.sel, Math.max(items.length - 1, 0));
+  let kind = null, html = '';
+  items.forEach((it, i) => { if (it.kind !== kind) { kind = it.kind; html += `<div class="menu-label">${t(kind)}</div>`; }
+    html += `<button type="button" class="pal-item" data-pi="${i}" role="option" aria-selected="${i === ui.sel}">${icon(it.ic, 17)}<span>${esc(it.label)}</span>${it.hint ? `<small>${esc(it.hint)}</small>` : ''}</button>`; });
+  if (!p.innerHTML) {
+    p.innerHTML = `<div class="scrim" data-act="pal-close"></div><div class="palette" role="dialog" aria-modal="true" aria-label="${t('Buscar generador, vista o término…')}">
+      <div class="pal-in">${icon('search')}<input id="pal-q" type="text" placeholder="${t('Buscar generador, vista o término…')}" autocomplete="off" aria-controls="pal-list"><kbd>Esc</kbd></div><div class="pal-list" id="pal-list" role="listbox"></div></div>`;
+    const inp = $('#pal-q'); inp.value = ui.q; inp.focus();
+    inp.addEventListener('input', () => { ui.q = inp.value; ui.sel = 0; renderPalette(); });
+  }
+  $('#pal-list').innerHTML = html || `<div class="pal-empty">${t('Sin resultados para')} «${esc(ui.q)}»</div>`;
+  const s = $('#pal-list [aria-selected="true"]'); if (s) s.scrollIntoView({ block: 'nearest' });
+}
+const openPal = () => { ui.pal = true; ui.q = ''; ui.sel = 0; renderPalette(); };
+const closePal = () => { ui.pal = false; renderPalette(); };
+
+/* ── Gráficos (SVG con tokens del tema) ── */
+const scale = (d0, d1, r0, r1) => (v) => r0 + (v - d0) / (d1 - d0) * (r1 - r0);
+const ticks = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * i / n);
+function tooltip(host) { let tp = host.querySelector('.tip'); if (!tp) { tp = document.createElement('div'); tp.className = 'tip'; tp.setAttribute('role', 'status'); host.appendChild(tp); } return tp; }
+function place(tp, host, x, y) { tp.style.left = Math.min(Math.max(x + 12, 0), host.clientWidth - tp.offsetWidth - 4) + 'px'; tp.style.top = Math.max(y - tp.offsetHeight - 10, 0) + 'px'; }
+const axisText = (x, y, s, anchor = 'middle', size = 11, col = '--muted') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="${css(col)}" font-family="${css('--f')}">${s}</text>`;
+function pareto() {
+  const host = $('#c-pareto'); if (!host) return;
+  const W = 560, H = 360, m = { l: 46, r: 18, t: 14, b: 42 }, rs = rowsOf(S.ds);
+  const maxR = Math.max(0.3, ...rs.map((r) => (r.risk || 0) + (r.risk_se || 0))) * 1.08;
+  const x = scale(0, maxR, m.l, W - m.r), y = scale(0, 1, H - m.b, m.t);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Utilidad frente a privacidad')}">`;
+  s += `<rect x="${x(0)}" y="${m.t}" width="${x(0.10) - x(0)}" height="${H - m.t - m.b}" fill="${css('--ok-soft')}"/>` + axisText(x(0) + 6, m.t + 14, t('zona de liberación'), 'start', 10.5, '--ok');
+  for (const v of ticks(0, 1, 4)) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="${css('--line')}"/>` + axisText(m.l - 8, y(v) + 4, nf(v), 'end');
+  for (const v of ticks(0, maxR, 4)) s += axisText(x(v), H - m.b + 18, nf(v));
+  s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0.5)}" y2="${y(0.5)}" stroke="${css('--line-2')}"/>`;
+  s += axisText((m.l + W - m.r) / 2, H - 6, t('Riesgo de reidentificación (peor ataque)'), 'middle', 11.5, '--ink-2');
+  s += `<g transform="translate(12 ${(m.t + H - m.b) / 2}) rotate(-90)">${axisText(0, 0, t('Validez inferencial'), 'middle', 11.5, '--ink-2')}</g>`;
+  // Etiquetas sin solapes: se colocan de arriba abajo y se desplazan si chocan con una ya colocada
+  const placed = [], labelPos = {};
+  [...rs.keys()].sort((a, b) => y(rs[a].comb_ci_overlap_mean || 0) - y(rs[b].comb_ci_overlap_mean || 0)).forEach((i) => {
+    const r = rs[i], cx = x(r.risk || 0), cy = y(r.comb_ci_overlap_mean || 0), w = r.label.length * 6.2 + 4;
+    const right = cx + 10 + w > W - m.r; let lx = right ? cx - 10 - w : cx + 10, ly = cy - 9;
+    for (let k = 0; k < 8 && placed.some((p) => Math.abs(p.y - ly) < 13 && lx < p.x + p.w && p.x < lx + w); k++) ly += 13;
+    placed.push({ x: lx, y: ly, w }); labelPos[i] = { lx: right ? lx + w : lx, ly, anchor: right ? 'end' : 'start', cx, cy, moved: Math.abs(ly - (cy - 9)) > 1 };
+  });
+  rs.forEach((r, i) => {
+    const c = css(FAM[r.family] || '--fam-control'), cx = x(r.risk || 0), cy = y(r.comb_ci_overlap_mean || 0), on = r.label === S.gen, L = labelPos[i];
+    s += `<line x1="${x(Math.max(0, r.risk - r.risk_se))}" x2="${x(r.risk + r.risk_se)}" y1="${cy}" y2="${cy}" stroke="${c}" stroke-opacity=".55"/><line x1="${cx}" x2="${cx}" y1="${y(r.comb_ci_overlap_mean - r.comb_ci_overlap_mean_se)}" y2="${y(r.comb_ci_overlap_mean + r.comb_ci_overlap_mean_se)}" stroke="${c}" stroke-opacity=".55"/>`;
+    if (on) s += `<circle cx="${cx}" cy="${cy}" r="12" fill="none" stroke="${c}" stroke-width="1.5"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="${on ? 7.5 : 6}" fill="${c}" stroke="${css('--surface')}" stroke-width="2"/>` + (L.moved ? `<line x1="${cx}" y1="${cy}" x2="${L.anchor === 'end' ? L.lx + 2 : L.lx - 2}" y2="${L.ly - 4}" stroke="${css('--line-2')}"/>` : '')
+      + `<text x="${L.lx}" y="${L.ly}" text-anchor="${L.anchor}" font-size="11" fill="${css('--ink-2')}" font-weight="${on ? 600 : 400}" font-family="${css('--f')}">${esc(r.label)}</text>`;
+    s += `<circle data-i="${i}" cx="${cx}" cy="${cy}" r="16" fill="transparent" style="cursor:pointer"/>`;
+  });
+  host.innerHTML = s + '</svg>';
+  const tp = tooltip(host);
+  host.querySelectorAll('circle[data-i]').forEach((el) => { const r = rs[+el.dataset.i];
+    el.addEventListener('pointerenter', () => { tp.innerHTML = `<b>${esc(r.label)}</b> · ${t(r.family)}<br>${t('Validez inferencial')} ${nf(r.comb_ci_overlap_mean)} · ${t('Riesgo de reidentificación (peor ataque)').split(' (')[0]} ${nf(r.risk)}<br>${t('verde')} ${t('en')} ${pct(r.verdicts.verde)} ${t('de')} ${t('réplicas')}`; tp.classList.add('on'); });
+    el.addEventListener('pointermove', (e) => { const b = host.getBoundingClientRect(); place(tp, host, e.clientX - b.left, e.clientY - b.top); });
+    el.addEventListener('pointerleave', () => tp.classList.remove('on'));
+    el.addEventListener('pointerdown', () => { S.gen = r.label; render(); }); });
+  $('#lg-pareto').innerHTML = [...new Set(rs.map((r) => r.family))].map((f) => `<span><i style="background:var(${FAM[f] || '--fam-control'})"></i>${t(f)}</span>`).join('');
+}
+function km() {
+  const host = $('#c-km'); if (!host) return;
+  const k = D.km[S.ds], W = 760, H = 380, m = { l: 48, r: 18, t: 14, b: 42 };
+  if (!k || !k[S.gen]) { host.innerHTML = `<p class="muted">${t('Sin curva para este generador.')}</p>`; return; }
+  const T = k.t, tmax = T[T.length - 1], x = scale(0, tmax, m.l, W - m.r), y = scale(0, 1, H - m.b, m.t);
+  const path = (Sv) => Sv.map((v, i) => `${i ? 'L' : 'M'}${x(T[i]).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Curva de supervivencia')}">`;
+  for (const v of ticks(0, 1, 4)) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="${css('--line')}"/>` + axisText(m.l - 8, y(v) + 4, nf(v), 'end');
+  for (const v of ticks(0, tmax, 5)) s += axisText(x(v), H - m.b + 18, intf(v));
+  s += axisText((m.l + W - m.r) / 2, H - 6, t('Días de seguimiento'), 'middle', 11.5, '--ink-2') + `<g transform="translate(12 ${(m.t + H - m.b) / 2}) rotate(-90)">${axisText(0, 0, t('Supervivencia S(t)'), 'middle', 11.5, '--ink-2')}</g>`;
+  s += `<path d="${path(k.real)}" fill="none" stroke="${css('--real')}" stroke-width="2"/><path d="${path(k[S.gen])}" fill="none" stroke="${css('--syn')}" stroke-width="2"/>`;
+  s += `<line id="km-x" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="${css('--line-2')}" visibility="hidden"/><circle id="km-a" r="4" fill="${css('--real')}" stroke="${css('--surface')}" stroke-width="2" visibility="hidden"/><circle id="km-b" r="4" fill="${css('--syn')}" stroke="${css('--surface')}" stroke-width="2" visibility="hidden"/>`;
+  s += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = s + '</svg>';
+  const svg = host.querySelector('svg'), tp = tooltip(host), cross = $('#km-x', host), ca = $('#km-a', host), cb = $('#km-b', host);
+  svg.addEventListener('pointermove', (e) => {
+    const b = svg.getBoundingClientRect(), px = (e.clientX - b.left) * W / b.width, tt = (px - m.l) / (W - m.l - m.r) * tmax;
+    if (tt < 0 || tt > tmax) return;
+    const i = Math.min(T.length - 1, Math.max(0, Math.round(tt / tmax * (T.length - 1))));
+    for (const [el, v] of [[cross, null], [ca, k.real[i]], [cb, k[S.gen][i]]]) { el.setAttribute('visibility', 'visible'); if (v == null) { el.setAttribute('x1', x(T[i])); el.setAttribute('x2', x(T[i])); } else { el.setAttribute('cx', x(T[i])); el.setAttribute('cy', y(v)); } }
+    tp.innerHTML = `<b>${t('Día')} ${intf(T[i])}</b><br>${t('Real')} ${nf(k.real[i])} · ${t('Sintético')} ${nf(k[S.gen][i])}`; tp.classList.add('on'); place(tp, host, e.clientX - b.left, e.clientY - b.top);
+  });
+  svg.addEventListener('pointerleave', () => { tp.classList.remove('on'); [cross, ca, cb].forEach((el) => el.setAttribute('visibility', 'hidden')); });
+}
+function forest() {
+  const host = $('#c-forest'); if (!host) return;
+  const f = (D.forest[S.ds] || {})[S.gen];
+  if (!f || !f.length) { host.innerHTML = `<p class="muted">${t('Sin estimaciones para este generador.')}</p>`; return; }
+  const W = 600, rowH = 32, m = { l: 132, r: 22, t: 8, b: 38 }, H = m.t + m.b + rowH * f.length;
+  const vals = f.flatMap((r) => [r.real[1], r.real[2], r.syn[1], r.syn[2]]).filter((v) => v != null && isFinite(v));
+  const lo = Math.min(-0.2, ...vals), hi = Math.max(0.2, ...vals), x = scale(lo, hi, m.l, W - m.r);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Efectos clínicos')}">`;
+  for (const v of [0.125, 0.25, 0.5, 1, 2, 4, 8, 16].filter((v) => Math.log(v) >= lo && Math.log(v) <= hi))
+    s += `<line x1="${x(Math.log(v))}" x2="${x(Math.log(v))}" y1="${m.t}" y2="${H - m.b}" stroke="${css(v === 1 ? '--line-2' : '--line')}"/>` + axisText(x(Math.log(v)), H - m.b + 16, nf(v, v < 1 ? 2 : 0));
+  s += axisText((m.l + W - m.r) / 2, H - 4, t('Hazard ratio (IC 95 %)'), 'middle', 11.5, '--ink-2');
+  f.forEach((r, i) => {
+    const cy = m.t + rowH * i + rowH / 2;
+    s += `<text x="${m.l - 10}" y="${cy + 4}" text-anchor="end" font-size="11.5" font-family="${css('--f')}" fill="${css(r.changed ? '--crit' : '--ink-2')}" font-weight="${r.changed ? 600 : 400}">${r.changed ? '✕ ' : ''}${esc(r.term)}</text>`;
+    [[r.real, -5, '--real'], [r.syn, 5, '--syn']].forEach(([v, off, col]) => { if (v[0] == null) return; const c = css(col);
+      s += `<line x1="${x(v[1])}" x2="${x(v[2])}" y1="${cy + off}" y2="${cy + off}" stroke="${c}" stroke-width="2" stroke-linecap="round"/><circle cx="${x(v[0])}" cy="${cy + off}" r="4.5" fill="${c}" stroke="${css('--surface')}" stroke-width="2"/>`; });
+    s += `<rect data-i="${i}" x="0" y="${cy - rowH / 2}" width="${W}" height="${rowH}" fill="transparent"/>`;
+  });
+  host.innerHTML = s + '</svg>';
+  const tp = tooltip(host), hr = (v) => (v == null ? '—' : nf(Math.exp(v)));
+  host.querySelectorAll('rect[data-i]').forEach((el) => { const r = f[+el.dataset.i];
+    el.addEventListener('pointerenter', () => { tp.innerHTML = `<b>${esc(r.term)}</b><br>${t('HR real')} ${hr(r.real[0])} (${hr(r.real[1])}–${hr(r.real[2])})<br>${t('HR sintético')} ${hr(r.syn[0])} (${hr(r.syn[1])}–${hr(r.syn[2])})<br>${t('Solapamiento')} ${nf(r.overlap)}${r.changed ? `<br><b style="color:${css('--crit')}">${t('Conclusión clínica cambiada')}</b>` : ''}`; tp.classList.add('on'); });
+    el.addEventListener('pointermove', (e) => { const b = host.getBoundingClientRect(); place(tp, host, e.clientX - b.left, e.clientY - b.top); });
+    el.addEventListener('pointerleave', () => tp.classList.remove('on')); });
+}
+
+/* ── Render y eventos ── */
+const railMedium = () => innerWidth > 900 && innerWidth <= 1240;
+function applyPrefs() {
+  const r = document.documentElement;
+  if (S.theme === 'system') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', S.theme);
+  if (S.accent === 'blue') r.removeAttribute('data-accent'); else r.setAttribute('data-accent', S.accent);
+  r.setAttribute('data-density', S.density === 'compacta' ? 'compacta' : 'comoda');
+  if (S.motion === 'reduce') r.setAttribute('data-motion', 'reduce'); else r.removeAttribute('data-motion');
+  r.toggleAttribute('data-mini', S.railMin || railMedium());
+  r.lang = S.lang;
+}
+function moveGlow(el) {
+  const nav = $('#side .nav'); if (!nav) return; const g = $('.nav-glow', nav);
+  if (!el) { nav.classList.remove('hov'); return; }
+  g.style.top = el.offsetTop + 'px'; g.style.height = el.offsetHeight + 'px'; nav.classList.add('hov');
+}
+function render() {
+  applyPrefs();
+  const ae = document.activeElement, key = ae && (ae.id || (ae.dataset && (ae.dataset.go && 'go:' + ae.dataset.go)));
+  $('#side').innerHTML = renderSide();
+  $('#top').innerHTML = renderTop();
+  $('#view').innerHTML = VIEWS[S.view].render();
+  document.body.classList.toggle('drawer-open', ui.drawer);
+  document.querySelector('.skip').textContent = t('Ir al contenido');
+  pareto(); km(); forest();
+  if (key) { const el = key.startsWith('go:') ? document.querySelector(`#side [data-go="${key.slice(3)}"]`) : document.getElementById(key); if (el && el !== document.body) el.focus({ preventScroll: true }); }
+  save();
+}
+function go(v) {
+  S.view = v; ui.menu = null; ui.drawer = false; ui.pal = false;
+  try { history.replaceState(null, '', '#' + v); } catch (e) { /* entorno aislado */ }
+  render(); renderPalette(); scrollTo({ top: 0 });
+  const h = $('#view h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+}
+function setDs(n) { S.ds = n; ui.menu = null; if (!rowsOf(n).some((r) => r.label === S.gen)) S.gen = rowsOf(n)[0].label; ui.pal = false; render(); renderPalette(); }
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-go],[data-act],[data-ds],[data-set],[data-gen],[data-pi],[data-pcolor]');
+  if (!el) { if (ui.menu) { ui.menu = null; render(); } return; }
+  if (el.dataset.go) return go(el.dataset.go);
+  if (el.dataset.ds) return setDs(el.dataset.ds);
+  if (el.dataset.gen) { S.gen = el.dataset.gen; return render(); }
+  if (el.dataset.pi) { const it = palItems()[+el.dataset.pi]; closePal(); return it && it.run(); }
+  if (el.dataset.pcolor) { S.profile = { ...S.profile, color: el.dataset.pcolor }; return render(); }
+  if (el.dataset.set) { S[el.dataset.set] = el.dataset.v; return render(); }
+  const a = el.dataset.act;
+  if (a === 'menu') { ui.menu = ui.menu === 'ds' ? null : 'ds'; render(); }
+  else if (a === 'rail') { S.railMin = !S.railMin; render(); $('#side').classList.toggle('hold', S.railMin); }
+  else if (a === 'drawer') { ui.drawer = !ui.drawer; render(); }
+  else if (a === 'theme') { S.theme = { system: 'light', light: 'dark', dark: 'system' }[S.theme]; render(); }
+  else if (a === 'pal') openPal();
+  else if (a === 'pal-close') closePal();
+});
+$('#scrim').addEventListener('click', () => { ui.drawer = false; render(); });
+$('#side').addEventListener('pointerover', (e) => { const it = e.target.closest('.nav-item'); if (it && it.closest('.nav')) moveGlow(it); });
+$('#side').addEventListener('pointerleave', () => { moveGlow(null); $('#side').classList.remove('hold'); });
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'gen-sel') { S.gen = e.target.value; render(); }
+  else if (e.target.id === 'set-rail') { S.railMin = e.target.checked; render(); }
+  else if (e.target.id === 'set-motion') { S.motion = e.target.checked ? 'reduce' : 'system'; render(); }
+});
+document.addEventListener('submit', (e) => {
+  if (e.target.id !== 'prof') return; e.preventDefault();
+  S.profile = { ...S.profile, name: $('#p-name').value.trim(), role: $('#p-role').value.trim() }; render();
+  const ok = $('#p-ok'); if (ok) ok.textContent = t('Guardado');
+});
+document.addEventListener('click', (e) => { if (e.target.closest('#reset')) { const lang = S.lang; S = { ...DEF, lang }; try { localStorage.removeItem('synapse'); } catch (er) { /* n/a */ } render(); } });
+document.addEventListener('keydown', (e) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return ui.pal ? closePal() : openPal(); }
+  if (ui.pal) {
+    const items = palItems();
+    if (e.key === 'Escape') { e.preventDefault(); return closePal(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); ui.sel = Math.min(ui.sel + 1, items.length - 1); return renderPalette(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); ui.sel = Math.max(ui.sel - 1, 0); return renderPalette(); }
+    if (e.key === 'Enter') { e.preventDefault(); const it = items[ui.sel]; closePal(); return it && it.run(); }
+    return;
+  }
+  if (e.key === 'Escape' && (ui.menu || ui.drawer)) { ui.menu = null; ui.drawer = false; return render(); }
+  if (typing) return;
+  if (e.key === '[') { S.railMin = !S.railMin; render(); }
+  else if (/^[1-9]$/.test(e.key) && DS[+e.key - 1]) setDs(DS[+e.key - 1]);
+  else if (e.key === 'Enter' && e.target.matches('tr[data-gen]')) { S.gen = e.target.dataset.gen; render(); }
+});
+addEventListener('hashchange', () => { fromHash(); render(); });
+addEventListener('resize', () => applyPrefs());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'system') render(); });
+render();
+})();
+</script>
