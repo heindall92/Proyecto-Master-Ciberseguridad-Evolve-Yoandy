@@ -225,16 +225,6 @@ def header(dark: bool) -> str:
 """
 
 
-def footer(dark: bool) -> str:
-    bg = ACCENT_DARK if dark else ACCENT
-    art = survival_art(0, 1280, 14, 100, bg, "#30B0C7", "rgba(10,92,255,.10)", n=70, hazard=(1.2, 1.35))
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="110" viewBox="0 0 1280 110" role="img" aria-label="Fin">
-  {CSS}
-  {art}
-</svg>
-"""
-
-
 def stats(dark: bool) -> str:
     k = {"bg": "#1C1C1E", "ink": "#F5F5F7", "faint": "#98989D"} if dark else {"bg": "#F5F5F7", "ink": "#1D1D1F", "faint": "#6E6E73"}
     items = [("320", "evaluaciones completas"), ("4", "estudios clínicos reales"), ("8", "generadores comparados"),
@@ -257,10 +247,10 @@ def main() -> None:
     for name, svg in TILES.items():
         (OUT / "stack" / f"{name}.svg").write_text(svg, encoding="utf-8")
     (OUT / "readme").mkdir(parents=True, exist_ok=True)
-    for name, fn in (("cabecera", header), ("pie", footer), ("cifras", stats)):
+    for name, fn in (("cabecera", header), ("cifras", stats)):
         (OUT / "readme" / f"{name}-light.svg").write_text(fn(False), encoding="utf-8")
         (OUT / "readme" / f"{name}-dark.svg").write_text(fn(True), encoding="utf-8")
-    print(f"OK · {n_icons} iconos de sección · {len(TILES)} mosaicos · cabecera, cifras y pie en claro y oscuro")
+    print(f"OK · {n_icons} iconos de sección · {len(TILES)} mosaicos · cabecera y cifras en claro y oscuro")
 
 
 if __name__ == "__main__":

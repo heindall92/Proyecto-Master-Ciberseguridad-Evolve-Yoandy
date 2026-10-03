@@ -404,10 +404,3 @@ synapse/
 </table>
 
 Errores, métricas discutibles o propuestas: abre una [*issue*](https://github.com/maricelmeneses/synapse/issues).
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/pie-dark.svg">
-    <img src="docs/assets/readme/pie-light.svg" alt="" width="100%">
-  </picture>
-</p>
