@@ -1,0 +1,80 @@
+{
+ "clip": "honeypots",
+ "duracion": 29.642,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.989,
+   "tipo": "clic",
+   "caja": [
+    15,
+    335,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 8.122,
+   "tipo": "foco",
+   "caja": [
+    256,
+    138,
+    405,
+    103
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 9.188,
+   "tipo": "foco",
+   "caja": [
+    256,
+    138,
+    405,
+    103
+   ],
+   "texto": "Sesiones",
+   "zoom": null
+  },
+  {
+   "t": 10.927,
+   "tipo": "foco",
+   "caja": [
+    673,
+    138,
+    405,
+    103
+   ],
+   "texto": "Inicios fallidos",
+   "zoom": null
+  },
+  {
+   "t": 12.705,
+   "tipo": "foco",
+   "caja": [
+    1090,
+    138,
+    405,
+    103
+   ],
+   "texto": "Accesos logrados",
+   "zoom": null
+  },
+  {
+   "t": 14.464,
+   "tipo": "foco",
+   "caja": [
+    1507,
+    138,
+    405,
+    103
+   ],
+   "texto": "IPs atacantes",
+   "zoom": null
+  }
+ ]
+}

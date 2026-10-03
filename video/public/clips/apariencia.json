@@ -1,0 +1,140 @@
+{
+ "clip": "apariencia",
+ "duracion": 55.785,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.013,
+   "tipo": "clic",
+   "caja": [
+    1509,
+    22,
+    36,
+    36
+   ],
+   "texto": "Apariencia",
+   "zoom": null
+  },
+  {
+   "t": 9.423,
+   "tipo": "clic",
+   "caja": [
+    1701,
+    150,
+    90,
+    58
+   ],
+   "texto": "Color de acento: Eléctrico",
+   "zoom": null
+  },
+  {
+   "t": 13.387,
+   "tipo": "clic",
+   "caja": [
+    1799,
+    216,
+    90,
+    58
+   ],
+   "texto": "Color de acento: Púrpura",
+   "zoom": null
+  },
+  {
+   "t": 19.191,
+   "tipo": "clic",
+   "caja": [
+    1603,
+    282,
+    90,
+    58
+   ],
+   "texto": "Color de acento: Ámbar",
+   "zoom": null
+  },
+  {
+   "t": 24.198,
+   "tipo": "clic",
+   "caja": [
+    1799,
+    282,
+    90,
+    58
+   ],
+   "texto": "Color de acento: Rojo",
+   "zoom": null
+  },
+  {
+   "t": 28.302,
+   "tipo": "clic",
+   "caja": [
+    1603,
+    216,
+    90,
+    58
+   ],
+   "texto": "Color de acento: Cian",
+   "zoom": null
+  },
+  {
+   "t": 31.192,
+   "tipo": "clic",
+   "caja": [
+    1747,
+    385,
+    139,
+    28
+   ],
+   "texto": "Tema claro",
+   "zoom": null
+  },
+  {
+   "t": 36.322,
+   "tipo": "clic",
+   "caja": [
+    1747,
+    461,
+    139,
+    28
+   ],
+   "texto": "Idioma: inglés",
+   "zoom": null
+  },
+  {
+   "t": 41.503,
+   "tipo": "clic",
+   "caja": [
+    1606,
+    461,
+    139,
+    28
+   ],
+   "texto": "Español",
+   "zoom": null
+  },
+  {
+   "t": 46.601,
+   "tipo": "clic",
+   "caja": [
+    1606,
+    385,
+    139,
+    28
+   ],
+   "texto": "Tema oscuro",
+   "zoom": null
+  },
+  {
+   "t": 50.596,
+   "tipo": "clic",
+   "caja": [
+    1603,
+    150,
+    90,
+    58
+   ],
+   "texto": "Bosque (por defecto)",
+   "zoom": null
+  }
+ ]
+}

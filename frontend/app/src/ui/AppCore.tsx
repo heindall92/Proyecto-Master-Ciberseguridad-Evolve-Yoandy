@@ -328,6 +328,7 @@ export default function App() {
   // Enlace de invitación (/activar#token): sustituye el formulario de login hasta activar la cuenta
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
   const [prefillUser, setPrefillUser] = useState("");
+  const [loginError, setLoginError] = useState("");
   const finishInvite = (username: string | null) => {
     setInviteToken(null);
     window.history.replaceState(null, "", "/");
@@ -337,6 +338,7 @@ export default function App() {
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
+    setLoginError("");
     try {
       await login(fd.get("u") as string, fd.get("p") as string);
       dispatch(setToken("session"));
@@ -358,7 +360,12 @@ export default function App() {
         dispatch(loginOffline());
         dispatch(setView("overview"));
       } else {
-        alert(err.message?.includes("401") ? "ERROR: Credenciales inválidas." : `ERROR: ${err.message || "Login fallido"}`);
+        // Mensaje dentro del formulario (antes un alert() nativo que bloqueaba la página)
+        setLoginError(err.message?.includes("401")
+          ? (lang === 'es' ? "Usuario o contraseña incorrectos." : "Wrong username or password.")
+          : err.message?.includes("429")
+            ? (lang === 'es' ? "Demasiados intentos. Espera un minuto y vuelve a probar." : "Too many attempts. Wait a minute and try again.")
+            : `${lang === 'es' ? "No se pudo iniciar sesión" : "Sign-in failed"}: ${err.message || "error"}`);
       }
     }
   };
@@ -805,6 +812,7 @@ export default function App() {
               {inviteToken ? <InviteActivation token={inviteToken} onDone={finishInvite} /> : (
               <form className="login-form" onSubmit={onLogin}>
                  {prefillUser && <p className="invite-msg invite-msg--ok">Cuenta activada. Inicia sesión con tu nueva contraseña.</p>}
+                 {loginError && <p className="invite-msg invite-msg--err" role="alert"><AlertTriangle size={14} />{loginError}</p>}
                  <div className="login-field">
                    <label className="login-label" htmlFor="login-user">{t('user_id')}</label>
                    <input id="login-user" key={prefillUser} name="u" className="login-input" placeholder={lang === 'es' ? 'Usuario SOC' : 'SOC username'} autoComplete="username" defaultValue={prefillUser} autoFocus={!prefillUser} />

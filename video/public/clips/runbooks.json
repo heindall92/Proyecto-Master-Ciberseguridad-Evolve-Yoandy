@@ -1,0 +1,56 @@
+{
+ "clip": "runbooks",
+ "duracion": 22.721,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.09,
+   "tipo": "clic",
+   "caja": [
+    15,
+    521,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 6.164,
+   "tipo": "foco",
+   "caja": [
+    256,
+    178,
+    266,
+    166
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 7.313,
+   "tipo": "clic",
+   "caja": [
+    336,
+    138,
+    112,
+    28
+   ],
+   "texto": "Por categoría",
+   "zoom": null
+  },
+  {
+   "t": 9.925,
+   "tipo": "clic",
+   "caja": [
+    534,
+    178,
+    266,
+    184
+   ],
+   "texto": "Brute Force SSH/Telnet",
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+node_modules/
+build/
+out/
+public/generated/
+public/clips/*.mp4
+voz_propia/
+src/generated/
+__pycache__/
+.venv/
+public/clips_proxy/
+.venv-xtts/
+public/clips_final/
+
+# Datos personales del autor: no se publican en el repositorio
+public/marca/yoandy.png
+build/voz/

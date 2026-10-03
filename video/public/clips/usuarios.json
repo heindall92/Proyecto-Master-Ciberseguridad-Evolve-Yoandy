@@ -1,0 +1,175 @@
+{
+ "clip": "usuarios",
+ "duracion": 60.721,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.442,
+   "tipo": "clic",
+   "caja": [
+    15,
+    707,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 8.489,
+   "tipo": "foco",
+   "caja": [
+    673,
+    138,
+    405,
+    103
+   ],
+   "texto": "Quién está conectado ahora",
+   "zoom": null
+  },
+  {
+   "t": 10.825,
+   "tipo": "clic",
+   "caja": [
+    331,
+    253,
+    121,
+    28
+   ],
+   "texto": "Filtrar por rol",
+   "zoom": null
+  },
+  {
+   "t": 13.055,
+   "tipo": "clic",
+   "caja": [
+    256,
+    253,
+    69,
+    28
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 15.213,
+   "tipo": "foco",
+   "caja": [
+    497,
+    433,
+    129,
+    15
+   ],
+   "texto": "Dispositivo y red de cada sesión",
+   "zoom": null
+  },
+  {
+   "t": 18.702,
+   "tipo": "clic",
+   "caja": [
+    1782,
+    92,
+    130,
+    28
+   ],
+   "texto": "Nuevo usuario",
+   "zoom": null
+  },
+  {
+   "t": 21.168,
+   "tipo": "clic",
+   "caja": [
+    1359,
+    91,
+    266,
+    38
+   ],
+   "texto": "Usuario",
+   "zoom": null
+  },
+  {
+   "t": 25.061,
+   "tipo": "clic",
+   "caja": [
+    1636,
+    91,
+    266,
+    38
+   ],
+   "texto": "Email",
+   "zoom": null
+  },
+  {
+   "t": 31.483,
+   "tipo": "foco",
+   "caja": [
+    1359,
+    155,
+    266,
+    32
+   ],
+   "texto": "Rol: administrador · analista · reportero · lector",
+   "zoom": null
+  },
+  {
+   "t": 33.723,
+   "tipo": "foco",
+   "caja": [
+    1359,
+    203,
+    543,
+    18
+   ],
+   "texto": "Invitación de un solo uso (24 h)",
+   "zoom": null
+  },
+  {
+   "t": 36.351,
+   "tipo": "clic",
+   "caja": [
+    1359,
+    1040,
+    543,
+    28
+   ],
+   "texto": "Crear e invitar",
+   "zoom": null
+  },
+  {
+   "t": 43.648,
+   "tipo": "foco",
+   "caja": [
+    1359,
+    489,
+    543,
+    334
+   ],
+   "texto": "Enlaces para compartir: solo se guarda su huella",
+   "zoom": null
+  },
+  {
+   "t": 51.103,
+   "tipo": "clic",
+   "caja": [
+    1583,
+    430,
+    82,
+    28
+   ],
+   "texto": "Anular la invitación",
+   "zoom": null
+  },
+  {
+   "t": 54.525,
+   "tipo": "clic",
+   "caja": [
+    1359,
+    1034,
+    107,
+    34
+   ],
+   "texto": "Eliminar: mantener pulsado"
+  }
+ ]
+}

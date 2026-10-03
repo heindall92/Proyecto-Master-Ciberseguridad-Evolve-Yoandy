@@ -1,0 +1,92 @@
+{
+ "clip": "bifrost",
+ "duracion": 25.163,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.817,
+   "tipo": "clic",
+   "caja": [
+    15,
+    459,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 7.046,
+   "tipo": "foco",
+   "caja": [
+    256,
+    138,
+    405,
+    103
+   ],
+   "texto": "MTTR con la fecha real de resolución",
+   "zoom": null
+  },
+  {
+   "t": 8.9,
+   "tipo": "foco",
+   "caja": [
+    673,
+    138,
+    405,
+    103
+   ],
+   "texto": "Antigüedad de los abiertos",
+   "zoom": null
+  },
+  {
+   "t": 10.742,
+   "tipo": "foco",
+   "caja": [
+    1090,
+    138,
+    405,
+    103
+   ],
+   "texto": "Tasa de resolución",
+   "zoom": null
+  },
+  {
+   "t": 12.593,
+   "tipo": "foco",
+   "caja": [
+    1507,
+    138,
+    405,
+    103
+   ],
+   "texto": "Cobertura ATT&CK",
+   "zoom": null
+  },
+  {
+   "t": 14.955,
+   "tipo": "clic",
+   "caja": [
+    265,
+    743,
+    283,
+    66
+   ],
+   "texto": "Caza: credenciales que funcionaron",
+   "zoom": null
+  },
+  {
+   "t": 17.552,
+   "tipo": "clic",
+   "caja": [
+    1817,
+    509,
+    36,
+    36
+   ],
+   "texto": "Ejecutar sobre el SIEM",
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,67 @@
+{
+ "clip": "bloqueo",
+ "duracion": 23.057,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.735,
+   "tipo": "foco",
+   "caja": [
+    1249,
+    364,
+    73,
+    26
+   ],
+   "texto": "Acción destructiva: mantener pulsado",
+   "zoom": null
+  },
+  {
+   "t": 3.864,
+   "tipo": "clic",
+   "caja": [
+    1249,
+    364,
+    73,
+    26
+   ],
+   "texto": "Bloquear 172.19.0.2"
+  },
+  {
+   "t": 11.798,
+   "tipo": "clic",
+   "caja": [
+    15,
+    397,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 16.154,
+   "tipo": "clic",
+   "caja": [
+    1602,
+    92,
+    72,
+    28
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 18.56,
+   "tipo": "clic",
+   "caja": [
+    1410,
+    174,
+    96,
+    28
+   ],
+   "texto": "IPs bloqueadas",
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,879 @@
+{
+ "titulo": "Valhalla SOC · Práctica 3 · Del prototipo al producto",
+ "bloques": {
+  "presentacion": "Presentación",
+  "requisitos": "Requisitos",
+  "arquitectura": "Arquitectura",
+  "demo": "Demostración",
+  "seguridad": "Errores y seguridad",
+  "cierre": "Cierre"
+ },
+ "escenas": [
+  {
+   "id": "s01_portada",
+   "bloque": "presentacion",
+   "titulo": "Valhalla SOC",
+   "visual": {
+    "tipo": "portada"
+   },
+   "frases": [
+    "Hola. Soy Yoandy Ramírez y hoy les vengo a presentar Valhalla SOC, el proyecto del grupo Valhalla para la Práctica 3 del máster de Ciberseguridad de Evolve.",
+    "Es un centro de operaciones de seguridad completo que cabe en un portátil: detecta ataques reales, los investiga con inteligencia artificial local y los convierte en informes que se pueden defender."
+   ]
+  },
+  {
+   "id": "s02_equipo",
+   "bloque": "presentacion",
+   "titulo": "El equipo",
+   "visual": {
+    "tipo": "equipo",
+    "miembros": [
+     {
+      "nombre": "Santiago Visso",
+      "rol": "Jefe de proyecto",
+      "detalle": "Coordinación · laboratorio de ataque (Kali)",
+      "en": 0
+     },
+     {
+      "nombre": "Julieta Tenti",
+      "rol": "Informes ejecutivos",
+      "detalle": "Generador de informes PDF",
+      "en": 1
+     },
+     {
+      "nombre": "Rosalino Martínez",
+      "rol": "Integraciones de IA",
+      "detalle": "Ollama · asistente · webhook",
+      "en": 2
+     },
+     {
+      "nombre": "Santiago de Prada",
+      "rol": "Honeypot Cowrie",
+      "detalle": "Señuelo · simulación de ataques",
+      "en": 3
+     },
+     {
+      "nombre": "Yoandy Ramírez Delgado",
+      "rol": "Arquitectura y desarrollo",
+      "detalle": "Integración · seguridad · pruebas",
+      "en": 4,
+      "foto": "marca/yoandy.png"
+     }
+    ]
+   },
+   "frases": [
+    "El equipo está conformado por cinco personas. Santiago Visso, jefe del proyecto, coordinó el grupo y montó el laboratorio de ataque.",
+    "Julieta Tenti creó el generador de informes ejecutivos.",
+    "Rosalino Martínez hizo las integraciones de inteligencia artificial.",
+    "Santiago de Prada, el honeypot Cowrie y la simulación de ataques.",
+    "Y yo me he ocupado de la arquitectura, el desarrollo y la integración. Hoy lo presento en nombre de todo el equipo."
+   ]
+  },
+  {
+   "id": "s03_problema",
+   "bloque": "presentacion",
+   "titulo": "El problema",
+   "visual": {
+    "tipo": "titular",
+    "kicker": "El problema",
+    "titular": "Los ataques llegan igual, tengas o no un SOC",
+    "puntos": [
+     {
+      "en": 0,
+      "icono": "alert",
+      "texto": "Un SOC comercial está fuera del alcance de un equipo pequeño"
+     },
+     {
+      "en": 1,
+      "icono": "puzzle",
+      "texto": "Las herramientas abiertas existen, pero están sueltas"
+     },
+     {
+      "en": 2,
+      "icono": "shield",
+      "texto": "Valhalla las une en un producto: un comando, todo en local"
+     }
+    ]
+   },
+   "frases": [
+    "Un equipo pequeño no puede permitirse un SOC comercial, pero los ataques le llegan igual.",
+    "Las herramientas abiertas, como Wazuh, existen, pero están sueltas: alguien tiene que unirlas y convertir las alertas en una respuesta.",
+    "Valhalla las une en un producto que se instala con un comando, y donde todo corre en local, incluida la inteligencia artificial."
+   ]
+  },
+  {
+   "id": "s04_reto",
+   "bloque": "presentacion",
+   "titulo": "Del prototipo al producto",
+   "visual": {
+    "tipo": "antesdespues",
+    "kicker": "Práctica 3",
+    "titular": "Del prototipo al producto",
+    "antes": [
+     "Pantallas con datos de ejemplo",
+     "Instalación solo en nuestra máquina",
+     "Secretos en el historial de Git",
+     "Ninguna prueba"
+    ],
+    "despues": [
+     "Ningún dato inventado",
+     "Instalación desde cero con un comando",
+     "Seguridad analizada (STRIDE)",
+     "Cada requisito, con su prueba"
+    ],
+    "enAntes": 1,
+    "enDespues": 2
+   },
+   "frases": [
+    "En las prácticas anteriores construimos un prototipo.",
+    "Tenía datos de ejemplo, pero solo se instalaba en nuestra máquina, y había secretos en el historial y ninguna prueba.",
+    "El reto era convertirlo en un producto: instalable desde cero, sin datos inventados, con la seguridad analizada y cada requisito probado.",
+    "Y una regla para todo: si falta un dato, la interfaz lo dice."
+   ]
+  },
+  {
+   "id": "s05_cifras",
+   "bloque": "presentacion",
+   "titulo": "En números",
+   "visual": {
+    "tipo": "cifras",
+    "cifras": [
+     {
+      "valor": 25,
+      "etiqueta": "requisitos",
+      "detalle": "16 funcionales · 9 no funcionales",
+      "en": 0
+     },
+     {
+      "valor": 118,
+      "etiqueta": "pruebas superadas",
+      "detalle": "62 backend · 56 consola",
+      "en": 1
+     },
+     {
+      "valor": 0,
+      "etiqueta": "vulnerabilidades",
+      "detalle": "pip-audit · npm audit",
+      "en": 2
+     },
+     {
+      "valor": 11,
+      "etiqueta": "secciones",
+      "detalle": "consola rediseñada",
+      "en": 2.5
+     }
+    ]
+   },
+   "frases": [
+    "En números: veinticinco requisitos.",
+    "Ciento dieciocho pruebas automáticas superadas.",
+    "Cero vulnerabilidades conocidas en las dependencias, y once secciones rediseñadas."
+   ]
+  },
+  {
+   "id": "s06_requisitos",
+   "bloque": "requisitos",
+   "titulo": "Requisitos",
+   "visual": {
+    "tipo": "requisitos",
+    "enRF": 1,
+    "enRNF": 2,
+    "enBadge": 3
+   },
+   "frases": [
+    "Cada requisito tiene un criterio de aceptación comprobable.",
+    "Dieciséis funcionales cubren el ciclo completo de un SOC: autenticación y roles, incidentes, informes, caza de amenazas, bloqueo de IPs, asistente de IA y acceso por VPN.",
+    "Nueve no funcionales fijan cómo debe comportarse: seguridad de sesión, validación, auditoría, privacidad, instalación reproducible, diseño adaptable y rendimiento.",
+    "Durante la demo, arriba a la derecha, veréis qué requisito se está demostrando."
+   ]
+  },
+  {
+   "id": "s08_arquitectura",
+   "bloque": "arquitectura",
+   "titulo": "Arquitectura",
+   "visual": {
+    "tipo": "arquitectura"
+   },
+   "frases": [
+    "Todo corre en local con Docker Compose.",
+    "El atacante llega a Cowrie, un honeypot SSH y Telnet que registra cada contraseña y cada comando.",
+    "Wazuh aplica nuestras reglas, mapeadas a MITRE ATT&CK, y guarda las alertas en el indexador.",
+    "El backend en FastAPI lee el SIEM, abre incidentes y calcula las métricas, con PostgreSQL.",
+    "La consola, en React, lo presenta por REST y WebSocket.",
+    "La inteligencia artificial es un modelo Qwen de tres mil millones de parámetros, servido por Ollama.",
+    "Y Tailscale publica la consola solo por HTTPS, a través de una VPN."
+   ]
+  },
+  {
+   "id": "s09_contenedores",
+   "bloque": "arquitectura",
+   "titulo": "Contenedores y decisiones",
+   "visual": {
+    "tipo": "contenedores",
+    "enDecisiones": 3
+   },
+   "frases": [
+    "Cada pieza expone lo mínimo.",
+    "La base de datos y el indexador solo están en la red interna; la API de Wazuh y Ollama, en localhost.",
+    "El atacante del laboratorio vive en su propia red aislada.",
+    "La inteligencia artificial redacta, pero nunca aporta cifras.",
+    "Y la autorización se decide siempre en el servidor."
+   ]
+  },
+  {
+   "id": "s10_instalacion",
+   "bloque": "arquitectura",
+   "titulo": "Instalación desde cero",
+   "req": [
+    "RNF-07"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "term_instalacion",
+    "rotulo": "Instalación desde el repositorio público"
+   },
+   "frases": [
+    "Todo se instala con un solo comando: install punto sh, o install punto ps1 en Windows.",
+    "Genera secretos y certificados propios, levanta el stack, descarga el modelo y configura Wazuh.",
+    "Desde un clon limpio, el primer intento falló por los permisos de ejecución en Git. Lo corregimos, y la instalación terminó en cinco minutos."
+   ]
+  },
+  {
+   "id": "s10b_arranque",
+   "bloque": "arquitectura",
+   "titulo": "El stack en marcha",
+   "req": [
+    "RNF-07"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "term_stack",
+    "rotulo": "Los servicios en marcha"
+   },
+   "frases": [
+    "En el día a día, un lanzador lo arranca todo con un doble clic.",
+    "Docker compose confirma los doce contenedores en marcha, y el backend responde."
+   ]
+  },
+  {
+   "id": "s11_login",
+   "bloque": "demo",
+   "titulo": "Acceso",
+   "req": [
+    "RF-01",
+    "RNF-01"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "login",
+    "rotulo": "Acceso"
+   },
+   "frases": [
+    "Empezamos la demostración por el acceso.",
+    "La sesión viaja en cookies HttpOnly, con un token JWT y protección CSRF.",
+    "Con una contraseña incorrecta la consola lo indica, y los intentos se limitan por IP."
+   ]
+  },
+  {
+   "id": "s12_vista_general",
+   "bloque": "demo",
+   "titulo": "Vista general",
+   "req": [
+    "RNF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "vista_general",
+    "rotulo": "Vista general"
+   },
+   "frases": [
+    "La vista general resume el periodo: alertas, críticas, agentes e incidentes abiertos.",
+    "Debajo, las alertas de Wazuh, el volumen, la severidad y los atacantes.",
+    "Todo sale del SIEM. Esa regla destapó un fallo: el backend generaba unas dos mil cuatrocientas sesiones falsas al día al comprobar el honeypot. Lo corregimos, y limpiamos el SIEM."
+   ]
+  },
+  {
+   "id": "s13_siem",
+   "bloque": "demo",
+   "titulo": "SIEM",
+   "req": [
+    "RF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "siem",
+    "rotulo": "SIEM: alertas en directo"
+   },
+   "frases": [
+    "En el SIEM, las alertas llegan en directo por un webhook con secreto o firma HMAC.",
+    "Podemos filtrarlas y agrupar las similares.",
+    "Abrimos una crítica: acceso tras fuerza bruta, con su evento original y sus técnicas de ATT&CK.",
+    "Con «escalar», se convierte en un incidente."
+   ]
+  },
+  {
+   "id": "s14_ataque",
+   "bloque": "demo",
+   "titulo": "Ataque al honeypot",
+   "req": [
+    "RF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "term_ataque",
+    "rotulo": "Ataque real al honeypot"
+   },
+   "frases": [
+    "Ahora, un ataque real desde el contenedor atacante.",
+    "Nmap encuentra el SSH y el Telnet del honeypot, e hydra prueba contraseñas típicas.",
+    "Cada intento llega a Wazuh en segundos, y salta nuestra regla de fuerza bruta. Es actividad real, no datos simulados."
+   ]
+  },
+  {
+   "id": "s15_honeypots",
+   "bloque": "demo",
+   "titulo": "Honeypots",
+   "req": [
+    "RF-05",
+    "RNF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "honeypots",
+    "rotulo": "Honeypots"
+   },
+   "frases": [
+    "En Honeypots vemos ese ataque desde el señuelo.",
+    "Sesiones, intentos fallidos, accesos logrados y actividad por hora.",
+    "Y las credenciales más probadas por los atacantes."
+   ]
+  },
+  {
+   "id": "s16_workspace",
+   "bloque": "demo",
+   "titulo": "Gestión de incidentes",
+   "req": [
+    "RF-06"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "workspace",
+    "rotulo": "Workspace: ciclo del incidente"
+   },
+   "frases": [
+    "En el Workspace aparece el incidente escalado, en un tablero con las fases de respuesta.",
+    "Arriba, los indicadores del equipo: fuera de SLA, sin asignar y tiempo de resolución.",
+    "Lo pasamos a investigación, anotamos los hallazgos, y el caso nos sugiere el runbook adecuado.",
+    "Cada cambio queda en el historial. Al resolverlo lo clasificamos como verdadero positivo, y eso alimenta las métricas."
+   ]
+  },
+  {
+   "id": "s17_runbooks",
+   "bloque": "demo",
+   "titulo": "Runbooks",
+   "req": [
+    "RF-07"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "runbooks",
+    "rotulo": "Runbooks NIST 800-61"
+   },
+   "frases": [
+    "Hay veinte runbooks, con las cinco fases de NIST 800-61 y comandos reales.",
+    "El de fuerza bruta SSH tiene doce pasos. Se pueden crear y editar, con validación."
+   ]
+  },
+  {
+   "id": "s18_bloqueo",
+   "bloque": "demo",
+   "titulo": "Bloqueo de IPs",
+   "req": [
+    "RF-13",
+    "RNF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "bloqueo",
+    "rotulo": "Contención: bloqueo de la IP"
+   },
+   "frases": [
+    "Contención: bloqueamos la IP atacante. Como es destructivo, hay que mantener pulsado.",
+    "Valhalla lo aplica en Wazuh, y si Wazuh no lo confirma, no lo da por bloqueado: preferimos avisar de un fallo a mostrar una protección que no existe."
+   ]
+  },
+  {
+   "id": "s19_inteligencia",
+   "bloque": "demo",
+   "titulo": "Inteligencia de amenazas",
+   "req": [
+    "RF-12"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "inteligencia",
+    "rotulo": "Inteligencia de amenazas"
+   },
+   "frases": [
+    "En Inteligencia están las CVE explotadas del catálogo KEV de CISA.",
+    "Se priorizan con una fórmula documentada; hablamos de explotación, CVSS, exploit público y uso en ransomware.",
+    "Y desde indicadores se consulta la reputación de una IP, un dominio o un hash, y en el mapa se sitúan los atacantes."
+   ]
+  },
+  {
+   "id": "s20_activos",
+   "bloque": "demo",
+   "titulo": "Activos",
+   "req": [
+    "RNF-05"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "activos",
+    "rotulo": "Activos"
+   },
+   "frases": [
+    "En Activos, los equipos con agente de Wazuh y sus vulnerabilidades reales.",
+    "El escáner no analizaba nada por un catálogo desfasado; cargamos una instantánea reciente, y aparecieron las doce vulnerabilidades reales del equipo."
+   ]
+  },
+  {
+   "id": "s21_bifrost",
+   "bloque": "demo",
+   "titulo": "Métricas y caza de amenazas",
+   "req": [
+    "RF-14",
+    "RF-11"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "bifrost",
+    "rotulo": "Bifröst: métricas y caza"
+   },
+   "frases": [
+    "Bifröst calcula las métricas: MTTR, antigüedad, tasa de resolución y cobertura de ATT&CK.",
+    "El MTTR usa la fecha real de resolución, y la cobertura, un treinta por ciento, se muestra tal cual.",
+    "Y tiene siete consultas de caza: aquí, las credenciales con las que el atacante consiguió entrar."
+   ]
+  },
+  {
+   "id": "s22_informes",
+   "bloque": "demo",
+   "titulo": "Informes con integridad",
+   "req": [
+    "RF-10"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "informes",
+    "rotulo": "Informe SOC con huella SHA-256"
+   },
+   "frases": [
+    "En Informes generamos un informe SOC del periodo, con su clasificación TLP.",
+    "Queda congelado con una huella SHA-256, y el escudo verifica que nadie lo ha alterado.",
+    "La IA puede añadir un resumen, pero las cifras las calcula siempre el backend."
+   ]
+  },
+  {
+   "id": "s23_grc",
+   "bloque": "demo",
+   "titulo": "Informe GRC",
+   "req": [
+    "RF-10"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "grc",
+    "rotulo": "Informe GRC"
+   },
+   "frases": [
+    "El informe GRC lo traduce a gobierno y riesgo; hablamos de matriz de riesgo, madurez NIST CSF 2.0 y plan de tratamiento.",
+    "Con correspondencia con el Esquema Nacional de Seguridad, ISO 27001, NIS2 e ISO 42001."
+   ]
+  },
+  {
+   "id": "s24_usuarios",
+   "bloque": "demo",
+   "titulo": "Usuarios, roles e invitaciones",
+   "req": [
+    "RF-02",
+    "RF-03",
+    "RF-04",
+    "RF-09"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "usuarios",
+    "rotulo": "Usuarios, roles e invitaciones"
+   },
+   "frases": [
+    "En Usuarios hay cuatro roles, comprobados en cada endpoint del servidor.",
+    "Vemos quién está conectado, desde qué dispositivo y por qué red.",
+    "Damos de alta a un analista con una invitación de un solo uso, que caduca en veinticuatro horas; solo guardamos la huella del enlace.",
+    "Después la anulamos, y eliminamos al usuario manteniendo pulsado."
+   ]
+  },
+  {
+   "id": "s24b_perfil",
+   "bloque": "demo",
+   "titulo": "Perfil del analista",
+   "req": [
+    "RF-09",
+    "RF-01"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "perfil",
+    "rotulo": "Mi perfil"
+   },
+   "frases": [
+    "Cada analista tiene su perfil: sus incidentes, su actividad en la auditoría y su sesión actual, con dispositivo e IP.",
+    "También ve sus otras sesiones abiertas, y puede cambiar su contraseña."
+   ]
+  },
+  {
+   "id": "s25_chat",
+   "bloque": "demo",
+   "titulo": "Chat de equipo y asistente de IA",
+   "req": [
+    "RF-08",
+    "RF-15",
+    "RNF-06"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "chat",
+    "rotulo": "Chat de equipo y asistente IA"
+   },
+   "frases": [
+    "El chat tiene canal de equipo y mensajes directos que ni el administrador puede leer.",
+    "Si escribimos arroba IA, responde el asistente local, con un glosario del SOC para no inventar términos.",
+    "Este requisito se verifica a mano, porque la respuesta de un modelo no es determinista."
+   ]
+  },
+  {
+   "id": "s25b_apariencia",
+   "bloque": "demo",
+   "titulo": "Apariencia e idioma",
+   "req": [
+    "RNF-08"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "apariencia",
+    "rotulo": "Tema, color e idioma"
+   },
+   "frases": [
+    "Cada analista elige su color de acento, tema claro u oscuro, e idioma.",
+    "La interfaz cambia al instante, sin recargar."
+   ]
+  },
+  {
+   "id": "s25c_busqueda",
+   "bloque": "demo",
+   "titulo": "Búsqueda y notificaciones",
+   "req": [],
+   "visual": {
+    "tipo": "toma",
+    "clip": "busqueda",
+    "rotulo": "Búsqueda global y avisos"
+   },
+   "frases": [
+    "Con Ctrl K se salta a cualquier sección.",
+    "Y la campana notifica los incidentes pendientes, para asignárselos al propio analista o ir al Workspace."
+   ]
+  },
+  {
+   "id": "s26_sistema",
+   "bloque": "demo",
+   "titulo": "Sistema",
+   "req": [
+    "RNF-05",
+    "RNF-04"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "sistema",
+    "rotulo": "Sistema"
+   },
+   "frases": [
+    "En Sistema, la salud y la latencia de cada integración.",
+    "Y los monitores de detección y el registro de auditoría."
+   ]
+  },
+  {
+   "id": "s27_movil",
+   "bloque": "demo",
+   "titulo": "Móvil y acceso remoto por VPN",
+   "req": [
+    "RF-16",
+    "RNF-08"
+   ],
+   "visual": {
+    "tipo": "toma",
+    "clip": "movil",
+    "rotulo": null,
+    "puntos": [
+     {
+      "en": 0,
+      "texto": "Diseño adaptable: 390 px · 1280 px · 1700 px"
+     },
+     {
+      "en": 1,
+      "texto": "Solo HTTPS con Tailscale Serve y certificado válido"
+     },
+     {
+      "en": 1.5,
+      "texto": "Cortafuegos: la VPN no llega a los puertos de Docker"
+     },
+     {
+      "en": 2,
+      "texto": "Cuenta y dispositivo de VPN en cada sesión"
+     },
+     {
+      "en": 2.5,
+      "texto": "Alerta si la cuenta no es la vinculada"
+     }
+    ]
+   },
+   "frases": [
+    "En el móvil, la consola se adapta a trescientos noventa píxeles.",
+    "Desde fuera se entra por Tailscale, solo por HTTPS, con un cortafuegos que cierra a la VPN los puertos de Docker.",
+    "Cada sesión muestra la cuenta de VPN, y si no coincide con la vinculada, los administradores reciben un aviso."
+   ]
+  },
+  {
+   "id": "s28_errores",
+   "bloque": "seguridad",
+   "titulo": "Cuando algo va mal",
+   "req": [
+    "RNF-01",
+    "RNF-02",
+    "RNF-03",
+    "RNF-04"
+   ],
+   "visual": {
+    "tipo": "errores",
+    "casos": [
+     {
+      "en": 1,
+      "entrada": "POST sin token CSRF",
+      "codigo": "403",
+      "resultado": "Rechazada"
+     },
+     {
+      "en": 1.35,
+      "entrada": "Lector intenta crear un runbook",
+      "codigo": "403",
+      "resultado": "Sin permiso"
+     },
+     {
+      "en": 1.7,
+      "entrada": "Usuario con <b>HTML</b>",
+      "codigo": "422",
+      "resultado": "Rechazada / neutralizada"
+     },
+     {
+      "en": 2,
+      "entrada": "X-Forwarded-For: 1.2.3.4 (falso)",
+      "codigo": "—",
+      "resultado": "Ignorada: proxy no confiable"
+     },
+     {
+      "en": 3,
+      "entrada": "Wazuh no responde",
+      "codigo": "—",
+      "resultado": "Sistema lo indica; no se rompe"
+     },
+     {
+      "en": 3.4,
+      "entrada": "Toda escritura",
+      "codigo": "AUDIT",
+      "resultado": "Usuario · IP · resultado · sin cuerpo"
+     }
+    ]
+   },
+   "frases": [
+    "¿Y cuando algo va mal?",
+    "Sin token CSRF, la petición se rechaza; sin permisos, un 403; con HTML, se neutraliza.",
+    "Una IP falsificada en la cabecera X-Forwarded-For se ignora si no viene de un proxy de confianza.",
+    "Si un servicio cae, Sistema lo indica, y cada escritura queda auditada, sin guardar el cuerpo de la petición."
+   ]
+  },
+  {
+   "id": "s29_stride",
+   "bloque": "seguridad",
+   "titulo": "Modelo de amenazas STRIDE",
+   "visual": {
+    "tipo": "stride"
+   },
+   "frases": [
+    "Analizamos el propio SOC con un modelo STRIDE.",
+    "Para cada categoría documentamos las amenazas, la mitigación, la prueba y el riesgo residual."
+   ]
+  },
+  {
+   "id": "s30_hallazgos",
+   "bloque": "seguridad",
+   "titulo": "Hallazgos en nuestro propio SOC",
+   "visual": {
+    "tipo": "hallazgos",
+    "items": [
+     {
+      "en": 1,
+      "riesgo": "ALTO",
+      "texto": "API de Wazuh con la credencial de fábrica, alcanzable desde la LAN y el atacante",
+      "fix": "Contraseña propia · solo 127.0.0.1"
+     },
+     {
+      "en": 1.5,
+      "riesgo": "ALTO",
+      "texto": "Usuarios de demostración del indexador con contraseña pública",
+      "fix": "Eliminados en el arranque"
+     },
+     {
+      "en": 2,
+      "riesgo": "ALTO",
+      "texto": "Certificados con claves privadas en el repositorio público",
+      "fix": "git filter-repo en 6 ramas · certificados por instalación"
+     },
+     {
+      "en": 3,
+      "riesgo": "MEDIO",
+      "texto": "Atacante del laboratorio en la misma red que BD, Wazuh y Ollama",
+      "fix": "Red lab-net aislada"
+     }
+    ]
+   },
+   "frases": [
+    "Y encontramos fallos reales.",
+    "La API de Wazuh tenía la credencial de fábrica, y los usuarios de demostración del indexador, contraseñas públicas.",
+    "Había claves privadas en el repositorio: reescribimos el historial, y cada instalación genera las suyas.",
+    "Y el atacante compartía red con la base de datos; ahora está aislado. Todo está corregido."
+   ]
+  },
+  {
+   "id": "s31_dependencias",
+   "bloque": "seguridad",
+   "titulo": "Cadena de suministro",
+   "visual": {
+    "tipo": "barras",
+    "kicker": "Cadena de suministro",
+    "titular": "De decenas de vulnerabilidades a cero",
+    "barras": [
+     {
+      "en": 0,
+      "herramienta": "pip-audit",
+      "alcance": "Dependencias Python",
+      "antes": 11,
+      "despues": 0
+     },
+     {
+      "en": 0.5,
+      "herramienta": "npm audit",
+      "alcance": "Dependencias de la consola",
+      "antes": 26,
+      "despues": 0
+     },
+     {
+      "en": 1,
+      "herramienta": "Trivy",
+      "alcance": "Imagen de la consola",
+      "antes": 49,
+      "despues": 0
+     }
+    ],
+    "nota": {
+     "en": 2,
+     "texto": "CI: auditoría en cada cambio y cada lunes → PyJWT 2.15.1 · urllib3 2.8.0"
+    }
+   },
+   "frases": [
+    "En las dependencias, pip-audit encontró once paquetes vulnerables.",
+    "Npm audit, veintiséis avisos, y Trivy, cuarenta y nueve en la imagen. Hoy, cero.",
+    "Y la integración continua lo repite en cada cambio y cada lunes."
+   ]
+  },
+  {
+   "id": "s32_pruebas",
+   "bloque": "seguridad",
+   "titulo": "Pruebas automáticas",
+   "visual": {
+    "tipo": "toma",
+    "clip": "term_pruebas",
+    "rotulo": "Pruebas automáticas"
+   },
+   "frases": [
+    "Las pruebas: al comenzar el proyecto había diecisiete, y once no arrancaban.",
+    "Hoy el backend tiene sesenta y dos, etiquetadas por requisito y sin tocar datos reales: pasan sesenta y dos de sesenta y dos, todas superadas.",
+    "Más cincuenta y seis en la consola, y GitHub Actions lo ejecuta todo en cada cambio."
+   ]
+  },
+  {
+   "id": "s33_trazabilidad",
+   "bloque": "seguridad",
+   "titulo": "Matriz de trazabilidad",
+   "visual": {
+    "tipo": "trazabilidad"
+   },
+   "frases": [
+    "La matriz de trazabilidad cubre los veinticinco requisitos.",
+    "Veintidós con pruebas automáticas, y tres con verificación manual documentada."
+   ]
+  },
+  {
+   "id": "s34_limitaciones",
+   "bloque": "cierre",
+   "titulo": "Limitaciones y trabajo futuro",
+   "visual": {
+    "tipo": "limitaciones",
+    "items": [
+     {
+      "en": 1,
+      "limite": "Catálogo de vulnerabilidades fijado a una instantánea (16/09/2026)",
+      "mejora": "Actualización automática"
+     },
+     {
+      "en": 1.25,
+      "limite": "Consola por HTTP en la red local",
+      "mejora": "TLS también en la LAN"
+     },
+     {
+      "en": 1.5,
+      "limite": "IA de 3B en CPU: lenta y limitada",
+      "mejora": "Modelo mayor con GPU"
+     },
+     {
+      "en": 1.75,
+      "limite": "Auditoría en la BD que gestiona el administrador",
+      "mejora": "Exportarla al SIEM o firmarla"
+     },
+     {
+      "en": 2.4,
+      "limite": "Pruebas automáticas solo de backend y unitarias",
+      "mejora": "Extremo a extremo con Playwright"
+     }
+    ]
+   },
+   "frases": [
+    "Las limitaciones también forman parte del producto.",
+    "El catálogo de vulnerabilidades es una instantánea, la red local va por HTTP, la IA es lenta en CPU y la auditoría vive en la misma base de datos.",
+    "Como trabajo futuro: actualización automática, TLS en la red local, GPU, auditoría exportada y pruebas de extremo a extremo."
+   ]
+  },
+  {
+   "id": "s35_cierre",
+   "bloque": "cierre",
+   "titulo": "Gracias",
+   "visual": {
+    "tipo": "cierre"
+   },
+   "frases": [
+    "Valhalla SOC termina como un producto instalable, auditado y verificable.",
+    "Un producto no es añadir funciones, sino demostrar que funcionan, son seguras y dicen la verdad.",
+    "Un SOC debe pasar el mismo análisis que exige a lo que vigila.",
+    "Muchas gracias. El código está en el repositorio, con la etiqueta de la versión 1 de la Práctica 3."
+   ]
+  }
+ ]
+}

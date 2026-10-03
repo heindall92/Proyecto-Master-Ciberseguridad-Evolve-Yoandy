@@ -1,0 +1,104 @@
+{
+ "clip": "perfil",
+ "duracion": 30.844,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.116,
+   "tipo": "clic",
+   "caja": [
+    1751,
+    20,
+    140,
+    40
+   ],
+   "texto": "Menú de usuario",
+   "zoom": null
+  },
+  {
+   "t": 4.904,
+   "tipo": "clic",
+   "caja": [
+    1641,
+    158,
+    258,
+    34
+   ],
+   "texto": "Mi perfil",
+   "zoom": null
+  },
+  {
+   "t": 9.584,
+   "tipo": "foco",
+   "caja": [
+    524,
+    306,
+    246,
+    12
+   ],
+   "texto": "Mi actividad en el SOC",
+   "zoom": null
+  },
+  {
+   "t": 12.601,
+   "tipo": "foco",
+   "caja": [
+    1240,
+    442,
+    108,
+    16
+   ],
+   "texto": "Sesión actual: dispositivo, IP y token",
+   "zoom": null
+  },
+  {
+   "t": 15.383,
+   "tipo": "foco",
+   "caja": [
+    543,
+    442,
+    196,
+    16
+   ],
+   "texto": "Datos de contacto",
+   "zoom": null
+  },
+  {
+   "t": 19.748,
+   "tipo": "foco",
+   "caja": [
+    543,
+    321,
+    378,
+    16
+   ],
+   "texto": "Sesiones abiertas en otros dispositivos",
+   "zoom": null
+  },
+  {
+   "t": 23.775,
+   "tipo": "foco",
+   "caja": [
+    543,
+    496,
+    203,
+    16
+   ],
+   "texto": "Cambio de contraseña",
+   "zoom": null
+  },
+  {
+   "t": 26.565,
+   "tipo": "foco",
+   "caja": [
+    1240,
+    245,
+    216,
+    16
+   ],
+   "texto": "Mi rastro en la auditoría",
+   "zoom": null
+  }
+ ]
+}

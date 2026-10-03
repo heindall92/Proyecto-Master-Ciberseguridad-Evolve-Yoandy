@@ -1,0 +1,56 @@
+{
+ "clip": "sistema",
+ "duracion": 24.209,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.439,
+   "tipo": "clic",
+   "caja": [
+    15,
+    273,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 8.346,
+   "tipo": "clic",
+   "caja": [
+    1876,
+    138,
+    36,
+    36
+   ],
+   "texto": "Salud y latencia de cada integración",
+   "zoom": null
+  },
+  {
+   "t": 12.463,
+   "tipo": "clic",
+   "caja": [
+    1690,
+    92,
+    108,
+    28
+   ],
+   "texto": "Monitores de detección",
+   "zoom": null
+  },
+  {
+   "t": 16.267,
+   "tipo": "clic",
+   "caja": [
+    1800,
+    92,
+    108,
+    28
+   ],
+   "texto": "Registro de auditoría",
+   "zoom": null
+  }
+ ]
+}

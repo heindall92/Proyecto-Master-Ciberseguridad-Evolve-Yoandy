@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: radial-gradient(1200px 700px at 30% 20%, #10241c 0%, #070d0b 70%); overflow: hidden; }
+  .win { position: absolute; left: 90px; top: 70px; right: 90px; bottom: 70px; border-radius: 14px; overflow: hidden;
+         background: #0a1310; border: 1px solid rgba(82,183,136,.35); box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.4); }
+  .bar { height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 18px; background: #0f1d18; border-bottom: 1px solid rgba(82,183,136,.2); }
+  .dot { width: 13px; height: 13px; border-radius: 50%; }
+  .tit { flex: 1; text-align: center; color: #8fa89c; font: 600 15px 'JetBrains Mono', monospace; letter-spacing: .5px; margin-right: 60px; }
+  #t { position: absolute; top: 60px; left: 22px; right: 22px; bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span>
+    <span class="dot" style="background:#28c840"></span><span class="tit" id="tit"></span></div>
+  <div id="t"></div>
+</div>
+<script>
+  // DATOS = {titulo, pasos: [[segundos_de_espera, "base64"], ...]}  (lo inyecta grabar_terminal.py)
+  const term = new Terminal({
+    fontFamily: "'JetBrains Mono', 'Cascadia Mono', Consolas, monospace", fontSize: 21, lineHeight: 1.15,
+    cols: 118, rows: 32, cursorBlink: false, allowProposedApi: true,
+    theme: { background: '#0a1310', foreground: '#d7e9df', cursor: '#74e0a8', green: '#52b788', brightGreen: '#74e0a8',
+             blue: '#5b9dff', brightBlue: '#7fb2ff', red: '#ff5a6a', yellow: '#ffb454', cyan: '#4fd1c5', brightBlack: '#5b7268' }
+  });
+  term.open(document.getElementById('t'));
+  document.getElementById('tit').textContent = DATOS.titulo;
+  const dec = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  window.__fin = false;
+  (async () => {
+    await new Promise(r => setTimeout(r, 800));
+    for (const [espera, b64] of DATOS.pasos) {
+      if (espera > 0) await new Promise(r => setTimeout(r, espera * 1000));
+      term.write(dec(b64));
+    }
+    window.__fin = true;
+  })();
+</script>
+</body>
+</html>

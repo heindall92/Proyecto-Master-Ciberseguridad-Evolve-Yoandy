@@ -1,0 +1,44 @@
+{
+ "clip": "movil",
+ "duracion": 28.102,
+ "ancho": 390,
+ "alto": 844,
+ "marcas": [
+  {
+   "t": 8.741,
+   "tipo": "clic",
+   "caja": [
+    89,
+    777,
+    70,
+    50
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 15.204,
+   "tipo": "clic",
+   "caja": [
+    160,
+    777,
+    70,
+    50
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 21.408,
+   "tipo": "clic",
+   "caja": [
+    232,
+    777,
+    70,
+    50
+   ],
+   "texto": null,
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,188 @@
+{
+ "clip": "workspace",
+ "duracion": 78.407,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.531,
+   "tipo": "clic",
+   "caja": [
+    15,
+    583,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 6.598,
+   "tipo": "foco",
+   "caja": [
+    274,
+    154,
+    262,
+    58
+   ],
+   "texto": "Indicadores del equipo",
+   "zoom": 1.4
+  },
+  {
+   "t": 8.959,
+   "tipo": "foco",
+   "caja": [
+    285,
+    280,
+    374,
+    151
+   ],
+   "texto": "El incidente que acabamos de escalar",
+   "zoom": null
+  },
+  {
+   "t": 10.82,
+   "tipo": "clic",
+   "caja": [
+    300,
+    321,
+    346,
+    36
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 13.703,
+   "tipo": "foco",
+   "caja": [
+    1359,
+    75,
+    543,
+    48
+   ],
+   "texto": "Detalle del incidente",
+   "zoom": null
+  },
+  {
+   "t": 16.178,
+   "tipo": "clic",
+   "caja": [
+    1498,
+    143,
+    131,
+    30
+   ],
+   "texto": "Cambio de fase",
+   "zoom": null
+  },
+  {
+   "t": 19.667,
+   "tipo": "clic",
+   "caja": [
+    1374,
+    810,
+    513,
+    96
+   ],
+   "texto": "Notas del analista",
+   "zoom": null
+  },
+  {
+   "t": 39.608,
+   "tipo": "clic",
+   "caja": [
+    1800,
+    760,
+    87,
+    26
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 42.584,
+   "tipo": "foco",
+   "caja": [
+    1374,
+    963,
+    513,
+    64
+   ],
+   "texto": "Runbook sugerido",
+   "zoom": null
+  },
+  {
+   "t": 45.299,
+   "tipo": "clic",
+   "caja": [
+    1632,
+    115,
+    131,
+    30
+   ],
+   "texto": "Contención",
+   "zoom": null
+  },
+  {
+   "t": 48.754,
+   "tipo": "foco",
+   "caja": [
+    1374,
+    800,
+    513,
+    196
+   ],
+   "texto": "Historial: cada cambio queda registrado",
+   "zoom": null
+  },
+  {
+   "t": 52.009,
+   "tipo": "clic",
+   "caja": [
+    1767,
+    143,
+    131,
+    30
+   ],
+   "texto": "Resolver con clasificación",
+   "zoom": null
+  },
+  {
+   "t": 55.053,
+   "tipo": "clic",
+   "caja": [
+    1623,
+    139,
+    87,
+    109
+   ],
+   "texto": "Verdadero positivo",
+   "zoom": null
+  },
+  {
+   "t": 57.001,
+   "tipo": "clic",
+   "caja": [
+    1623,
+    279,
+    266,
+    52
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 72.98,
+   "tipo": "clic",
+   "caja": [
+    1712,
+    360,
+    177,
+    28
+   ],
+   "texto": "Resuelto",
+   "zoom": null
+  }
+ ]
+}

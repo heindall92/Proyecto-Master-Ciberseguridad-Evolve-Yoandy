@@ -1,0 +1,128 @@
+{
+ "clip": "siem",
+ "duracion": 41.7,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.715,
+   "tipo": "clic",
+   "caja": [
+    15,
+    149,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 7.483,
+   "tipo": "foco",
+   "caja": [
+    275,
+    222,
+    1286,
+    44
+   ],
+   "texto": "Alertas en directo desde el indexador",
+   "zoom": 1.3
+  },
+  {
+   "t": 10.814,
+   "tipo": "clic",
+   "caja": [
+    1770,
+    96,
+    36,
+    36
+   ],
+   "texto": "Filtros",
+   "zoom": null
+  },
+  {
+   "t": 13.577,
+   "tipo": "clic",
+   "caja": [
+    1770,
+    96,
+    36,
+    36
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 15.328,
+   "tipo": "clic",
+   "caja": [
+    1814,
+    96,
+    36,
+    36
+   ],
+   "texto": "Agrupar similares",
+   "zoom": null
+  },
+  {
+   "t": 23.095,
+   "tipo": "clic",
+   "caja": [
+    1814,
+    96,
+    36,
+    36
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 25.982,
+   "tipo": "foco",
+   "caja": [
+    1627,
+    164,
+    88,
+    15
+   ],
+   "texto": "Técnicas ATT&CK",
+   "zoom": null
+  },
+  {
+   "t": 29.347,
+   "tipo": "clic",
+   "caja": [
+    275,
+    266,
+    1286,
+    44
+   ],
+   "texto": "Detalle de la alerta",
+   "zoom": null
+  },
+  {
+   "t": 33.665,
+   "tipo": "foco",
+   "caja": [
+    1509,
+    415,
+    370,
+    12
+   ],
+   "texto": "Técnicas de la alerta",
+   "zoom": null
+  },
+  {
+   "t": 36.149,
+   "tipo": "clic",
+   "caja": [
+    1509,
+    864,
+    181,
+    36
+   ],
+   "texto": "Escalar a incidente",
+   "zoom": null
+  }
+ ]
+}

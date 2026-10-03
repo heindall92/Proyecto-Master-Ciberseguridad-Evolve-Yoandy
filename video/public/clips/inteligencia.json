@@ -1,0 +1,56 @@
+{
+ "clip": "inteligencia",
+ "duracion": 26.918,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.332,
+   "tipo": "clic",
+   "caja": [
+    15,
+    397,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 7.443,
+   "tipo": "clic",
+   "caja": [
+    1676,
+    92,
+    158,
+    28
+   ],
+   "texto": "CVE explotadas · CISA KEV",
+   "zoom": null
+  },
+  {
+   "t": 17.685,
+   "tipo": "clic",
+   "caja": [
+    1602,
+    92,
+    72,
+    28
+   ],
+   "texto": "Reputación de IP, dominio o hash",
+   "zoom": null
+  },
+  {
+   "t": 21.379,
+   "tipo": "clic",
+   "caja": [
+    1836,
+    92,
+    72,
+    28
+   ],
+   "texto": "Mapa de atacantes",
+   "zoom": null
+  }
+ ]
+}

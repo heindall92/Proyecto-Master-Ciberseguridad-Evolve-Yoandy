@@ -1,0 +1,56 @@
+{
+ "clip": "busqueda",
+ "duracion": 28.727,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 3.497,
+   "tipo": "foco",
+   "caja": [
+    1110,
+    22,
+    269,
+    36
+   ],
+   "texto": "Búsqueda global · Ctrl K",
+   "zoom": null
+  },
+  {
+   "t": 18.039,
+   "tipo": "clic",
+   "caja": [
+    1630,
+    22,
+    36,
+    36
+   ],
+   "texto": "Notificaciones: incidentes pendientes",
+   "zoom": null
+  },
+  {
+   "t": 21.932,
+   "tipo": "foco",
+   "caja": [
+    1652,
+    202,
+    122,
+    28
+   ],
+   "texto": "Asignarse el caso",
+   "zoom": null
+  },
+  {
+   "t": 24.127,
+   "tipo": "clic",
+   "caja": [
+    1511,
+    202,
+    135,
+    28
+   ],
+   "texto": "Ir al Workspace",
+   "zoom": null
+  }
+ ]
+}

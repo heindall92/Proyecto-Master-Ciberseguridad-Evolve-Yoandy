@@ -1,0 +1,8 @@
+{
+  "_nota": "Tramos de cada toma que se reproducen en avance rápido [inicio_s, fin_s, factor]: tecleo largo y esperas reales (generar el informe, pytest). El resto de la toma va a velocidad normal.",
+  "chat": [[14.6, 96.8, 7]],
+  "workspace": [[20.2, 39.2, 5], [57.4, 72.6, 5]],
+  "informes": [[12.6, 76.2, 8]],
+  "term_pruebas": [[4.5, 103.5, 8]],
+  "apariencia": [[2.5, 52.5, 1.6]]
+}

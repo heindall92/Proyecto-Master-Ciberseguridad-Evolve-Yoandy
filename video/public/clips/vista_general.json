@@ -1,0 +1,140 @@
+{
+ "clip": "vista_general",
+ "duracion": 40.44,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 0.725,
+   "tipo": "foco",
+   "caja": [
+    276,
+    142,
+    395,
+    114
+   ],
+   "texto": "Alertas del periodo",
+   "zoom": null
+  },
+  {
+   "t": 3.589,
+   "tipo": "foco",
+   "caja": [
+    683,
+    142,
+    395,
+    114
+   ],
+   "texto": "Críticas: nivel ≥ 12",
+   "zoom": null
+  },
+  {
+   "t": 6.105,
+   "tipo": "foco",
+   "caja": [
+    1497,
+    142,
+    395,
+    114
+   ],
+   "texto": "Incidentes abiertos",
+   "zoom": null
+  },
+  {
+   "t": 9.284,
+   "tipo": "foco",
+   "caja": [
+    71,
+    181,
+    146,
+    10
+   ],
+   "texto": "Alertas de Wazuh en directo",
+   "zoom": null
+  },
+  {
+   "t": 12.751,
+   "tipo": "foco",
+   "caja": [
+    1414,
+    288,
+    57,
+    15
+   ],
+   "texto": "Volumen por hora",
+   "zoom": null
+  },
+  {
+   "t": 15.248,
+   "tipo": "foco",
+   "caja": [
+    1414,
+    540,
+    67,
+    15
+   ],
+   "texto": "Distribución por severidad",
+   "zoom": null
+  },
+  {
+   "t": 17.586,
+   "tipo": "foco",
+   "caja": [
+    1414,
+    750,
+    70,
+    15
+   ],
+   "texto": "Atacantes principales",
+   "zoom": null
+  },
+  {
+   "t": 23.005,
+   "tipo": "foco",
+   "caja": [
+    329,
+    706,
+    88,
+    15
+   ],
+   "texto": "Técnicas ATT&CK observadas",
+   "zoom": null
+  },
+  {
+   "t": 26.718,
+   "tipo": "foco",
+   "caja": [
+    1143,
+    706,
+    109,
+    15
+   ],
+   "texto": "Salud de cada servicio",
+   "zoom": null
+  },
+  {
+   "t": 31.473,
+   "tipo": "clic",
+   "caja": [
+    1765,
+    90,
+    123,
+    28
+   ],
+   "texto": "Cambiar el periodo",
+   "zoom": null
+  },
+  {
+   "t": 36.735,
+   "tipo": "clic",
+   "caja": [
+    1660,
+    90,
+    102,
+    28
+   ],
+   "texto": null,
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,56 @@
+{
+ "clip": "activos",
+ "duracion": 18.74,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 2.579,
+   "tipo": "clic",
+   "caja": [
+    15,
+    211,
+    226,
+    56
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 7.403,
+   "tipo": "foco",
+   "caja": [
+    256,
+    138,
+    405,
+    103
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 8.677,
+   "tipo": "foco",
+   "caja": [
+    257,
+    382,
+    1654,
+    48
+   ],
+   "texto": "Equipo con agente de Wazuh",
+   "zoom": null
+  },
+  {
+   "t": 10.691,
+   "tipo": "clic",
+   "caja": [
+    257,
+    382,
+    1654,
+    48
+   ],
+   "texto": null,
+   "zoom": null
+  }
+ ]
+}

@@ -1,0 +1,56 @@
+{
+ "clip": "login",
+ "duracion": 11.726,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 0.498,
+   "tipo": "foco",
+   "caja": [
+    1311,
+    622,
+    368,
+    50
+   ],
+   "texto": null,
+   "zoom": 1.0
+  },
+  {
+   "t": 1.94,
+   "tipo": "clic",
+   "caja": [
+    1311,
+    466,
+    368,
+    40
+   ],
+   "texto": "Usuario",
+   "zoom": null
+  },
+  {
+   "t": 4.116,
+   "tipo": "clic",
+   "caja": [
+    1311,
+    552,
+    368,
+    40
+   ],
+   "texto": "Contraseña (prueba con una incorrecta)",
+   "zoom": null
+  },
+  {
+   "t": 6.888,
+   "tipo": "clic",
+   "caja": [
+    1311,
+    622,
+    368,
+    50
+   ],
+   "texto": "Credenciales incorrectas → 401",
+   "zoom": null
+  }
+ ]
+}

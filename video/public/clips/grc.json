@@ -1,0 +1,20 @@
+{
+ "clip": "grc",
+ "duracion": 20.641,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.38,
+   "tipo": "clic",
+   "caja": [
+    1769,
+    108,
+    121,
+    28
+   ],
+   "texto": "Informe GRC",
+   "zoom": null
+  }
+ ]
+}

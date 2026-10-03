@@ -1,0 +1,88 @@
+{
+ "clip": "chat",
+ "duracion": 152.543,
+ "ancho": 1920,
+ "alto": 1080,
+ "marcas": [
+  {
+   "t": 1.835,
+   "tipo": "clic",
+   "caja": [
+    1588,
+    22,
+    36,
+    36
+   ],
+   "texto": "Chat del equipo",
+   "zoom": null
+  },
+  {
+   "t": 5.307,
+   "tipo": "foco",
+   "caja": [
+    1381,
+    622,
+    130,
+    437
+   ],
+   "texto": "Canal del equipo y mensajes directos",
+   "zoom": null
+  },
+  {
+   "t": 14.146,
+   "tipo": "clic",
+   "caja": [
+    1551,
+    1015,
+    304,
+    36
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 97.372,
+   "tipo": "clic",
+   "caja": [
+    1551,
+    1015,
+    304,
+    36
+   ],
+   "texto": null,
+   "zoom": null
+  },
+  {
+   "t": 144.629,
+   "tipo": "corte_ini",
+   "caja": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "t": 145.253,
+   "tipo": "corte_fin",
+   "caja": [
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "t": 146.48,
+   "tipo": "foco",
+   "caja": [
+    1523,
+    744,
+    364,
+    144
+   ],
+   "texto": "Respuesta del asistente local (Ollama)",
+   "zoom": null
+  }
+ ]
+}

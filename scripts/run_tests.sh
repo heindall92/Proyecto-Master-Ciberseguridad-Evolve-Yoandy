@@ -9,5 +9,6 @@ cp docs/REQUISITOS.md backend/.REQUISITOS.md
 trap 'rm -f backend/.REQUISITOS.md' EXIT
 status=0
 docker compose exec -T -e TRACE_MATRIX=/app/.TRAZABILIDAD.md -e TRACE_REQS=/app/.REQUISITOS.md   backend python -m pytest -q -p no:cacheprovider tests "$@" || status=$?
-mv backend/.TRAZABILIDAD.md docs/TRAZABILIDAD.md
+# -f: el contenedor la crea como root y, en una terminal, mv preguntaría antes de sobrescribir
+mv -f backend/.TRAZABILIDAD.md docs/TRAZABILIDAD.md
 exit $status
