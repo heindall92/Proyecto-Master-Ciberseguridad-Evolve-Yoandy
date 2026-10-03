@@ -1,0 +1,38 @@
+name: SYNAPSE
+
+on:
+  push:
+    paths: ["synapse/**", ".github/workflows/synapse.yml"]
+  pull_request:
+    paths: ["synapse/**", ".github/workflows/synapse.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: synapse
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: synapse/pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - name: Estilo
+        run: python -m ruff check src tests scripts app
+      - name: Tipos
+        run: python -m mypy
+      - name: Pruebas (cobertura ≥ 90 %)
+        run: python -m pytest --cov --cov-fail-under=90
+      - name: Cuadernos ejecutables
+        run: python -m pytest --nbmake notebooks -q
+      - name: Explorador web
+        run: synapse site --out site/index.html
