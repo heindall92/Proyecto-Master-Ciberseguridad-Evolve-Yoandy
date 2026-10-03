@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="pandas">
+  <title>pandas</title>
+  <rect width="256" height="256" rx="57" fill="#5856D6"/>
+  <g transform="translate(80 46) scale(4)" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" /> <rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M3 9h18" /> <path d="M3 15h18" /></g>
+  <text x="128" y="206" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="600" font-size="32" letter-spacing="-0.4" fill="#FFFFFF">pandas</text>
+</svg>
