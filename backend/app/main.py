@@ -972,6 +972,10 @@ async def delete_user_ep(user_id: int, db: AsyncSession = Depends(get_db), curre
         raise HTTPException(409, "Es un usuario de sistema (asistente IA del chat) y no se puede eliminar")
     if u.role == "admin" and await _admins_left(db, u.id) == 0:
         raise HTTPException(409, "No se puede eliminar al último administrador")
+    # Anula sus invitaciones (también el enlace de Tailscale) antes de borrarlo; las ya usadas se borran sin más
+    await _drop_invites(db, await _pending_invites(db, u.id))
+    await db.execute(delete(UserInvite).where(UserInvite.user_id == u.id))
+    await db.flush()
     await db.delete(u)
     await db.commit()
     return {"ok": True}

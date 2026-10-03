@@ -180,3 +180,33 @@ async def test_usuario_creado_sin_contrasena_no_puede_entrar_hasta_activar():
     async with client_as() as ac:
         r = await ac.post("/api/auth/login", json={"username": "pendiente", "password": PASSWORD})
     assert r.status_code == 401
+
+
+@pytest.mark.req("RF-03", "RF-04")
+async def test_borrar_usuario_revoca_su_invitacion_de_tailscale(monkeypatch):
+    revocadas = []
+
+    async def share():
+        return "inv-123", "https://login.tailscale.com/admin/invite/inv-123", None
+
+    async def status(_id):
+        return {"accepted": False, "login": None}
+
+    async def revoke(inv_id):
+        revocadas.append(inv_id)
+
+    monkeypatch.setattr(main.ts, "create_share_invite", share)
+    monkeypatch.setattr(main.ts, "invite_status", status)
+    monkeypatch.setattr(main.ts, "revoke_invite", revoke)
+    user_id, inv = await _invitar("borrable")
+    assert inv["tailscale_url"]
+    async with client_as("admin") as ac:
+        r = await ac.delete(f"/api/users/{user_id}")
+    assert r.status_code == 200, r.text
+    assert revocadas == ["inv-123"]
+    async with TestSessionLocal() as s:
+        assert (await s.execute(select(UserInvite).where(UserInvite.user_id == user_id))).first() is None
+        assert await s.get(User, user_id) is None
+    async with client_as() as ac:  # el enlace de activación tampoco sirve ya
+        chk = await ac.post("/api/auth/invite/check", json={"token": inv["activation_url"].split("#", 1)[1]})
+    assert chk.status_code == 410
