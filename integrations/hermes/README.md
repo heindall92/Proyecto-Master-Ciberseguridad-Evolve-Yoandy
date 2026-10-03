@@ -15,7 +15,7 @@ Hermes **no sustituye** Cursor ni el dashboard: es un agente en terminal con mem
 
 Hermes trabaja **dentro del clone** del repo con herramientas de terminal (git, pytest, docker, ripgrep). Sirve para:
 
-- Cerrar hallazgos de `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md`
+- Cerrar hallazgos de `docs/historico/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md`
 - Ejecutar tests y leer logs mientras tú usas Cursor en paralelo
 - Dejar rutinas (“cada noche: pytest + resumen de diff”)
 
@@ -58,7 +58,7 @@ Integración vía MCP para cuando el stack está arriba: alertas Wazuh, Cowrie, 
 
 ## Requisitos
 
-1. Stack Valhalla levantado (`docker compose up` o `Valhalla-Runner.bat`).
+1. Stack Valhalla levantado (`docker compose up` o `.\install.ps1`).
 2. Backend en `http://localhost:8000` y credencial `admin` (variable `ADMIN_PASSWORD` en `.env`).
 3. Hermes instalado (en Windows se recomienda **WSL2**):
 

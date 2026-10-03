@@ -229,7 +229,7 @@ Para facilitar el uso tras clonar el repositorio **sin depender del mantenedor**
 | Recurso | Descripción |
 |---------|-------------|
 | [`docs/INSTALACION_PRIMERA_VEZ.md`](INSTALACION_PRIMERA_VEZ.md) | Guía paso a paso (secretos, Docker, login, Wazuh) |
-| [`README.md`](../README.md) § Guía de Puesta en Marcha | Inicio rápido con enlace al asistente |
+| [`README.md`](../../README.md) § Guía de Puesta en Marcha | Inicio rápido con enlace al asistente |
 | `scripts/setup_env.py` | Genera `.env` con `SECRET_KEY`, `WEBHOOK_SECRET`, `ADMIN_PASSWORD` |
 | `setup.bat` / `Valhalla-Runner.bat` | Windows: setup automático antes del arranque |
 | `make setup` / `make docker-up` | Linux/Mac: mismo flujo vía Makefile |

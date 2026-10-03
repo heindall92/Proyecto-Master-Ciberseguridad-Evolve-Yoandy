@@ -92,3 +92,8 @@ backend/uploads/
 pgdata/
 *.sql.gz
 *.dump
+
+# Borradores locales de la memoria y bloqueos de Word
+docs/memoria/*Corregido*
+docs/memoria/*.rar
+~$*

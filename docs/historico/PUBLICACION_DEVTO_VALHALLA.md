@@ -2,7 +2,7 @@
 title: "Monté un mini-SOC en mi portátil con honeypot, Wazuh e IA local — proyecto del Máster en Evolve"
 published: false
 tags: cybersecurity, python, infosec, networking, linux
-cover_image: docs/img/10-dashboard-presentacion.png
+cover_image: docs/historico/img/10-dashboard-presentacion.png
 organization: Evolve
 ---
 
@@ -55,7 +55,7 @@ En una sesión de laboratorio típica (con el honeypot expuesto y el atacante au
 - Tickets creados desde alertas Wazuh, asignables y movibles por estados en el workspace.
 - Respuestas de Ollama del estilo: “están bajando un script desde una IP externa; tratar como intento de implant” — útil como primera lectura, no como veredicto legal.
 
-Capturas que recomiendo subir en el artículo (están en el repo bajo `docs/img/`):
+Capturas que recomiendo subir en el artículo (están en el repo bajo `docs/historico/img/`):
 
 - Dashboard Cowrie en tiempo real (`04-cowrie-honeypot.png`)
 - Cobertura MITRE en agente (`02-agente-mitre.png`)

@@ -15,7 +15,7 @@ Copiloto para **mejorar el código y la infra**, no para sustituir el dashboard 
 | Frontend | `frontend/app/src/` | React, Redux, Vite :3000 |
 | Docker | `docker-compose.yml` | Wazuh, Cowrie, Postgres, Ollama |
 | Reglas Wazuh | `wazuh_config/` | Cowrie decoders/rules |
-| Auditoría | `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` | Hallazgos pendientes |
+| Auditoría | `docs/historico/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` | Hallazgos pendientes |
 | Tests backend | `backend/tests/` | `pytest tests/` desde `backend/` |
 
 ## Comandos habituales

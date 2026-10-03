@@ -12,7 +12,7 @@ Ayudar al mantenedor a **mejorar el código, tests, Docker y seguridad** del rep
 - `backend/app/opensearch_client.py` — consultas Wazuh Indexer
 - `frontend/app/src/ui/` — vistas (Cowrie, Workspace, Dashboard)
 - `docker-compose.yml` — servicios; perfil `labs` para attacker
-- `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — vulnerabilidades; muchas aún abiertas
+- `docs/historico/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — vulnerabilidades; muchas aún abiertas
 
 ## Convenciones
 

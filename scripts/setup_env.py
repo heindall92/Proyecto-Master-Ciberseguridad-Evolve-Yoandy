@@ -2,7 +2,7 @@
 """
 Configuración inicial de Valhalla SOC — genera .env con secretos únicos.
 
-Ejecutar antes del primer `docker compose up` o desde Valhalla-Runner.bat.
+Ejecutar antes del primer `docker compose up` (install.sh / install.ps1 lo hacen solos).
 No sobrescribe un .env ya válido salvo --force.
 """
 from __future__ import annotations
@@ -270,7 +270,6 @@ def run_setup(
         print("Usuario de login del SOC: admin")
         print("Siguiente paso:")
         print("  docker compose --profile labs up -d --build")
-        print("  o ejecute Valhalla-Runner.bat")
         print()
         if ENV_PATH.exists() and (ROOT / ".env.bak").exists():
             print("(Copia anterior guardada en .env.bak)")

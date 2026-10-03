@@ -91,8 +91,7 @@ docker compose exec ollama ollama list
 bash scripts/wazuh_post_install.sh
 ```
 
-Alternativas para el paso 1: `setup.bat` (Windows, que después arranca todo con `Valhalla-Runner.bat`),
-`./scripts/setup_env.sh` o `make setup`.
+Alternativas para el paso 1: `.\install.ps1` (Windows), `./scripts/setup_env.sh` o `make setup`.
 
 ### Qué genera el asistente de secretos
 
@@ -191,7 +190,7 @@ Antes de exponer el SOC fuera del laboratorio:
 3. Contraseña de `admin` propia (no `Valhalla2026!`) y secretos regenerados.
 4. Gateway HTTPS: `docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile prod up -d --build`
    (puerto 8443), o acceso por VPN con Tailscale (ver el [README](../README.md#arranque-rápido)).
-5. Revisar [`SECURITY.md`](../SECURITY.md) y la [auditoría de ciberseguridad](AUDITORIA_CIBERSEGURIDAD_2026-05-15.md).
+5. Revisar [`SECURITY.md`](../SECURITY.md) y la [auditoría de ciberseguridad](historico/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md).
 
 ---
 

@@ -75,8 +75,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased] — 2026-05-15
 
 ### Documentación
-- **Nuevo** `docs/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — auditoría OWASP/API (hallazgos críticos a altos).
-- **Nuevo** `docs/INFORME_MEJORAS_UI_TEMAS_2026-05-15.md` — multitema, formularios, threat map, runbooks, honeypot.
+- **Nuevo** `docs/historico/AUDITORIA_CIBERSEGURIDAD_2026-05-15.md` — auditoría OWASP/API (hallazgos críticos a altos).
+- **Nuevo** `docs/historico/INFORME_MEJORAS_UI_TEMAS_2026-05-15.md` — multitema, formularios, threat map, runbooks, honeypot.
 
 ### UI / UX
 - Sistema multitema GREEN / CYAN / AMBER / PURPLE en modo oscuro y claro (`light-theme-overrides.css`).

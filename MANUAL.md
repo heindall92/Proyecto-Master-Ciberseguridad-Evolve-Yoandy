@@ -205,7 +205,7 @@ docker compose logs -f backend          # registros de un servicio (Ctrl+C para 
 docker compose --profile labs down      # parar sin perder datos
 ```
 
-En Windows también puedes usar `Valhalla-Runner.bat` (arrancar) y `Apagar-Valhalla.bat` (parar).
+En Windows, `.\install.ps1` instala y arranca el stack; para parar: `docker compose --profile labs down`.
 
 | Contenedor | Qué hace |
 |---|---|
