@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "Si usas S.Y.N.A.P.S.E., cítalo así."
+title: "S.Y.N.A.P.S.E.: SYNthetic Anonymised Patients — Statistical fidelity & Security Evaluation"
+version: 0.1.0
+date-released: 2026-10-02
+license: MIT
+repository-code: "https://github.com/maricelmeneses/synapse"
+keywords: [synthetic data, survival analysis, Cox model, membership inference, anonymisation, GDPR, EHDS, biostatistics]
+authors:
+  - family-names: "Meneses Gómez"
+    given-names: "Maricel"
+  - family-names: "Ramírez Delgado"
+    given-names: "Yoandy"
