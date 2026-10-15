@@ -6,6 +6,7 @@ import {
   ExternalLink, Copy,
 } from "lucide-react";
 import { listReports, generateReport, getReport, verifyReport, type ReportSummary, type ReportData, type ReportTLP } from "../lib/api";
+import { imprimirDocumento } from "../lib/imprimir";
 import { toast } from "./premium/widgets";
 import ExecutiveReport from "./ExecutiveReport";
 import GrcReport from "./GrcReport";
@@ -268,27 +269,8 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     download(`${current.report_id}-incidentes.csv`, [cols.join(","), ...items.map((i: any) => cols.map((c) => esc(i[c])).join(","))].join("\n"), "text/csv;charset=utf-8");
   };
-  // Imprimir: el documento vive en contenedores con scroll y altura fija que cortarían la
-  // impresión en la primera página, así que se copia a un contenedor propio en <body>.
-  const print = () => {
-    const doc = document.getElementById("rc-print");
-    if (!doc) return;
-    const host = document.createElement("div");
-    host.id = "rc-print-host";
-    host.appendChild(doc.cloneNode(true)); // copia del DOM ya pintado, sin re-interpretar HTML
-    document.body.appendChild(host);
-    document.body.classList.add("rc-printing");
-    const prevTitle = document.title;
-    document.title = current ? `${current.report_id} - Valhalla SOC` : prevTitle;
-    const done = () => {
-      document.body.classList.remove("rc-printing");
-      host.remove();
-      document.title = prevTitle;
-      window.removeEventListener("afterprint", done);
-    };
-    window.addEventListener("afterprint", done);
-    window.print();
-  };
+  // Imprimir: copia el documento a un contenedor propio (ver lib/imprimir.ts)
+  const print = () => imprimirDocumento(document.getElementById("rc-print"), current ? `${current.report_id} - Valhalla SOC` : undefined);
 
   const tabs: { id: Tab; icon: LucideIcon; es: string; en: string }[] = [
     { id: "soc", icon: FileBarChart, es: "Informe SOC", en: "SOC report" },

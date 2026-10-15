@@ -4,6 +4,50 @@ import { fetchExecutiveReportData, type ExecutiveDetail } from "../lib/reportApi
 import ExecutiveView from "./ExecutiveView";
 import { translations } from "./translations";
 
+// Las fuentes estándar de jsPDF solo conocen Windows-1252. Un carácter fuera (≥, −, →, emojis…)
+// hace que jsPDF codifique la línea entera de otra forma y salga con las letras separadas, así que
+// todo texto se normaliza antes de dibujarlo.
+const CP1252_EXTRA = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+export const textoPdf = (t: string): string =>
+  String(t ?? "")
+    .replace(/≥/g, ">=").replace(/≤/g, "<=").replace(/[→⟶]/g, "->").replace(/←/g, "<-").replace(/−/g, "-")
+    .replace(/[✓✔✅]/g, "OK").replace(/[✗✘❌]/g, "X")
+    .replace(/[\u00a0\u2009\u202f]/g, " ")
+    .split("").filter((c) => c.charCodeAt(0) < 256 || CP1252_EXTRA.includes(c)).join("")
+    .replace(/ {2,}/g, " ");
+
+function sanearTextos(doc: jsPDF) {
+  const text = doc.text.bind(doc);
+  const split = doc.splitTextToSize.bind(doc);
+  const fix = (t: unknown) => (Array.isArray(t) ? t.map((x) => textoPdf(String(x))) : textoPdf(String(t)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (doc as any).text = (t: unknown, ...r: unknown[]) => (text as any)(fix(t), ...r);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (doc as any).splitTextToSize = (t: unknown, ...r: unknown[]) => (split as any)(textoPdf(String(t)), ...r);
+}
+
+/** Pie con «Página X de N» en todas las páginas (antes el total iba fijo y algunas páginas no lo tenían). */
+function piesDePagina(doc: jsPDF, texto: string, M: number, W: number, navy: [number, number, number]) {
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.setFillColor(...navy);
+    doc.rect(0, 285, W, 12, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(texto, M, 293);
+    doc.text(`Página ${i} de ${n}`, W - M, 293, { align: "right" });
+  }
+}
+
+/** Recomendación «[CRITICAL] texto» → prioridad real y texto limpio. */
+const PRIORIDAD_REC: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const separarRec = (rec: string): { nivel: number; texto: string } => {
+  const m = /^\s*\[(CRITICAL|HIGH|MEDIUM|LOW)\]\s*/i.exec(rec);
+  return { nivel: m ? PRIORIDAD_REC[m[1].toUpperCase()] : 3, texto: rec.replace(/^\s*\[[A-Z]+\]\s*/i, "").replace(/^P\d+ - /i, "") };
+};
+
 interface ValhallaReportJSON {
   report_metadata: {
     report_id: string;
@@ -133,6 +177,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   async function exportToPDF() {
     if (!reportData) return;
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    sanearTextos(doc);
     const W = 210;
     const M = 20;
     const col = W - M * 2;
@@ -195,7 +240,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text(`Analista: ${analystName}`, W - M, 39, { align: "right" });
 
     doc.setFillColor(240, 243, 247);
-    doc.rect(M, 52, col, 18, "F");
+    doc.rect(M, 52, col, 22, "F"); // alto suficiente para «Preparado para…» (antes se salía por abajo)
     doc.setTextColor(...navy);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
@@ -222,7 +267,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const kpis = [
       { label: "Salud del Sistema", value: `${health}%`, sub: "Estado general", color: statusColor },
-      { label: "Alertas Críticas", value: reportData.wazuh_metrics.critical_alerts.toLocaleString("es-ES"), sub: `de ${reportData.wazuh_metrics.total_alerts.toLocaleString("es-ES")} alertas (nivel ≥ 12)`, color: navy },
+      { label: "Alertas Críticas", value: reportData.wazuh_metrics.critical_alerts.toLocaleString("es-ES"), sub: `de ${reportData.wazuh_metrics.total_alerts.toLocaleString("es-ES")} alertas (nivel 12 o más)`, color: navy },
       { label: "Incidentes Resueltos", value: `${reportData.incident_management.closed_tickets}/${reportData.incident_management.total_tickets}`, sub: "Tasa de resolución", color: green },
       { label: "Tiempo Respuesta", value: `${reportData.incident_management.avg_resolution_time_min} min`, sub: "Tiempo medio (MTTR)", color: navy },
     ];
@@ -259,7 +304,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...gray);
-    doc.text("Análisis automatizado generado por inteligencia artificial a partir de los datos del sistema de monitoreo.", M, 162);
+    doc.text(detail?.ai_summary
+      ? "Resumen redactado por la IA local a partir de las métricas del periodo (las cifras las calcula el backend)."
+      : "Resumen calculado a partir de los datos del SIEM y de los incidentes del periodo.", M, 162);
 
     doc.setFillColor(248, 249, 250);
     doc.roundedRect(M, 166, col, 35, 2, 2, "F");
@@ -282,7 +329,16 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("CONCLUSIÓN:", M + 4, 215);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(...black);
-    doc.text("La infraestructura permanece segura bajo monitoreo continuo con inteligencia artificial. No se han registrado brechas.", M + 4, 221);
+    // Conclusión según los datos (antes era fija: «permanece segura… no se han registrado brechas»,
+    // aunque el propio informe mostrase riesgo alto y accesos tras fuerza bruta)
+    const riesgo = detail?.risk?.score ?? 100 - health;
+    const intrusiones = detail?.honeypot?.intrusions_after_bruteforce ?? 0;
+    const conclusion = riesgo >= 60
+      ? `Riesgo ${detail?.risk?.level?.toLowerCase() ?? "alto"} (${riesgo}/100). ${intrusiones ? `El señuelo registró ${intrusiones} accesos tras fuerza bruta (sin datos reales expuestos). ` : ""}Se recomienda aplicar con prioridad las acciones del apartado 7.`
+      : riesgo >= 30
+        ? `Riesgo moderado (${riesgo}/100): conviene aplicar las recomendaciones del apartado 8 y mantener la monitorización.`
+        : `Riesgo bajo (${riesgo}/100) en el periodo: continuar la monitorización y revisar las recomendaciones.`;
+    doc.text(doc.splitTextToSize(conclusion, col - 8).slice(0, 2), M + 4, 220.5);
 
     doc.setDrawColor(...lightgray);
     doc.setLineWidth(0.5);
@@ -325,13 +381,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(s.desc, x + w / 2, 274, { align: "center" });
     });
 
-    doc.setFillColor(...navy);
-    doc.rect(0, 285, W, 12, "F");
-    doc.setTextColor(...white);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 1 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 2
@@ -458,23 +507,24 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setTextColor(...gray);
     doc.text("Asegúrese de que su organización NO utiliza ninguna de estas contraseñas.", M, pwY + 6);
 
-    (reportData.honeypot_intel.top_passwords_captured ?? []).forEach((pw, i) => {
-      const pwX = M + i * 55;
+    // Fichas que se ajustan al texto y bajan de línea (antes 4 fijas de 50 mm se salían de la página)
+    let pwX = M;
+    let pwRow = pwY + 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    (reportData.honeypot_intel.top_passwords_captured ?? []).slice(0, 12).forEach((pw) => {
+      const etiqueta = textoPdf(pw).slice(0, 28);
+      const w = Math.max(22, doc.getTextWidth(etiqueta) + 10);
+      if (pwX + w > W - M) { pwX = M; pwRow += 13; }
+      if (pwRow > 268) return;
       doc.setFillColor(253, 237, 236);
       doc.setDrawColor(...red);
-      doc.roundedRect(pwX, pwY + 10, 50, 10, 2, 2, "FD");
+      doc.roundedRect(pwX, pwRow, w, 10, 2, 2, "FD");
       doc.setTextColor(...red);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text(pw, pwX + 25, pwY + 17, { align: "center" });
+      doc.text(etiqueta, pwX + w / 2, pwRow + 7, { align: "center" });
+      pwX += w + 4;
     });
 
-    doc.setFillColor(...navy);
-    doc.rect(0, 285, W, 12, "F");
-    doc.setTextColor(...white);
-    doc.setFontSize(7);
-    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 2 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 3 — GEO INTEL
@@ -500,6 +550,14 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("Países desde donde se originó la mayor parte del tráfico malicioso detectado durante el período.", M, 37);
 
     const geoData = (reportData.geo_intel ?? []).map(e => ({ name: e.country, pct: e.pct, desc: e.desc }));
+    if (geoData.length === 0) {
+      doc.setFillColor(248, 249, 250);
+      doc.roundedRect(M, 46, col, 20, 2, 2, "F");
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(doc.splitTextToSize("Sin datos de geolocalización en este periodo: las direcciones atacantes son privadas (laboratorio) o no se pudieron ubicar, así que no se muestra ningún origen.", col - 10), M + 5, 55);
+    }
 
     const barStartX = M + 28;
     const barMaxW = 55;
@@ -525,12 +583,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(doc.splitTextToSize(g.desc, descMaxW), W - M, gy + 6, { align: "right" });
     });
 
-    doc.setFillColor(...navy);
-    doc.rect(0, 285, W, 12, "F");
-    doc.setTextColor(...white);
-    doc.setFontSize(7);
-    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 3 de 4", W - M, 293, { align: "right" });
 
     // ════════════════════════════
     // PÁGINA 3
@@ -557,8 +609,23 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.text("Medidas concretas que el equipo de seguridad debe ejecutar para reducir el riesgo identificado.", M, 37);
 
     let remY2 = 44;
+    // Salto de página automático (antes la sección 9 se dibujaba por debajo del final de la hoja)
+    const asegurar = (alto: number) => {
+      if (remY2 + alto <= 278) return;
+      doc.addPage();
+      doc.setFillColor(...white);
+      doc.rect(0, 0, W, 297, "F");
+      doc.setFillColor(...navy);
+      doc.rect(0, 0, W, 18, "F");
+      doc.setTextColor(...white);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("PLAN DE ACCIÓN Y CUMPLIMIENTO NORMATIVO (continuación)", M, 12);
+      remY2 = 30;
+    };
     (reportData.remediation_steps ?? []).forEach((step, i) => {
       const stepH = step.action_cmd ? 30 : 20;
+      asegurar(stepH + 5);
       doc.setFillColor(248, 249, 250);
       doc.roundedRect(M, remY2, col, stepH, 2, 2, "F");
       doc.setDrawColor(...navy);
@@ -585,6 +652,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     });
 
     remY2 += 5;
+    asegurar(70);
     doc.setDrawColor(...lightgray);
     doc.line(M, remY2, W - M, remY2);
     remY2 += 10;
@@ -608,8 +676,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       { label: "PLANIFICAR", color: green, days: "Próx. trimestre" },
     ];
 
-    (reportData.recommendations ?? []).forEach((rec, i) => {
-      const p = recPriority[i] || recPriority[3];
+    (reportData.recommendations ?? []).map(separarRec).sort((a, b) => a.nivel - b.nivel).forEach(({ nivel, texto: rec }) => {
+      asegurar(26);
+      const p = recPriority[nivel] || recPriority[3]; // la urgencia sale de la prioridad real, no del orden
       doc.setFillColor(248, 249, 250);
       doc.roundedRect(M, remY2, col, 22, 2, 2, "F");
       doc.setFillColor(...p.color);
@@ -622,11 +691,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...black);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(doc.splitTextToSize(rec.replace(/^P\d+ - /i, ""), col - 35), M + 32, remY2 + 10);
+      doc.text(doc.splitTextToSize(rec, col - 35).slice(0, 3), M + 32, remY2 + 10);
       remY2 += 26;
     });
 
     remY2 += 5;
+    asegurar(60);
     doc.setDrawColor(...lightgray);
     doc.line(M, remY2, W - M, remY2);
     remY2 += 10;
@@ -640,8 +710,9 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...gray);
-    doc.text("La ISO 27001 es la norma internacional de seguridad. Evalúa si la organización gestiona adecuadamente los riesgos de información.", M, remY2);
-    remY2 += 6;
+    const isoIntro = doc.splitTextToSize("La ISO 27001 es la norma internacional de seguridad. Evalúa si la organización gestiona adecuadamente los riesgos de información.", col);
+    doc.text(isoIntro, M, remY2);
+    remY2 += isoIntro.length * 4.5 + 2;
 
     const isoScore2 = reportData.iso27001?.overall ?? 73;
     const isoColor2: [number, number, number] = isoScore2 >= 80 ? green : isoScore2 >= 60 ? yellow : red;
@@ -663,6 +734,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
     const statusLabels: Record<string, string> = { covered: "CUMPLE", partial: "PARCIAL", gap: "INCUMPLE" };
 
     (reportData.iso27001?.controls ?? []).forEach((ctrl) => {
+      asegurar(24);
       const sColor: [number, number, number] = ctrl.status === "covered" ? green : ctrl.status === "partial" ? yellow : red;
       doc.setFillColor(248, 249, 250);
       doc.roundedRect(M, remY2, col, 20, 2, 2, "F");
@@ -678,17 +750,12 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.setTextColor(...gray);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
-      doc.text(ctrlExplained[ctrl.control] || ctrl.note, M + 4, remY2 + 14);
+      doc.text(doc.splitTextToSize(ctrlExplained[ctrl.control] || ctrl.note, col - 30)[0] ?? "", M + 4, remY2 + 14);
       remY2 += 24;
     });
 
-    doc.setFillColor(...navy);
-    doc.rect(0, 285, W, 12, "F");
-    doc.setTextColor(...white);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.text("CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, 293);
-    doc.text("Página 4 de 4", W - M, 293, { align: "right" });
+    piesDePagina(doc, "CONFIDENCIAL — Uso exclusivo de la Dirección. No distribuir sin autorización.", M, W, navy);
+
 
     doc.save(`valhalla-informe-ejecutivo-${reportData.report_metadata.generation_date}.pdf`);
   }
@@ -696,8 +763,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
   async function exportTechnicalPDF() {
     if (!reportData) return;
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    sanearTextos(doc);
     const W = 210, M = 20, col = W - M * 2;
-    const TOTAL_PAGES = 4;
 
     const navy: [number, number, number] = [26, 58, 92];
     const black: [number, number, number] = [17, 17, 17];
@@ -729,15 +796,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.text(`${reportId} · ${analystName} · ${period}`, W - M, 12, { align: "right" });
     };
 
-    const pageFooter = (page: number) => {
-      doc.setFillColor(...navy);
-      doc.rect(0, 285, W, 12, "F");
-      doc.setTextColor(...white);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.text("CONFIDENCIAL — INFORME TÉCNICO. Uso exclusivo del equipo de seguridad.", M, 293);
-      doc.text(`Página ${page} de ${TOTAL_PAGES}`, W - M, 293, { align: "right" });
-    };
 
     const sectionTitle = (title: string, y: number): number => {
       doc.setDrawColor(...lightgray);
@@ -861,7 +919,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       `• ${reportData.wazuh_metrics.critical_alerts} críticas con intervención manual`,
       `• Tasa de resolución: ${closureRate}%`,
       `• MTTR: ${mttr} min`,
-      `• IA redujo tiempo de detección y respuesta`,
     ].join("\n");
     y1 = analysisBox(execAnalysis, y1);
     y1 += 3;
@@ -881,14 +938,13 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         doc.text(asset.name, M + 3, y1 + 6);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(...gray);
-        doc.text(`IP: ${asset.ip}`, M + 65, y1 + 6);
+        if (asset.ip) doc.text(`IP: ${asset.ip}`, M + 65, y1 + 6);
         doc.setTextColor(...red);
         doc.setFont("helvetica", "bold");
         doc.text(`${asset.alerts} alertas`, W - M - 3, y1 + 6, { align: "right" });
         y1 += 9;
       });
     }
-    pageFooter(1);
 
     // ── PÁGINA 2: MITRE ATT&CK + Honeypot ─────────────────────────────────
     doc.addPage();
@@ -973,7 +1029,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       `• Compartir IOCs con MISP/ISAC`,
     ].join("\n");
     y2 = analysisBox(honeypotConclusion, y2, col - 18, "Ref: ISO 27001 A.12.4, NIST SP 800-150.");
-    pageFooter(2);
 
     // ── PÁGINA 3: Geo Intel + Gestión de Incidentes ────────────────────────
     doc.addPage();
@@ -1063,7 +1118,6 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       `• Establecer SLAs formales por severidad`,
     ].join("\n");
     y3 = analysisBox(incidentAnalysis, y3, col - 18, "Ref: ISO 27001 A.16.1.");
-    pageFooter(3);
 
     // ── PÁGINA 4: Remediación detallada + ISO 27001 ────────────────────────
     doc.addPage();
@@ -1100,7 +1154,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       doc.roundedRect(W - M - 36, y4 + 2, 34, 6, 1, 1, "F");
       doc.setTextColor(...white);
       doc.setFontSize(6);
-      doc.text(`⏱ ${meta.time}`, W - M - 19, y4 + 6, { align: "center" });
+      doc.text(`Esfuerzo: ${meta.time}`, W - M - 19, y4 + 6, { align: "center" });
       doc.setTextColor(...black);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
@@ -1149,6 +1203,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
 
     const statusLabelsT: Record<string, string> = { covered: "CUMPLE", partial: "PARCIAL", gap: "INCUMPLE" };
     (reportData.iso27001?.controls ?? []).forEach((ctrl) => {
+      if (y4 + 22 > 278) { doc.addPage(); pageHeader("CUMPLIMIENTO ISO 27001 (continuación)"); y4 = 26; }
       const sColor: [number, number, number] = ctrl.status === "covered" ? green : ctrl.status === "partial" ? yellow : red;
       doc.setFillColor(248, 249, 250);
       doc.roundedRect(M, y4, col, 18, 2, 2, "F");
@@ -1168,7 +1223,7 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
       y4 += 22;
     });
 
-    pageFooter(4);
+    piesDePagina(doc, "CONFIDENCIAL — INFORME TÉCNICO. Uso exclusivo del equipo de seguridad.", M, W, navy);
     doc.save(`valhalla-informe-tecnico-${reportData.report_metadata.generation_date}.pdf`);
   }
 

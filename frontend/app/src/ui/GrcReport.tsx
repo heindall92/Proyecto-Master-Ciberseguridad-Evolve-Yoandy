@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarRange, ClipboardList, Crosshair, FileJson, Gauge, Grid3x3, Info, Landmark, ListChecks,
   Printer, RefreshCw, Search, ShieldCheck, Radar,
 } from "lucide-react";
 import { fetchGrcReport, type GrcReport as GrcData, type GrcTechnique, type GrcFramework } from "../lib/reportApi";
 import { AnimatedNumber } from "./premium/widgets";
+import { imprimirDocumento } from "../lib/imprimir";
 import "./premium/executive.css";
 import "./premium/grc.css";
 
@@ -137,6 +138,20 @@ function MitreMatrix({ data }: { data: GrcData }) {
           );
         })}
       </div>
+      {/* En papel, la matriz completa ocupaba ~8 páginas de casillas: se imprime un resumen por táctica */}
+      <table className="grc-print-only grc-mitre-resumen">
+        <thead><tr><th>Táctica</th><th>Técnicas con regla</th><th>Observadas en el periodo</th></tr></thead>
+        <tbody>
+          {cov.tactics.map(col => (
+            <tr key={col.id}>
+              <td>{col.name}</td>
+              <td>{col.techniques.filter(t => t.coverage !== "none").length} / {col.techniques.length}</td>
+              <td>{col.techniques.filter(t => observed.has(t.id)).length}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="grc-print-only grc-source">La matriz interactiva con cada técnica se consulta en la consola: Informes → Informe GRC.</p>
     </>
   );
 }
@@ -144,6 +159,7 @@ function MitreMatrix({ data }: { data: GrcData }) {
 export default function GrcReport() {
   const [start, setStart] = useState(isoDay(29));
   const [end, setEnd] = useState(isoDay(0));
+  const raiz = useRef<HTMLDivElement>(null); // el informe que se copia al imprimir
   const [data, setData] = useState<GrcData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,7 +194,7 @@ export default function GrcReport() {
   const deadline = (days: number) => { const d = new Date(data.meta.generated_at); d.setDate(d.getDate() + days); return d.toLocaleDateString("es-ES"); };
 
   return (
-    <div className="ex grc">
+    <div className="ex grc" ref={raiz}>
       {error && <div className="ex-error">{error}</div>}
       <header className="ex-hero">
         <div className="ex-hero__brand">
@@ -204,7 +220,7 @@ export default function GrcReport() {
           <div className="ex-btns">
             <button type="button" className="ex-icon" title="Actualizar" aria-label="Actualizar" onClick={() => load()}><RefreshCw size={15} className={loading ? "ex-spin" : ""} /></button>
             <button type="button" className="ex-icon" title="Descargar JSON" aria-label="Descargar JSON" onClick={exportJson}><FileJson size={15} /></button>
-            <button type="button" className="ex-btn ex-btn--primary" onClick={() => window.print()}><Printer size={14} />Imprimir / PDF</button>
+            <button type="button" className="ex-btn ex-btn--primary" onClick={() => imprimirDocumento(raiz.current, `Informe GRC ${data.meta.period_start} - Valhalla SOC`)}><Printer size={14} />Imprimir / PDF</button>
           </div>
         </div>
       </header>

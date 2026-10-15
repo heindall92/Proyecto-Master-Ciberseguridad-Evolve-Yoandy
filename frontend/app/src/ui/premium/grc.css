@@ -73,9 +73,14 @@
   .grc-legend { margin-left: 0; }
 }
 
+.grc-print-only { display: none; }
 @media print {
-  .grc .ex-hero__actions, .grc-mitre__bar .grc-search { display: none !important; }
-  .grc-mitre { max-height: none; overflow: visible; flex-wrap: wrap; }
+  .grc .ex-hero__actions, .grc-mitre__bar, .grc-mitre { display: none !important; }
+  .grc-print-only { display: block; }
+  table.grc-print-only { display: table; width: 100%; border-collapse: collapse; font: 500 11px var(--sans); }
+  .grc-mitre-resumen th, .grc-mitre-resumen td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  .grc-mitre-resumen th { font: 700 10px var(--mono); letter-spacing: .5px; color: var(--text-dim); }
+  .grc-row > .ex-panel, .grc .ex-kpi, .grc-matrix, .grc-radar, .grc-table tr { break-inside: avoid; }
 }
 .grc-table .ex-pill { white-space: nowrap; }
 .grc-sw.grc-t--none { border-color: var(--line); }
