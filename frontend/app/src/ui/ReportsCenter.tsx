@@ -245,6 +245,36 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
     }
   };
 
+  // «PDF técnico» del Ejecutivo: genera el Informe SOC del mismo periodo (guardado y con huella)
+  // y lo imprime con este mismo documento, en lugar del PDF dibujado con coordenadas fijas.
+  const [printPending, setPrintPending] = useState(false);
+  const tecnicoDesdeEjecutivo = async (dia0: string, dia1: string) => {
+    const ini = new Date(`${dia0}T00:00:00`);
+    const fin = new Date(Math.min(new Date(`${dia1}T23:59:59`).getTime(), Date.now()));
+    setTab("soc");
+    setStart(toLocalInput(ini));
+    setEnd(toLocalInput(fin));
+    setGenerating(true);
+    try {
+      const r = await generateReport({ start: ini.toISOString(), end: fin.toISOString(), tlp, include_ai_summary: false });
+      setCurrent(r);
+      setVerified(null);
+      toast(es ? `Informe técnico ${r.report_id} generado.` : `Technical report ${r.report_id} generated.`, "ok");
+      loadHistory();
+      setPrintPending(true);
+    } catch (e) {
+      toast(String(e).replace(/^Error:\s*/, "").replace(/^HTTP \d+:\s*/, ""), "err");
+    } finally {
+      setGenerating(false);
+    }
+  };
+  useEffect(() => {
+    if (!printPending || !current || tab !== "soc") return;
+    setPrintPending(false);
+    // Sin limpieza: al poner printPending a false el efecto se re-ejecuta y cancelaría la impresión
+    window.setTimeout(() => print(), 400); // deja pintar el documento antes de copiarlo
+  }, [printPending, current, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const doVerify = async () => {
     if (!current) return;
     try {
@@ -290,7 +320,7 @@ export default function ReportsCenter({ lang = "es", initialTab = "soc" }: { lan
         </div>
       </div>
 
-      {tab === "executive" && <div className="rc-embed"><ExecutiveReport lang={lang} /></div>}
+      {tab === "executive" && <div className="rc-embed"><ExecutiveReport lang={lang} onTechnical={tecnicoDesdeEjecutivo} /></div>}
       {tab === "grc" && <div className="rc-embed"><GrcReport /></div>}
 
       {tab === "soc" && (

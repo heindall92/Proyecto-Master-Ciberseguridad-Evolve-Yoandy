@@ -86,7 +86,7 @@ interface ValhallaReportJSON {
   geo_intel?: Array<{ country: string; pct: number; desc: string }>;
 }
 
-export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" }) {
+export default function ExecutiveReport({ lang = "es", onTechnical }: { lang?: "es" | "en"; onTechnical?: (start: string, end: string) => void }) {
   const t = (key: keyof typeof translations.es) => (translations[lang] as any)[key] || key;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1257,7 +1257,8 @@ export default function ExecutiveReport({ lang = "es" }: { lang?: "es" | "en" })
         onPeriod={(a, b) => { setDateStart(a); setDateEnd(b); if (a && b && a <= b) load({ start: a, end: b }); }}
         onReload={reload}
         onExport={exportToPDF}
-        onExportTech={exportTechnicalPDF}
+        // Dentro del Centro de informes, el técnico es el Informe SOC impreso; suelto, el PDF clásico
+        onExportTech={onTechnical ? () => onTechnical(dateStart, dateEnd) : exportTechnicalPDF}
         onCompany={setCompanyName}
         onAnalyst={setAnalystName}
         onLogo={handleLogoUpload}
