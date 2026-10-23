@@ -1,5 +1,6 @@
 """Ciclo de vida de la API (lifespan) y caché de proxies de confianza (RNF-02, RNF-04, RNF-07)."""
 import asyncio
+import sys
 
 import pytest
 from sqlalchemy import func, select
@@ -17,8 +18,12 @@ def isolated_db(monkeypatch):
     """BD propia: el apagado cierra el pool (engine.dispose) y no debe tocar la de la suite."""
     eng = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     sessions = async_sessionmaker(bind=eng, class_=AsyncSession, expire_on_commit=False)
-    monkeypatch.setattr(main, "engine", eng)
-    monkeypatch.setattr(main, "SessionLocal", sessions)
+    # El arranque vive en app.startup y otros módulos abren sesiones propias: se sustituyen en todos
+    for mod in [m for name, m in list(sys.modules.items()) if name.startswith("app.")]:
+        if getattr(mod, "engine", None) is not None:
+            monkeypatch.setattr(mod, "engine", eng)
+        if getattr(mod, "SessionLocal", None) is not None:
+            monkeypatch.setattr(mod, "SessionLocal", sessions)
     monkeypatch.setattr(settings, "admin_password", "Arranque-Seguro-2026!")
     return sessions
 

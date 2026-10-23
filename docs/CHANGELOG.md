@@ -4,6 +4,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ---
 
+## [Sin publicar] — 2026-10-23 — Backend por módulos
+
+### 🧱 Arquitectura
+- **`backend/app/main.py` pasa de 3.449 a ~90 líneas**: solo crea la app, aplica el middleware y une los routers.
+- **`routers/`**: los 110 endpoints, agrupados por dominio (auth, users, incidents, siem, intel, reports, chat, settings), con las mismas rutas y nombres (comprobado contra la tabla de rutas anterior).
+- **`services/`**: lógica compartida (incidentes y monitores, firewall, invitaciones, claves de API, IA del chat, informes, tareas en segundo plano); `realtime.py`, `startup.py`, `migrations.py`, `middlewares.py` y `limits.py` aparte.
+- El código se movió sin reescribirlo (división automática por el árbol sintáctico) y la suite pasa igual: **62/62**.
+
+---
+
 ## [Sin publicar] — 2026-10-01 — Integración continua, tipos a cero y documentación al día
 
 ### 🔁 Integración continua

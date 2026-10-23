@@ -53,7 +53,11 @@ async def _override_get_db():
 
 
 main.app.dependency_overrides[get_db] = _override_get_db
-main.SessionLocal = TestSessionLocal  # auditoría y tareas que abren su propia sesión
+# Auditoría y tareas que abren su propia sesión: cada módulo de la app importa SessionLocal,
+# así que se sustituye en todos (antes bastaba con app.main, cuando todo vivía allí)
+for _mod in [m for name, m in list(sys.modules.items()) if name.startswith("app.")]:
+    if getattr(_mod, "SessionLocal", None) is not None:
+        _mod.SessionLocal = TestSessionLocal
 
 PASSWORD = "TestPass123!"
 USERS = {  # username -> rol
