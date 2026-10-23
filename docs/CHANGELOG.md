@@ -12,6 +12,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **`services/`**: lógica compartida (incidentes y monitores, firewall, invitaciones, claves de API, IA del chat, informes, tareas en segundo plano); `realtime.py`, `startup.py`, `migrations.py`, `middlewares.py` y `limits.py` aparte.
 - El código se movió sin reescribirlo (división automática por el árbol sintáctico) y la suite pasa igual: **62/62**.
 
+### 🧹 Repositorio
+- **Eliminados** los scripts sueltos que nada usaba (`create_dashboards.py`, `setup_monitors.py`, `setup_reports.py`, `backend/check_cowrie_status.py`, `scripts/verify_local_stack.py`, `scripts/purge_backend_probes.py`, `scripts/backup_db.ps1`), `docs/historico/` (informes y planes antiguos; siguen en el historial de git) `honeypot/`, la copia autónoma de Cowrie (el SOC usa `cowrie_config/`), e `integrations/hermes/`, la integración con el agente Hermes, que no llegó a usarse.
+- **Dependencias**: Pillow 13.0.0, certifi 2026.10.19, vite y DOMPurify parcheados por avisos nuevos de `pip-audit` y `npm audit`.
+
 ---
 
 ## [Sin publicar] — 2026-10-01 — Integración continua, tipos a cero y documentación al día

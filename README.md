@@ -314,7 +314,7 @@ valhalla-soc/
 │   └── runbooks_seed.py          Los 20 runbooks NIST
 │
 ├── 🛡️  wazuh_config/            ossec.conf, reglas y decodificadores propios
-├── 🍯 cowrie_config/ honeypot/   Configuración del honeypot
+├── 🍯 cowrie_config/            Configuración del honeypot
 ├── 🗡️  attacker/                 Atacante automático del laboratorio
 ├── 🔐 tailscale-whois/          Puente de solo lectura a tailscaled
 ├── 📜 scripts/                   setup_env · gen_certs · wazuh_post_install · vpn-firewall · reset_admin
