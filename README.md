@@ -300,7 +300,11 @@ valhalla-soc/
 │   └── store/                    Estado global (Redux Toolkit)
 │
 ├── ⚙️  backend/app/              API FastAPI
-│   ├── main.py                   Endpoints, WebSocket, sesiones, invitaciones
+│   ├── main.py                   Crea la app, middleware de seguridad y une los routers
+│   ├── routers/                  Endpoints por dominio: auth, users, incidents, siem, intel, reports, chat, settings
+│   ├── services/                 Lógica compartida: incidentes, firewall, invitaciones, IA del chat, informes
+│   ├── realtime.py               WebSocket del chat, presencia y avisos de sesión
+│   ├── startup.py                Arranque: esquema, ajustes, usuarios de sistema y semillas
 │   ├── report_builder.py         Informe SOC y ejecutivo
 │   ├── grc_builder.py            Informe GRC: riesgo, NIST CSF, ATT&CK, multinorma
 │   ├── cve_enrich.py             CVE: NVD, GitHub y Exploit-DB con prioridad calculada

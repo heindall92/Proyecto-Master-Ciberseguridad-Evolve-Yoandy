@@ -78,7 +78,7 @@ flowchart LR
 |---|---|---|---|---|
 | R1 | Un usuario niega haber hecho un cambio | Auditoría de toda escritura: usuario, IP real, ruta y código de resultado | `test_toda_escritura_queda_auditada_sin_el_cuerpo` | Medio: la auditoría vive en la misma BD que administra el administrador |
 | R2 | Cambios en incidentes sin rastro | Historial por incidente (fase, severidad, notas, asignación, resolución y clasificación) | `test_ciclo_de_vida_del_incidente_queda_en_el_historial` | Bajo |
-| R3 | Pérdida de registros de auditoría | Los fallos al auditar se registran como error (antes se perdían en silencio: 25/09/2026, 18:25-18:41 UTC) | `main.py` (`AuditMiddleware`) | Bajo |
+| R3 | Pérdida de registros de auditoría | Los fallos al auditar se registran como error (antes se perdían en silencio: 25/09/2026, 18:25-18:41 UTC) | `middlewares.py` (`AuditMiddleware`) | Bajo |
 
 ### I — Divulgación de información
 
@@ -96,10 +96,10 @@ flowchart LR
 | # | Amenaza | Mitigación | Comprobación | Riesgo residual |
 |---|---|---|---|---|
 | D1 | Inundar la API de escrituras | Límite por IP real en escrituras; *slowapi* en login e invitaciones | `security.py` | Medio: las lecturas no se limitan (el panel hace *polling*) |
-| D2 | Inundar el chat | 20 mensajes cada 10 s por usuario | `main.py` (`_chat_rate_ok`) | Bajo |
+| D2 | Inundar el chat | 20 mensajes cada 10 s por usuario | `services/chat_ai.py` (`_chat_rate_ok`) | Bajo |
 | D3 | Consultas de hunting o informes muy costosos | Ventanas acotadas (1-720 h), tamaños máximos, IA opcional en informes | `test_hunting_rechaza_consultas_y_ventanas_no_validas` | Medio |
 | D4 | El honeypot consume los recursos del SOC o sirve de trampolín hacia él | Cowrie y el atacante del laboratorio en la red `lab-net`, sin acceso a la BD, al manager, al indexador ni a Ollama; límites de memoria en los servicios de Wazuh | Comprobado con `nc` desde el atacante: solo alcanza el honeypot y la API autenticada | Medio: Cowrie y el backend sin límites de CPU/memoria |
-| D5 | Sondas internas que generan ruido en el SIEM | El chequeo de salud ya no conecta al honeypot (antes: ~2.400 sesiones falsas al día) | `main.py` (`_container_running`) | Bajo |
+| D5 | Sondas internas que generan ruido en el SIEM | El chequeo de salud ya no conecta al honeypot (antes: ~2.400 sesiones falsas al día) | `routers/siem.py` (`_container_running`) | Bajo |
 
 ### E — Elevación de privilegios
 
