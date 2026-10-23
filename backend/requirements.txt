@@ -7,7 +7,7 @@ bcrypt==5.0.0
 blinker==1.9.0
 boolean.py==5.0
 CacheControl==0.14.4
-certifi==2026.2.25
+certifi==2026.10.19
 cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.3.3
@@ -38,7 +38,7 @@ msgpack==1.2.1
 packageurl-python==0.17.6
 packaging==26.1
 passlib==1.7.4
-pillow==12.3.0
+pillow==13.0.0
 pip-api==0.0.34
 pip-requirements-parser==32.0.1
 pip_audit==2.10.0
